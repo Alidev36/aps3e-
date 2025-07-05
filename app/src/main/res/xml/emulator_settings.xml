@@ -12,7 +12,7 @@
 
 
         <aenu.preference.SeekbarPreference app:title="@string/emulator_settings_core_ppu_threads"
-            app:min="1"
+            app:min="4"
             android:max="8"
             app:showSeekBarValue="true"
             app:key="Core|PPU Threads" />
@@ -35,7 +35,7 @@
 
 
         <aenu.preference.SeekbarPreference app:title="@string/emulator_settings_core_max_llvm_compile_threads"
-            app:min="0"
+            app:min="4"
             android:max="12"
             app:showSeekBarValue="true"
             app:key="Core|Max LLVM Compile Threads" />
@@ -88,7 +88,7 @@
 
 
         <aenu.preference.SeekbarPreference app:title="@string/emulator_settings_core_preferred_spu_threads"
-            app:min="0"
+            app:min="4"
             android:max="6"
             app:showSeekBarValue="true"
             app:key="Core|Preferred SPU Threads" />
@@ -107,7 +107,7 @@
 
         <aenu.preference.SeekbarPreference app:title="@string/emulator_settings_core_max_spurs_threads"
             app:min="1"
-            android:max="6"
+            android:max="8"
             app:showSeekBarValue="true"
             app:key="Core|Max SPURS Threads" />
 
