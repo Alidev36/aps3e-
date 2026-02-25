@@ -198,7 +198,12 @@ public class AboutActivity extends AppCompatActivity {
                 + " *优化创建PPU缓存\n"
                 + " *内存搜索/写入（未测试）\n"
                 + "1.35(2025-12-26)\n"
-                + " *移除创建PPU缓存选项（谷歌play没通过）"
+                + " *移除创建PPU缓存选项（谷歌play没通过）\n"
+                + "1.36(2026-02-24)\n"
+                + " *修复方向键\n"
+                + " *修复DLC不生效（.iso)\n"
+                + " *修复设置界面旋转崩溃\n"
+                + " *部分调整与优化\n"
                 + " \n";
 
         return log;

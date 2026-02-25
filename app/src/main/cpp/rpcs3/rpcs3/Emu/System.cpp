@@ -1427,9 +1427,13 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 		vfs::mount("/app_home", g_cfg_vfs.app_home.to_string().empty() ? elf_dir + '/' : g_cfg_vfs.get(g_cfg_vfs.app_home, rpcs3::utils::get_emu_dir()));
 
         std::vector<uint8_t> psf_data;
-        if(m_iso_fs)
-        psf_data=m_iso_fs->get_data_tiny(":PS3_GAME/PARAM.SFO");
-            else
+        if(m_iso_fs&&!is_disc_patch){
+            psf_data=m_iso_fs->get_data_tiny(":PS3_GAME/PARAM.SFO");
+        }
+        else if(m_iso_fs&&is_disc_patch){
+            m_sfo_dir = rpcs3::utils::get_hdd0_dir() + "game/" + m_title_id;
+        }
+        else
 		// Load PARAM.SFO (TODO)
 		{
 			if (fs::is_dir(m_path))
@@ -1459,7 +1463,7 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 			}
 		}
 
-		const psf::registry _psf = m_iso_fs?psf::load_object(fs::file(psf_data.data(),psf_data.size()),"PS3_GAME/PARAM.SFO"sv)
+		const psf::registry _psf = m_iso_fs&&!is_disc_patch?psf::load_object(fs::file(psf_data.data(),psf_data.size()),"PS3_GAME/PARAM.SFO"sv)
                 :psf::load_object(m_sfo_dir + "/PARAM.SFO");
 
 		m_title = std::string(psf::get_string(_psf, "TITLE", std::string_view(m_path).substr(m_path.find_last_of(fs::delim) + 1)));
@@ -1844,7 +1848,7 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 					bdvd_dir = std::move(game_path);
 				}
 			}
-			else
+			else if(!m_iso_fs)
 			{
 				sys_log.fatal("Disc directory not found. Try to run the game from the actual game disc directory.");
 				return game_boot_result::invalid_file_or_folder;
@@ -2189,7 +2193,7 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 		}
 		// Check game updates
 		if (const std::string hdd0_boot = hdd0_game + m_title_id + "/USRDIR/EBOOT.BIN"; !m_ar
-				&& recursion_count == 0 && disc.empty() && !bdvd_dir.empty() && !m_title_id.empty()
+				&& recursion_count == 0 && disc.empty() && (!bdvd_dir.empty()||m_iso_fs) && !m_title_id.empty()
 				&& resolved_path == GetCallbacks().resolve_path(vfs::get("/dev_bdvd/PS3_GAME/USRDIR/EBOOT.BIN"))
 				&& resolved_path != GetCallbacks().resolve_path(hdd0_boot) && fs::is_file(hdd0_boot))
 		{
@@ -2252,7 +2256,7 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 		}
 
         fs::file elf_file;
-        if(m_iso_fs)
+        if(m_iso_fs&&!is_disc_patch)
             elf_file = fs::file(*m_iso_fs,m_path);
         else
             elf_file = fs::file(elf_path);
@@ -2348,10 +2352,18 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 
 				const std::string resolved_hdd0 = GetCallbacks().resolve_path(hdd0_game) + '/';
 
-                if(m_iso_fs)
+                if(m_iso_fs&&!is_disc_patch)
                 {
                     argv[0] = "/dev_bdvd/PS3_GAME/USRDIR/EBOOT.BIN";
                     m_dir = "/dev_bdvd/PS3_GAME/";
+                }
+                else if(m_iso_fs&&is_disc_patch)
+                {
+                    const std::string tail = resolved_path.substr(resolved_hdd0.size());
+                    const std::string dirname = tail.substr(0, tail.find_first_of(fs::delim));
+                    argv[0] = "/dev_hdd0/game/" + unescape(tail);
+                    m_dir = "/dev_hdd0/game/" + dirname + "/";
+                    sys_log.notice("Boot path(Patch): %s", m_dir);
                 }
 				else if (from_hdd0_game && m_cat == "DG")
 				{

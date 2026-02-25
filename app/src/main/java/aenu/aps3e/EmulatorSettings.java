@@ -6,6 +6,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
@@ -95,15 +96,21 @@ public class EmulatorSettings extends AppCompatActivity {
     public static class SettingsFragment extends PreferenceFragmentCompat implements
             Preference.OnPreferenceClickListener,Preference.OnPreferenceChangeListener{
 
+        static final String SS_CURRENT_SCREEN="current_screen";
         boolean is_global;
         String config_path;
         Emulator.Config original_config;
         Emulator.Config config;
         PreferenceScreen root_pref;
+        String current_screen_key;
 
-        SettingsFragment(String config_path,boolean is_global){
-            this.config_path=config_path;
-            this.is_global=is_global;
+        static SettingsFragment new_instance(String config_path,boolean is_global){
+            SettingsFragment frag=new SettingsFragment();
+            Bundle args=new Bundle();
+            args.putString("config_path",config_path);
+            args.putBoolean("is_global",is_global);
+            frag.setArguments(args);
+            return frag;
         }
 
         OnBackPressedCallback back_callback=new OnBackPressedCallback(true) {
@@ -181,6 +188,7 @@ public class EmulatorSettings extends AppCompatActivity {
         Preference reset_as_default_pref(File _config_file){
             Preference p=new Preference(requireContext());
             p.setTitle(R.string.reset_as_default);
+            p.setIconSpaceReserved(false);
             p.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener(){
                 public boolean onPreferenceClick(@NonNull Preference preference) {
                     new AlertDialog.Builder(requireContext())
@@ -211,6 +219,7 @@ public class EmulatorSettings extends AppCompatActivity {
         Preference reset_as_global_pref(){
             Preference p=new Preference(requireContext());
             p.setTitle(R.string.use_global_config);
+            p.setIconSpaceReserved(false);
             p.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener(){
                 public boolean onPreferenceClick(@NonNull Preference preference) {
                     new AlertDialog.Builder(requireContext())
@@ -241,18 +250,19 @@ public class EmulatorSettings extends AppCompatActivity {
 
         public void setPreferenceScreen(PreferenceScreen preferenceScreen){
             super.setPreferenceScreen(preferenceScreen);
+            current_screen_key=preferenceScreen.getKey();
             CharSequence title=preferenceScreen.getTitle();
             if(title==null)
                 title=getString(R.string.settings);
             requireActivity().setTitle(title);
         }
-
         @Override
         public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
 
-            if(rootKey!=null) throw new RuntimeException();
+            this.config_path=getArguments().getString("config_path");
+            this.is_global=getArguments().getBoolean("is_global");
 
-            setPreferencesFromResource(R.xml.emulator_settings, rootKey);
+            setPreferencesFromResource(R.xml.emulator_settings, null);
             root_pref=getPreferenceScreen();
 
             if(is_global) {
@@ -615,10 +625,21 @@ public class EmulatorSettings extends AppCompatActivity {
                 //return;
             }
 
+            /*String saved_screen=null;
+            if(savedInstanceState!=null&&(saved_screen=savedInstanceState.getString(SS_CURRENT_SCREEN))!=null){
+                final Preference current= root_pref.findPreference(saved_screen);
+                setPreferenceScreen((PreferenceScreen) current);
+                Toast.makeText(getActivity(),"Restoring screen: "+saved_screen,Toast.LENGTH_SHORT).show();
+            }*/
         }
 
+        @Override
+        public void onSaveInstanceState(@NonNull Bundle outState) {
+            super.onSaveInstanceState(outState);
+            //outState.putString(SS_CURRENT_SCREEN,current_screen_key);
+        }
 
-    @Override
+        @Override
     public void onDisplayPreferenceDialog( @NonNull Preference pref) {
 
         if (pref instanceof SeekBarPreference) {
@@ -1021,10 +1042,10 @@ public class EmulatorSettings extends AppCompatActivity {
 
 
         if(config_path!=null) {
-            fragment=new SettingsFragment(config_path,false);
+            fragment=SettingsFragment.new_instance(config_path,false);
         }
         else{
-            fragment=new SettingsFragment(Application.get_global_config_file().getAbsolutePath(),true);
+            fragment=SettingsFragment.new_instance(Application.get_global_config_file().getAbsolutePath(),true);
         }
 
         getSupportFragmentManager().beginTransaction().replace(android.R.id.content,fragment).commit();

@@ -602,7 +602,11 @@ error_code sceNpTrophyRegisterContext(ppu_thread& ppu, u32 context, u32 handle, 
 	{
 		sceNpTrophy.warning("sceNpTrophyRegisterContext failed to open trophy file from boot path: '%s' (%s)", trp_path, fs::g_tls_error);
 		trp_path = vfs::get("/dev_bdvd/PS3_GAME/TROPDIR/" + ctxt->trp_name + "/TROPHY.TRP");
-		stream.open(trp_path);
+
+        if(Emu.GetIsoFs()&&trp_path[0]==':')
+            stream=fs::file(*Emu.GetIsoFs(), trp_path);
+        else
+            stream=fs::file(trp_path);
 	}
 
 	// check if exists and opened
@@ -841,7 +845,11 @@ error_code sceNpTrophyGetRequiredDiskSpace(u32 context, u32 handle, vm::ptr<u64>
 		{
 			sceNpTrophy.warning("sceNpTrophyGetRequiredDiskSpace failed to open trophy file from boot path: '%s'", trophy_path);
 			trophy_path = vfs::get("/dev_bdvd/PS3_GAME/TROPDIR/" + ctxt->trp_name + "/TROPHY.TRP");
-			stream.open(trophy_path);
+
+            if(Emu.GetIsoFs()&&trophy_path[0]==':')
+                stream=fs::file(*Emu.GetIsoFs(), trophy_path);
+            else
+                stream=fs::file(trophy_path);
 		}
 
 		// check if exists and opened
