@@ -328,6 +328,8 @@ public class InnerDocumentsProvider extends android.provider.DocumentsProvider{
                     throw new IOException("Failed to create directory " + dst_file.getPath());
             }
             else{
+
+                if(dst_file.exists()) dst_file.delete();
                 if(dst_file.createNewFile()) {
                     copy_file(src_file,dst_file);
                 }
@@ -341,6 +343,8 @@ public class InnerDocumentsProvider extends android.provider.DocumentsProvider{
             throws FileNotFoundException {
         File src_file = getFileForDocId(sourceDocumentId);
         File dst_file = new File(getFileForDocId(targetParentDocumentId).getPath(), src_file.getName());
+
+        if(src_file.equals(dst_file)) return sourceDocumentId;
 
         try{
             if(src_file.isDirectory()){
