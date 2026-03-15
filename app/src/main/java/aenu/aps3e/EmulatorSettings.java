@@ -31,6 +31,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 import androidx.fragment.app.DialogFragment;
 
 import androidx.preference.Preference;
@@ -254,7 +255,11 @@ public class EmulatorSettings extends AppCompatActivity {
             CharSequence title=preferenceScreen.getTitle();
             if(title==null)
                 title=getString(R.string.settings);
-            requireActivity().setTitle(title);
+            //requireActivity().setTitle(title);
+            EmulatorSettings settings=(EmulatorSettings) requireActivity();
+            if(settings.getSupportActionBar()!=null) {
+                settings.getSupportActionBar().setTitle(title);
+            }
         }
         @Override
         public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
@@ -1037,6 +1042,14 @@ public class EmulatorSettings extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_emulator_settings);
+
+        // 设置 Toolbar
+        Toolbar toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+        if(getSupportActionBar()!=null) {
+            getSupportActionBar().setTitle(getString(R.string.settings));
+        }
 
         String config_path=getIntent().getStringExtra(EXTRA_CONFIG_PATH);
 
@@ -1048,7 +1061,7 @@ public class EmulatorSettings extends AppCompatActivity {
             fragment=SettingsFragment.new_instance(Application.get_global_config_file().getAbsolutePath(),true);
         }
 
-        getSupportFragmentManager().beginTransaction().replace(android.R.id.content,fragment).commit();
+        getSupportFragmentManager().beginTransaction().replace(R.id.settings_container,fragment).commit();
     }
 
     static boolean install_custom_driver_from_zip(Context ctx, Uri uri, InstallCallback cb) {

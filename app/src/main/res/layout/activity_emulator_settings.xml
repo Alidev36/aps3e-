@@ -15,15 +15,8 @@
 		android:theme="@style/ThemeOverlay.AppCompat.ActionBar"
 		app:popupTheme="@style/ThemeOverlay.AppCompat.Light" />
 
-	<ListView
+	<FrameLayout
+		android:id="@+id/settings_container"
 		android:layout_width="match_parent"
-		android:layout_height="match_parent"
-		android:id="@+id/game_list"/>
-	<TextView
-        android:id="@+id/game_list_is_empty"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:text="@string/empty_game_list"
-        android:gravity="center" />
+		android:layout_height="match_parent" />
 </LinearLayout>
-

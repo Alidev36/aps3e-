@@ -13,6 +13,7 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 
 public class AboutActivity extends AppCompatActivity {
 
@@ -278,6 +279,14 @@ public class AboutActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
 
         setContentView(R.layout.activity_about);
+        
+        // 设置 Toolbar
+        Toolbar toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+        if(getSupportActionBar()!=null) {
+            getSupportActionBar().setTitle(R.string.about);
+        }
+        
         text=findViewById(R.id.about_text);
         findViewById(R.id.gratitude).setOnClickListener(new View.OnClickListener() {
             @Override

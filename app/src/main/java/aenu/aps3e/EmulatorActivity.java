@@ -219,7 +219,6 @@ public class EmulatorActivity extends AppCompatActivity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		getSupportActionBar().hide();
 		Utils.enable_fullscreen(getWindow());
 		getOnBackPressedDispatcher().addCallback(emu_back_pressed_callback);
 

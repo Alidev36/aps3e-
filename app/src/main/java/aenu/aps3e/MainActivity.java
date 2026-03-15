@@ -73,6 +73,7 @@ import java.io.*;
 import android.view.*;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 import androidx.documentfile.provider.DocumentFile;
 
 import org.json.JSONArray;
@@ -210,15 +211,21 @@ public class MainActivity extends AppCompatActivity {
 	GameMetaInfoAdapter adapter;
 
 	ProgressTask progress_task;
+	Toolbar toolbar;
     @Override
     public void onCreate(Bundle savedInstanceState){
 
         super.onCreate(savedInstanceState);
 
-		getSupportActionBar().setTitle(getString(R.string.select_game));//"选择游戏");
-		android.util.Log.i("aps3e_java","main");
-
         setContentView(R.layout.activity_main);
+
+		// 设置 Toolbar
+		toolbar = findViewById(R.id.toolbar);
+		setSupportActionBar(toolbar);
+		if(getSupportActionBar()!=null) {
+			getSupportActionBar().setTitle(getString(R.string.select_game));//"选择游戏");
+		}
+		android.util.Log.i("aps3e_java","main");
 
 		((ListView)findViewById(R.id.game_list)).setOnItemClickListener(item_click_l);
 		((ListView)findViewById(R.id.game_list)).setEmptyView(findViewById(R.id.game_list_is_empty));
@@ -537,6 +544,39 @@ public class MainActivity extends AppCompatActivity {
             finish();
             return true;
         }
+		if (keyCode == KeyEvent.KEYCODE_MENU) {
+			openOptionsMenu();
+			return true;
+		}
+		if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+			ListView listView = findViewById(R.id.game_list);
+			if (listView != null && listView.getSelectedItemPosition() <= 0) {
+				if (toolbar != null && toolbar.getChildCount() > 0) {
+					View lastChild = toolbar.getChildAt(toolbar.getChildCount() - 1);
+					if (lastChild instanceof ViewGroup) {
+						ViewGroup group = (ViewGroup) lastChild;
+						if (group.getChildCount() > 0) {
+							View lastMenuItem = group.getChildAt(group.getChildCount() - 1);
+							lastMenuItem.setFocusable(true);
+							lastMenuItem.setFocusableInTouchMode(true);
+							lastMenuItem.requestFocus();
+							return true;
+						}
+					}
+				}
+			}
+		}
+		if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+			if (toolbar != null && toolbar.hasFocus()) {
+				ListView listView = findViewById(R.id.game_list);
+				if (listView != null) {
+					listView.requestFocus();
+					listView.setSelection(0);
+					return true;
+				}
+			}
+		}
+
         return super.onKeyDown(keyCode,event);
     }
 	

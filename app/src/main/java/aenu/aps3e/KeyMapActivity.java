@@ -32,6 +32,7 @@ import android.icu.text.*;
 import android.view.*;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 
 import aenu.view.SVListView;
 
@@ -44,6 +45,14 @@ public class KeyMapActivity extends AppCompatActivity {
 		sp=getSharedPreferences();
 		update_config();
 		setContentView(R.layout.activity_keymap);
+		
+		// 设置 Toolbar
+		Toolbar toolbar = findViewById(R.id.toolbar);
+		setSupportActionBar(toolbar);
+		if(getSupportActionBar()!=null) {
+			getSupportActionBar().setTitle(R.string.key_mappers);
+		}
+		
 		((SVListView)findViewById(R.id.keymap_list)).setOnItemClickListener(click_l);
 		((Button)findViewById(R.id.keymap_reset)).setOnClickListener(reset_l);
 		((CheckBox)findViewById(R.id.enable_vibrator)).setChecked(sp.getBoolean("enable_vibrator",false));

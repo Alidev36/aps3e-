@@ -29,6 +29,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 
 import org.json.JSONObject;
 
@@ -76,8 +77,15 @@ public class QuickStartActivity extends AppCompatActivity {
             return;
         }
 
-        getSupportActionBar().setTitle(R.string.welcome);
         setContentView(R.layout.activity_quick_start);
+        
+        // 设置 Toolbar
+        Toolbar toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+        if(getSupportActionBar()!=null) {
+            getSupportActionBar().setTitle(R.string.welcome);
+        }
+        
         MainActivity.mk_dirs();
         try{config=Emulator.Config.open_config_from_string(load_default_config_str(QuickStartActivity.this));}catch (Exception e){}
         init_layout_list();
