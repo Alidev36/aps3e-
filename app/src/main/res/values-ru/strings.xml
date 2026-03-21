@@ -1,5 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+
+<string name="user_data_manager">Менеджер пользовательских данных</string>
+<string name="ppu_cache_manager">Менеджер кэша PPU</string>
+<string name="import_ppu_cache">Импорт кэша PPU</string>
+<string name="export_ppu_cache">Экспорт кэша PPU</string>
+<string name="import_ppu_cache_done">Импорт кэша PPU завершен</string>
+<string name="import_ppu_cache_failed">Не удалось импортировать кэш PPU</string>
+<string name="iso_dir_manager">Менеджер каталогов ISO</string>
+<string name="compatibility_table">Таблица совместимости игр</string>
+<string name="driver_manager">Менеджер драйверов</string>
+<string name="add_a_iso_dir">Добавить каталог iso</string>
+<string name="download_compatibility_data_sheet">Скачать таблицу совместимости</string>
+<string name="reset_search">Сбросить поиск</string>
+<string name="save_to">Сохранить в %s</string>
+<string name="remove_directory">Удалить каталог</string>
+<string name="downloading">Загрузка...</string>
+<string name="download_success">Загрузка успешна</string>
+<string name="download_failed">Ошибка загрузки</string>
+<string name="information">Информация</string>
+
 	<string name="creating_ppu_cache">Создание кэша PPU</string>
 <string name="please_enter_a_search_value">Пожалуйста, введите значение для поиска</string>
 <string name="search_value_cannot_be_greater_than">Значение поиска не может быть больше</string>

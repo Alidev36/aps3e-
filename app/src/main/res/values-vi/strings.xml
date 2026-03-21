@@ -1,6 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+<string name="user_data_manager">Trình quản lý dữ liệu người dùng</string>
+<string name="ppu_cache_manager">Trình quản lý bộ nhớ cache PPU</string>
+<string name="import_ppu_cache">Nhập bộ nhớ cache PPU</string>
+<string name="export_ppu_cache">Xuất bộ nhớ cache PPU</string>
+<string name="import_ppu_cache_done">Đã hoàn thành việc nhập bộ nhớ cache PPU</string>
+<string name="import_ppu_cache_failed">Nhập bộ nhớ cache PPU thất bại</string>
+<string name="iso_dir_manager">Trình quản lý thư mục ISO</string>
+<string name="compatibility_table">Bảng tương thích trò chơi</string>
+<string name="driver_manager">Trình quản lý trình điều khiển</string>
+<string name="add_a_iso_dir">Thêm một thư mục iso</string>
+<string name="download_compatibility_data_sheet">Tải xuống bảng dữ liệu tương thích</string>
+<string name="reset_search">Đặt lại tìm kiếm</string>
+<string name="save_to">Lưu vào %s</string>
+<string name="remove_directory">Xóa thư mục</string>
+<string name="downloading">Đang tải xuống...</string>
+<string name="download_success">Tải xuống thành công</string>
+<string name="download_failed">Tải xuống thất bại</string>
+<string name="information">Thông tin</string>
+
 	<string name="creating_ppu_cache">Đang tạo bộ nhớ đệm PPU</string>
 <string name="please_enter_a_search_value">Vui lòng nhập giá trị tìm kiếm</string>
 <string name="search_value_cannot_be_greater_than">Giá trị tìm kiếm không được lớn hơn</string>

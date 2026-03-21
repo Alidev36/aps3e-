@@ -63,6 +63,14 @@ public class Application extends android.app.Application
         return new File(Application.get_app_data_dir(),"config/default_config.yml");
     }
 
+    public static File get_temp_dir()
+    {
+        return ctx.getExternalCacheDir();
+    }
+    public static File get_compatibility_table_file(){
+        return new File(Application.get_app_data_dir(),"config/compatibility_table.json");
+    }
+
     static boolean device_support_vulkan() {
         return gpu_device_name_vk!=null;
     }

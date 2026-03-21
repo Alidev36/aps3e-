@@ -20,6 +20,7 @@ import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.ListView;
@@ -261,6 +262,7 @@ public class EmulatorSettings extends AppCompatActivity {
                 settings.getSupportActionBar().setTitle(title);
             }
         }
+
         @Override
         public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
 
@@ -1041,6 +1043,9 @@ public class EmulatorSettings extends AppCompatActivity {
     SettingsFragment fragment;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
+        supportRequestWindowFeature(Window.FEATURE_NO_TITLE);
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_emulator_settings);
 

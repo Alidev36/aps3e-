@@ -1,6 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+    <string name="user_data_manager">مدير بيانات المستخدم</string>
+    <string name="ppu_cache_manager">مدير ذاكرة التخزين المؤقتة لـ PPU</string>
+    <string name="import_ppu_cache">استيراد ذاكرة التخزين المؤقتة لـ PPU</string>
+    <string name="export_ppu_cache">تصدير ذاكرة التخزين المؤقتة لـ PPU</string>
+    <string name="import_ppu_cache_done">تم استيراد ذاكرة التخزين المؤقتة لـ PPU بنجاح</string>
+    <string name="import_ppu_cache_failed">فشل استيراد ذاكرة التخزين المؤقتة لـ PPU</string>
+    <string name="iso_dir_manager">مدير دليل ISO</string>
+    <string name="compatibility_table">جدول توافق الألعاب</string>
+    <string name="driver_manager">مدير التعريفات</string>
+    <string name="add_a_iso_dir">إضافة دليل iso</string>
+    <string name="download_compatibility_data_sheet">تنزيل ورقة بيانات التوافق</string>
+    <string name="reset_search">إعادة تعيين البحث</string>
+    <string name="save_to">حفظ إلى %s</string>
+    <string name="remove_directory">إزالة الدليل</string>
+    <string name="downloading">جارٍ التنزيل...</string>
+    <string name="download_success">تم التنزيل بنجاح</string>
+    <string name="download_failed">فشل التنزيل</string>
+    <string name="information">معلومات</string>
+
     <string name="creating_ppu_cache">جاري إنشاء ذاكرة PPU المؤقتة</string>
 <string name="please_enter_a_search_value">الرجاء إدخال قيمة للبحث</string>
 <string name="search_value_cannot_be_greater_than">لا يمكن أن تكون قيمة البحث أكبر من</string>

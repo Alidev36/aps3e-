@@ -4,6 +4,25 @@
 	<!--无法转义',&apos;会报错 -->
 	<!-- +++++++++++++++++++++++++++ -->
 
+<string name="user_data_manager">Gestionnaire de données utilisateur</string>
+<string name="ppu_cache_manager">Gestionnaire de cache PPU</string>
+<string name="import_ppu_cache">Importer le cache PPU</string>
+<string name="export_ppu_cache">Exporter le cache PPU</string>
+<string name="import_ppu_cache_done">Importation du cache PPU terminée</string>
+<string name="import_ppu_cache_failed">Échec de l`importation du cache PPU</string>
+<string name="iso_dir_manager">Gestionnaire de répertoire ISO</string>
+<string name="compatibility_table">Table de compatibilité des jeux</string>
+<string name="driver_manager">Gestionnaire de pilotes</string>
+<string name="add_a_iso_dir">Ajouter un répertoire iso</string>
+<string name="download_compatibility_data_sheet">Télécharger la feuille de données de compatibilité</string>
+<string name="reset_search">Réinitialiser la recherche</string>
+<string name="save_to">Enregistrer dans %s</string>
+<string name="remove_directory">Supprimer le répertoire</string>
+<string name="downloading">Téléchargement en cours...</string>
+<string name="download_success">Téléchargement réussi</string>
+<string name="download_failed">Échec du téléchargement</string>
+<string name="information">Informations</string>
+
 	<string name="creating_ppu_cache">Création du cache PPU</string>
 <string name="please_enter_a_search_value">Veuillez saisir une valeur de recherche</string>
 <string name="search_value_cannot_be_greater_than">La valeur de recherche ne peut pas être supérieure à</string>

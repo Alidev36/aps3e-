@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: WTFPL
 package aenu.aps3e;
 
+import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.AssetManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -167,5 +169,27 @@ public class Utils {
     static long convert_hex_str_to_long(String hex){
         if(hex.startsWith("0x"))hex=hex.substring(2);
         return Long.parseLong(hex.toUpperCase(),16);
+    }
+    static void open_file_manager(Activity activity)
+    {
+        try{
+            Intent it=new Intent(Intent.ACTION_VIEW);
+            it.setClassName("com.android.documentsui", "com.android.documentsui.files.FilesActivity");
+            it.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(it);
+            return;
+        }
+        catch(Exception e){
+        }
+        try{
+            Intent it=new Intent(Intent.ACTION_VIEW);
+            it.setClassName("com.google.android.documentsui", "com.android.documentsui.files.FilesActivity");
+            it.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(it);
+            return;
+
+        }
+        catch(Exception e){
+        }
     }
 }

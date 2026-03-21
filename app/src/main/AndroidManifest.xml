@@ -55,7 +55,8 @@
 			android:exported="false"
 			android:label="@string/key_mappers"/>
 		<activity android:name="aenu.aps3e.UserDataActivity"
-			android:exported="false"/>
+			android:exported="false"
+			android:label="@string/user_data_manager"/>
 		<activity android:name="aenu.aps3e.VirtualPadEdit"
 			android:screenOrientation="sensorLandscape"
 			android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
@@ -85,16 +86,6 @@
 		<provider
 			android:name="aenu.aps3e.DocumentsProvider"
 			android:authorities="${applicationId}.provider"
-			android:exported="true"
-			android:grantUriPermissions="true"
-			android:permission="android.permission.MANAGE_DOCUMENTS">
-			<intent-filter>
-				<action android:name="android.content.action.DOCUMENTS_PROVIDER" />
-			</intent-filter>
-		</provider>
-		<provider
-			android:name="aenu.aps3e.InnerDocumentsProvider"
-			android:authorities="${applicationId}.inner.provider"
 			android:exported="true"
 			android:grantUriPermissions="true"
 			android:permission="android.permission.MANAGE_DOCUMENTS">

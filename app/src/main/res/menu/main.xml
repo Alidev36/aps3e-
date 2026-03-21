@@ -19,6 +19,9 @@
 	<item
         android:id="@+id/menu_key_mappers"
         android:title="@string/key_mappers"/>
+	<item
+		android:id="@+id/menu_user_data"
+		android:title="@string/user_data_manager"/>
 	<!--item
         android:id="@+id/menu_gratitude"
         android:title="@string/gratitude"/-->

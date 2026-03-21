@@ -1,6 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+<string name="user_data_manager">ตัวจัดการข้อมูลผู้ใช้</string>
+<string name="ppu_cache_manager">ตัวจัดการแคช PPU</string>
+<string name="import_ppu_cache">นำเข้าแคช PPU</string>
+<string name="export_ppu_cache">ส่งออกแคช PPU</string>
+<string name="import_ppu_cache_done">นำเข้าแคช PPU เสร็จสิ้น</string>
+<string name="import_ppu_cache_failed">ไม่สามารถนำเข้าแคช PPU ได้</string>
+<string name="iso_dir_manager">ตัวจัดการไดเรกทอรี ISO</string>
+<string name="compatibility_table">ตารางความเข้ากันได้ของเกม</string>
+<string name="driver_manager">ตัวจัดการไดรเวอร์</string>
+<string name="add_a_iso_dir">เพิ่มไดเรกทอรี iso</string>
+<string name="download_compatibility_data_sheet">ดาวน์โหลดแผ่นข้อมูลความเข้ากันได้</string>
+<string name="reset_search">รีเซ็ตการค้นหา</string>
+<string name="save_to">บันทึกไปยัง %s</string>
+<string name="remove_directory">ลบไดเรกทอรี</string>
+<string name="downloading">กำลังดาวน์โหลด...</string>
+<string name="download_success">ดาวน์โหลดสำเร็จ</string>
+<string name="download_failed">ดาวน์โหลดล้มเหลว</string>
+<string name="information">ข้อมูล</string>
+
 	<string name="creating_ppu_cache">กำลังสร้างแคช PPU</string>
 <string name="please_enter_a_search_value">กรุณาใส่ค่าที่ต้องการค้นหา</string>
 <string name="search_value_cannot_be_greater_than">ค่าค้นหาต้องไม่มากกว่า</string>

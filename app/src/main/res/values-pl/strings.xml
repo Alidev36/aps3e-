@@ -1,6 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+<string name="user_data_manager">Menedżer danych użytkownika</string>
+<string name="ppu_cache_manager">Menedżer pamięci podręcznej PPU</string>
+<string name="import_ppu_cache">Importuj pamięć podręczną PPU</string>
+<string name="export_ppu_cache">Eksportuj pamięć podręczną PPU</string>
+<string name="import_ppu_cache_done">Import pamięci podręcznej PPU zakończony</string>
+<string name="import_ppu_cache_failed">Import pamięci podręcznej PPU nie powiódł się</string>
+<string name="iso_dir_manager">Menedżer katalogów ISO</string>
+<string name="compatibility_table">Tabela kompatybilności gier</string>
+<string name="driver_manager">Menedżer sterowników</string>
+<string name="add_a_iso_dir">Dodaj katalog iso</string>
+<string name="download_compatibility_data_sheet">Pobierz arkusz danych zgodności</string>
+<string name="reset_search">Zresetuj wyszukiwanie</string>
+<string name="save_to">Zapisz do %s</string>
+<string name="remove_directory">Usuń katalog</string>
+<string name="downloading">Trwa pobieranie...</string>
+<string name="download_success">Pobieranie zakończone sukcesem</string>
+<string name="download_failed">Pobieranie nie powiodło się</string>
+<string name="information">Informacja</string>
+
     <string name="creating_ppu_cache">Tworzenie cache PPU</string>
 <string name="please_enter_a_search_value">Proszę wprowadzić wartość wyszukiwania</string>
 <string name="search_value_cannot_be_greater_than">Wartość wyszukiwania nie może być większa niż</string>

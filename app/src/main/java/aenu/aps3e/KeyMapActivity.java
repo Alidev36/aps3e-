@@ -41,7 +41,9 @@ public class KeyMapActivity extends AppCompatActivity {
 	SharedPreferences sp;
     @Override
     public void onCreate(Bundle bundle) {
-        super.onCreate(bundle);
+
+		supportRequestWindowFeature(Window.FEATURE_NO_TITLE);
+		super.onCreate(bundle);
 		sp=getSharedPreferences();
 		update_config();
 		setContentView(R.layout.activity_keymap);

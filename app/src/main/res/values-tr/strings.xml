@@ -1,6 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+<string name="user_data_manager">Kullanıcı Veri Yöneticisi</string>
+<string name="ppu_cache_manager">PPU Önbellek Yöneticisi</string>
+<string name="import_ppu_cache">PPU Önbelleğini İçe Aktar</string>
+<string name="export_ppu_cache">PPU Önbelleğini Dışa Aktar</string>
+<string name="import_ppu_cache_done">PPU önbelleği içe aktarma tamamlandı</string>
+<string name="import_ppu_cache_failed">PPU önbelleği içe aktarma başarısız oldu</string>
+<string name="iso_dir_manager">ISO Dizin Yöneticisi</string>
+<string name="compatibility_table">Oyun Uyumluluk Tablosu</string>
+<string name="driver_manager">Sürücü Yöneticisi</string>
+<string name="add_a_iso_dir">Bir iso dizini ekle</string>
+<string name="download_compatibility_data_sheet">Uyumluluk Veri Sayfasını İndir</string>
+<string name="reset_search">Aramayı sıfırla</string>
+<string name="save_to">%s konumuna kaydet</string>
+<string name="remove_directory">Dizini kaldır</string>
+<string name="downloading">İndiriliyor...</string>
+<string name="download_success">İndirme başarılı</string>
+<string name="download_failed">İndirme başarısız</string>
+<string name="information">Bilgi</string>
+
 	<string name="creating_ppu_cache">PPU önbelleği oluşturuluyor</string>
 <string name="please_enter_a_search_value">Lütfen bir arama değeri girin</string>
 <string name="search_value_cannot_be_greater_than">Arama değeri şundan büyük olamaz</string>

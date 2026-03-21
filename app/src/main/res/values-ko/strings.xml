@@ -1,6 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+<string name="user_data_manager">사용자 데이터 관리자</string>
+<string name="ppu_cache_manager">PPU 캐시 관리자</string>
+<string name="import_ppu_cache">PPU 캐시 가져오기</string>
+<string name="export_ppu_cache">PPU 캐시 내보내기</string>
+<string name="import_ppu_cache_done">PPU 캐시 가져오기 완료</string>
+<string name="import_ppu_cache_failed">PPU 캐시 가져오기 실패</string>
+<string name="iso_dir_manager">ISO 디렉터리 관리자</string>
+<string name="compatibility_table">게임 호환성 테이블</string>
+<string name="driver_manager">드라이버 관리자</string>
+<string name="add_a_iso_dir">iso 디렉터리 추가</string>
+<string name="download_compatibility_data_sheet">호환성 데이터 시트 다운로드</string>
+<string name="reset_search">검색 재설정</string>
+<string name="save_to">%s(으)로 저장</string>
+<string name="remove_directory">디렉터리 제거</string>
+<string name="downloading">다운로드 중...</string>
+<string name="download_success">다운로드 성공</string>
+<string name="download_failed">다운로드 실패</string>
+<string name="information">정보</string>
+
 	<string name="creating_ppu_cache">PPU 캐시 생성 중</string>
 <string name="please_enter_a_search_value">검색 값을 입력하십시오</string>
 <string name="search_value_cannot_be_greater_than">검색 값은 다음보다 클 수 없습니다</string>

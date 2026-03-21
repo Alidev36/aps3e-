@@ -1,6 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+<string name="user_data_manager">Pengurus Data Pengguna</string>
+<string name="ppu_cache_manager">Pengurus Cache PPU</string>
+<string name="import_ppu_cache">Import Cache PPU</string>
+<string name="export_ppu_cache">Eksport Cache PPU</string>
+<string name="import_ppu_cache_done">Import cache PPU selesai</string>
+<string name="import_ppu_cache_failed">Import cache PPU gagal</string>
+<string name="iso_dir_manager">Pengurus Direktori ISO</string>
+<string name="compatibility_table">Jadual Keserasian Permainan</string>
+<string name="driver_manager">Pengurus Pemandu</string>
+<string name="add_a_iso_dir">Tambah direktori iso</string>
+<string name="download_compatibility_data_sheet">Muat turun Helaian Data Keserasian</string>
+<string name="reset_search">Tetap semula carian</string>
+<string name="save_to">Simpan ke %s</string>
+<string name="remove_directory">Buang direktori</string>
+<string name="downloading">Memuat turun...</string>
+<string name="download_success">Muat turun berjaya</string>
+<string name="download_failed">Muat turun gagal</string>
+<string name="information">Maklumat</string>
+
 	<string name="creating_ppu_cache">Mencipta cache PPU</string>
 <string name="please_enter_a_search_value">Sila masukkan nilai carian</string>
 <string name="search_value_cannot_be_greater_than">Nilai carian tidak boleh melebihi</string>

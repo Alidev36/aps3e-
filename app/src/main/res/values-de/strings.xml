@@ -1,6 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+    <string name="user_data_manager">Benutzerverwaltung</string>
+    <string name="ppu_cache_manager">PPU-Cache-Verwaltung</string>
+    <string name="import_ppu_cache">PPU-Cache importieren</string>
+    <string name="export_ppu_cache">PPU-Cache exportieren</string>
+    <string name="import_ppu_cache_done">PPU-Cache-Import abgeschlossen</string>
+    <string name="import_ppu_cache_failed">PPU-Cache-Import fehlgeschlagen</string>
+    <string name="iso_dir_manager">ISO-Verzeichnisverwaltung</string>
+    <string name="compatibility_table">Kompatibilitätstabelle</string>
+    <string name="driver_manager">Treiber-Manager</string>
+    <string name="add_a_iso_dir">Ein ISO-Verzeichnis hinzufügen</string>
+    <string name="download_compatibility_data_sheet">Kompatibilitätsdatenblatt herunterladen</string>
+    <string name="reset_search">Suche zurücksetzen</string>
+    <string name="save_to">Speichern unter %s</string>
+    <string name="remove_directory">Verzeichnis entfernen</string>
+    <string name="downloading">Wird heruntergeladen...</string>
+    <string name="download_success">Download erfolgreich</string>
+    <string name="download_failed">Download fehlgeschlagen</string>
+    <string name="information">Information</string>
+
     <string name="creating_ppu_cache">PPU-Cache wird erstellt</string>
 <string name="please_enter_a_search_value">Bitte geben Sie einen Suchwert ein</string>
 <string name="search_value_cannot_be_greater_than">Suchwert darf nicht größer sein als</string>

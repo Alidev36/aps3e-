@@ -506,6 +506,39 @@ static void j_set_cheat(JNIEnv* env,jobject self,jobject cheat_info){
     }
 }
 
+static void j_get_cheat(JNIEnv* env,jobject self,jobject cheat_info){
+    jclass CheatInfo=env->GetObjectClass(cheat_info);
+    jfieldID fid_CheatInfo_addr=env->GetFieldID(CheatInfo,"addr","J");
+    jfieldID fid_CheatInfo_value=env->GetFieldID(CheatInfo,"value","J");
+    jfieldID fid_CheatInfo_type=env->GetFieldID(CheatInfo,"type","I");
+    jlong addr=env->GetLongField(cheat_info,fid_CheatInfo_addr);
+    jint type=env->GetIntField(cheat_info,fid_CheatInfo_type);
+
+    bool success;
+    switch (type) {
+        case 1://TYPE_U8
+        {
+            env->SetLongField(cheat_info,fid_CheatInfo_value,ae::mem_get_value<u8>(static_cast<u32>(addr), success));
+        }
+            break;
+        case 2://TYPE_U16
+        {
+            env->SetLongField(cheat_info,fid_CheatInfo_value,ae::mem_get_value<u16>(static_cast<u32>(addr), success));
+        }
+            break;
+        case 3://TYPE_U32
+        {
+            env->SetLongField(cheat_info,fid_CheatInfo_value,ae::mem_get_value<u32>(static_cast<u32>(addr), success));
+        }
+            break;
+        case 4://TYPE_U64
+        {
+            env->SetLongField(cheat_info,fid_CheatInfo_value,ae::mem_get_value<u64>(static_cast<u32>(addr), success));
+        }
+            break;
+    }
+}
+
 static auto gen_key=[](const std::string& name)->std::string{
     std::string k=name;
     if(size_t p=k.find("(");p!=std::string::npos){
@@ -1017,6 +1050,7 @@ int register_aps3e_Emulator(JNIEnv* env){
             { "trophy_info_from_dir", "(Ljava/lang/String;Ljava/lang/String;)Laenu/aps3e/Emulator$GameTrophyInfo;", (void *) j_trophy_info_from_dir},
             { "search_memory", "(Laenu/aps3e/Emulator$CheatInfo;)[Laenu/aps3e/Emulator$CheatInfo;", (void *) j_search_memory},
             { "set_cheat", "(Laenu/aps3e/Emulator$CheatInfo;)V", (void *) j_set_cheat},
+            { "get_cheat", "(Laenu/aps3e/Emulator$CheatInfo;)V", (void *) j_get_cheat},
 
     };
 

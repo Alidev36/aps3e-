@@ -50,6 +50,14 @@
         android:layout_height="wrap_content"
         android:text="@string/start_search"
         android:textSize="18sp"
+        android:layout_marginBottom="8dp"/>
+
+    <Button
+        android:id="@+id/btn_reset"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/reset_search"
+        android:textSize="16sp"
         android:layout_marginBottom="16dp"/>
 
     <TextView

@@ -99,5 +99,26 @@ namespace ae{
         });
     }
 
+    template <typename T> requires std::is_integral_v<T> T mem_get_value(const u32 offset, bool& success)
+    {
+        if (Emu.IsStopped())
+        {
+            success = false;
+            return 0;
+        }
+
+        return cpu_thread::suspend_all(nullptr, {}, [&]() -> T
+        {
+            if (!vm::check_addr<sizeof(T)>(offset))
+            {
+                success = false;
+                return 0;
+            }
+
+            success = true;
+            return *vm::get_super_ptr<T>(offset);
+        });
+    }
+
 }
 #endif //APS3E_EMULATOR_APS3E_H

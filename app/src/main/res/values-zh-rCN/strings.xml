@@ -1,5 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+<string name="user_data_manager">用户数据管理器</string>
+<string name="ppu_cache_manager">PPU缓存管理器</string>
+<string name="import_ppu_cache">导入PPU缓存</string>
+<string name="export_ppu_cache">导出PPU缓存</string>
+<string name="import_ppu_cache_done">PPU缓存导入完成</string>
+<string name="import_ppu_cache_failed">PPU缓存导入失败</string>
+<string name="iso_dir_manager">ISO目录管理器</string>
+<string name="compatibility_table">游戏兼容性表</string>
+<string name="driver_manager">驱动管理器</string>
+<string name="add_a_iso_dir">添加一个iso目录</string>
+<string name="download_compatibility_data_sheet">下载兼容性数据表</string>
+<string name="reset_search">重置搜索</string>
+<string name="save_to">保存到 %s</string>
+<string name="remove_directory">删除目录</string>
+<string name="downloading">正在下载...</string>
+<string name="download_success">下载成功</string>
+<string name="download_failed">下载失败</string>
+<string name="information">信息</string>
+
     <string name="creating_ppu_cache">正在创建PPU缓存</string>
 <string name="please_enter_a_search_value">请输入搜索值</string>
 <string name="search_value_cannot_be_greater_than">搜索值不能大于</string>

@@ -266,7 +266,7 @@ public class DocumentsProvider extends android.provider.DocumentsProvider{
 
         return getDocIdForFile(destFile);
     }
-    void recursive_delete_sub_files(File dir) throws FileNotFoundException {
+    static void recursive_delete_sub_files(File dir) throws FileNotFoundException {
         File[] files = dir.listFiles();
         if(files == null)
             return;

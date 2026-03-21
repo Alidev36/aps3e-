@@ -6,6 +6,7 @@ import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.View;
+import android.view.Window;
 import android.webkit.WebView;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
@@ -205,6 +206,10 @@ public class AboutActivity extends AppCompatActivity {
                 + " *修复DLC不生效（.iso)\n"
                 + " *修复设置界面旋转崩溃\n"
                 + " *部分调整与优化\n"
+                + "1.37(2026-03-21)\n"
+                + " *适配不支持触屏的设备\n"
+                + " *增加用户数据管理页面\n"
+                + " *优化了内存搜索\n"
                 + " \n";
 
         return log;
@@ -276,6 +281,7 @@ public class AboutActivity extends AppCompatActivity {
     @Override
     public void onCreate(Bundle savedInstanceState)
     {
+        supportRequestWindowFeature(Window.FEATURE_NO_TITLE);
         super.onCreate(savedInstanceState);
 
         setContentView(R.layout.activity_about);

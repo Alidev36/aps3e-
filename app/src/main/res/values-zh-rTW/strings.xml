@@ -1,5 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+
+<string name="user_data_manager">使用者資料管理員</string>
+<string name="ppu_cache_manager">PPU快取管理員</string>
+<string name="import_ppu_cache">匯入PPU快取</string>
+<string name="export_ppu_cache">匯出PPU快取</string>
+<string name="import_ppu_cache_done">PPU快取匯入完成</string>
+<string name="import_ppu_cache_failed">PPU快取匯入失敗</string>
+<string name="iso_dir_manager">ISO目錄管理員</string>
+<string name="compatibility_table">遊戲相容性表</string>
+<string name="driver_manager">驅動程式管理員</string>
+<string name="add_a_iso_dir">新增一個iso目錄</string>
+<string name="download_compatibility_data_sheet">下載相容性資料表</string>
+<string name="reset_search">重置搜尋</string>
+<string name="save_to">儲存至 %s</string>
+<string name="remove_directory">移除目錄</string>
+<string name="downloading">正在下載...</string>
+<string name="download_success">下載成功</string>
+<string name="download_failed">下載失敗</string>
+<string name="information">資訊</string>
+
 	<string name="creating_ppu_cache">正在建立 PPU 快取</string>
 <string name="please_enter_a_search_value">請輸入搜尋值</string>
 <string name="search_value_cannot_be_greater_than">搜尋值不能大於</string>

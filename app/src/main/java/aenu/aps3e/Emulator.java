@@ -650,5 +650,5 @@ public class Emulator extends aenu.emulator.Emulator
 
 	public native CheatInfo[] search_memory(CheatInfo info);
 	public native void set_cheat(CheatInfo info);
-    
+	public native void get_cheat(CheatInfo info);
 }

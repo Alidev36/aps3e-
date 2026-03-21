@@ -1,6 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+<string name="user_data_manager">उपयोगकर्ता डेटा प्रबंधक</string>
+<string name="ppu_cache_manager">PPU कैश प्रबंधक</string>
+<string name="import_ppu_cache">PPU कैश आयात करें</string>
+<string name="export_ppu_cache">PPU कैश निर्यात करें</string>
+<string name="import_ppu_cache_done">PPU कैश आयात पूर्ण हुआ</string>
+<string name="import_ppu_cache_failed">PPU कैश आयात विफल रहा</string>
+<string name="iso_dir_manager">ISO निर्देशिका प्रबंधक</string>
+<string name="compatibility_table">गेम संगतता तालिका</string>
+<string name="driver_manager">ड्राइवर प्रबंधक</string>
+<string name="add_a_iso_dir">एक iso निर्देशिका जोड़ें</string>
+<string name="download_compatibility_data_sheet">संगतता डेटा शीट डाउनलोड करें</string>
+<string name="reset_search">खोज रीसेट करें</string>
+<string name="save_to">%s में सहेजें</string>
+<string name="remove_directory">निर्देशिका हटाएं</string>
+<string name="downloading">डाउनलोड हो रहा है...</string>
+<string name="download_success">डाउनलोड सफल</string>
+<string name="download_failed">डाउनलोड विफल रहा</string>
+<string name="information">जानकारी</string>
+
 	<string name="creating_ppu_cache">PPU कैशे बनाया जा रहा है</string>
 <string name="please_enter_a_search_value">कृपया खोज मान दर्ज करें</string>
 <string name="search_value_cannot_be_greater_than">खोज मान इससे अधिक नहीं हो सकता</string>

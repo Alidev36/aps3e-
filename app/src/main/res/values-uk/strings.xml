@@ -1,6 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+<string name="user_data_manager">Менеджер даних користувача</string>
+<string name="ppu_cache_manager">Менеджер кешу PPU</string>
+<string name="import_ppu_cache">Імпортувати кеш PPU</string>
+<string name="export_ppu_cache">Експортувати кеш PPU</string>
+<string name="import_ppu_cache_done">Імпорт кешу PPU завершено</string>
+<string name="import_ppu_cache_failed">Не вдалося імпортувати кеш PPU</string>
+<string name="iso_dir_manager">Менеджер каталогів ISO</string>
+<string name="compatibility_table">Таблиця сумісності ігор</string>
+<string name="driver_manager">Менеджер драйверів</string>
+<string name="add_a_iso_dir">Додати каталог iso</string>
+<string name="download_compatibility_data_sheet">Завантажити аркуш даних сумісності</string>
+<string name="reset_search">Скинути пошук</string>
+<string name="save_to">Зберегти у %s</string>
+<string name="remove_directory">Видалити каталог</string>
+<string name="downloading">Завантаження...</string>
+<string name="download_success">Завантаження успішне</string>
+<string name="download_failed">Завантаження не вдалося</string>
+<string name="information">Інформація</string>
+
 	<string name="creating_ppu_cache">Створення кешу PPU</string>
 <string name="please_enter_a_search_value">Будь ласка, введіть значення для пошуку</string>
 <string name="search_value_cannot_be_greater_than">Значення пошуку не може бути більшим за</string>

@@ -1,6 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+<string name="user_data_manager">مدیریت داده‌های کاربر</string>
+<string name="ppu_cache_manager">مدیر کش PPU</string>
+<string name="import_ppu_cache">واردات کش PPU</string>
+<string name="export_ppu_cache">صادرات کش PPU</string>
+<string name="import_ppu_cache_done">واردات کش PPU با موفقیت انجام شد</string>
+<string name="import_ppu_cache_failed">واردات کش PPU ناموفق بود</string>
+<string name="iso_dir_manager">مدیر دایرکتوری ISO</string>
+<string name="compatibility_table">جدول سازگاری بازی</string>
+<string name="driver_manager">مدیر درایور</string>
+<string name="add_a_iso_dir">افزودن یک دایرکتوری iso</string>
+<string name="download_compatibility_data_sheet">دانلود فایل داده‌های سازگاری</string>
+<string name="reset_search">بازنشانی جستجو</string>
+<string name="save_to">ذخیره در %s</string>
+<string name="remove_directory">حذف دایرکتوری</string>
+<string name="downloading">در حال دانلود...</string>
+<string name="download_success">دانلود با موفقیت انجام شد</string>
+<string name="download_failed">دانلود ناموفق بود</string>
+<string name="information">اطلاعات</string>
+
     <string name="creating_ppu_cache">در حال ایجاد حافظه‌ی PPU</string>
 <string name="please_enter_a_search_value">لطفاً مقدار جستجو را وارد کنید</string>
 <string name="search_value_cannot_be_greater_than">مقدار جستجو نمی‌تواند بیشتر از</string>

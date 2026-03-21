@@ -2,6 +2,25 @@
 
 <resources>
 
+<string name="user_data_manager">ユーザー データ マネージャー</string>
+<string name="ppu_cache_manager">PPU キャッシュ マネージャー</string>
+<string name="import_ppu_cache">PPU キャッシュのインポート</string>
+<string name="export_ppu_cache">PPU キャッシュのエクスポート</string>
+<string name="import_ppu_cache_done">PPU キャッシュのインポートが完了しました</string>
+<string name="import_ppu_cache_failed">PPU キャッシュのインポートに失敗しました</string>
+<string name="iso_dir_manager">ISO ディレクトリ マネージャー</string>
+<string name="compatibility_table">ゲーム互換性テーブル</string>
+<string name="driver_manager">ドライバー マネージャー</string>
+<string name="add_a_iso_dir">iso ディレクトリを追加</string>
+<string name="download_compatibility_data_sheet">互換性データシートのダウンロード</string>
+<string name="reset_search">検索のリセット</string>
+<string name="save_to">%s に保存</string>
+<string name="remove_directory">ディレクトリを削除</string>
+<string name="downloading">ダウンロード中...</string>
+<string name="download_success">ダウンロード成功</string>
+<string name="download_failed">ダウンロード失敗</string>
+<string name="information">情報</string>
+
     <string name="creating_ppu_cache">PPUキャッシュを作成中</string>
 <string name="please_enter_a_search_value">検索値を入力してください</string>
 <string name="search_value_cannot_be_greater_than">検索値は次の値より大きくできません:</string>

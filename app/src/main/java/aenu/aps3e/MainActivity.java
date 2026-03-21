@@ -87,7 +87,9 @@ public class MainActivity extends AppCompatActivity {
 	//private static final int REQUEST_INSTALL_GAME_PKG=6003;
 	public static final int REQUEST_SELECT_ISO_DIR=6004;
 
-	private static final String PREF_KEY_ISO_DIR="iso_dir";
+	static final String PREF_KEY_ISO_DIR="iso_dir";
+
+	static final String PREF_KEY_EXTRA_ISO_DIRS="extra_iso_dirs";
 
 	public static File get_hdd0_game_dir(){
 		return new File(Application.get_app_data_dir(),"config/dev_hdd0/game");
@@ -105,6 +107,19 @@ public class MainActivity extends AppCompatActivity {
 		File cache_dir=new File(Application.get_app_data_dir(),"cache/cache/"+serial);
 		if(!cache_dir.exists()) return null;
 		File[] ppu_cache_dir=cache_dir.listFiles();
+		return ppu_cache_dir;
+	}
+
+	public static File[] get_all_ppu_cache_dirs(){
+		File cache_dir=new File(Application.get_app_data_dir(),"cache/cache");
+		if(!cache_dir.exists()) return null;
+		File[] ppu_cache_dir=cache_dir.listFiles(new FileFilter(){
+			@Override
+			public boolean accept(File f)
+			{
+				return f.isDirectory();
+			}
+		});
 		return ppu_cache_dir;
 	}
 	public static File[] get_shader_cache_dirs(String serial){
@@ -214,6 +229,7 @@ public class MainActivity extends AppCompatActivity {
 	Toolbar toolbar;
     @Override
     public void onCreate(Bundle savedInstanceState){
+        supportRequestWindowFeature(Window.FEATURE_NO_TITLE);
 
         super.onCreate(savedInstanceState);
 
@@ -221,6 +237,7 @@ public class MainActivity extends AppCompatActivity {
 
 		// 设置 Toolbar
 		toolbar = findViewById(R.id.toolbar);
+
 		setSupportActionBar(toolbar);
 		if(getSupportActionBar()!=null) {
 			getSupportActionBar().setTitle(getString(R.string.select_game));//"选择游戏");
@@ -277,17 +294,24 @@ public class MainActivity extends AppCompatActivity {
 		activity.startActivityForResult(intent, request_code);
 	}
 
-	static void request_iso_dir_select(Activity activity){
+	static void request_dir_select(Activity activity,int request_code){
 		Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
 		intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-		activity.startActivityForResult(intent, REQUEST_SELECT_ISO_DIR);
+		activity.startActivityForResult(intent, request_code);
+	}
+	static void request_iso_dir_select(Activity activity){
+		request_dir_select(activity, REQUEST_SELECT_ISO_DIR);
 	}
 
 	static void save_pref_iso_dir(Context ctx,Uri uri){
 		try{
-			ctx.getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);
 			SharedPreferences.Editor editor=PreferenceManager.getDefaultSharedPreferences(ctx).edit();
-			editor.putString(PREF_KEY_ISO_DIR,uri.toString());
+			if(uri==null)
+				editor.remove(PREF_KEY_ISO_DIR);
+			else {
+				ctx.getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);
+				editor.putString(PREF_KEY_ISO_DIR, uri.toString());
+			}
 			editor.apply();
 		}
 		catch(Exception e){
@@ -307,6 +331,48 @@ public class MainActivity extends AppCompatActivity {
 		catch(Exception e){
 			e.printStackTrace();
 			return null;
+		}
+	}
+
+	static Set<Uri> load_pref_extra_iso_dirs(Context ctx){
+
+		Set<Uri> uris=new HashSet<>();
+		try{
+			Set<String> uri_str=PreferenceManager.getDefaultSharedPreferences(ctx).getStringSet(PREF_KEY_EXTRA_ISO_DIRS,null);
+			if(uri_str==null||uri_str.isEmpty())
+				return uris;
+
+			for(String _uri_str:uri_str){
+				Uri uri= Uri.parse(_uri_str);
+				ctx.getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);
+				uris.add(uri);
+			}
+
+			return uris;
+		}
+		catch(Exception e){
+			e.printStackTrace();
+			return uris;
+		}
+	}
+
+	public static void save_pref_extra_iso_dirs(Context ctx,Set<Uri> uris){
+		try{
+			Set<String> uri_str=new HashSet<String>();
+			for(Uri uri:uris){
+				ctx.getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);
+				uri_str.add(uri.toString());
+			}
+			SharedPreferences.Editor editor=PreferenceManager.getDefaultSharedPreferences(ctx).edit();
+			if(uri_str.isEmpty())
+				editor.remove(PREF_KEY_EXTRA_ISO_DIRS);
+			else
+				editor.putStringSet(PREF_KEY_EXTRA_ISO_DIRS,uri_str);
+
+			editor.apply();
+		}
+		catch(Exception e){
+			e.printStackTrace();
 		}
 	}
 
@@ -338,6 +404,10 @@ public class MainActivity extends AppCompatActivity {
 			startActivity(new Intent(this,KeyMapActivity.class));
 			return true;
 		}
+		else if(item_id==R.id.menu_user_data){
+			startActivity(new Intent(this,UserDataActivity.class));
+			return true;
+		}
 		/*else if(item_id==R.id.menu_gratitude){
 			startActivity(new Intent(this,GratitudeActivity.class));
 			return true;
@@ -354,7 +424,7 @@ public class MainActivity extends AppCompatActivity {
 			/*Intent it=new Intent(this,TextActivity.class);
 			it.putExtra("text",Emulator.get.generate_java_string_arr());
 			startActivity(it);*/
-			UserDataActivity.open_file_manager(this);
+			Utils.open_file_manager(this);
 			return true;
 		}
 		else if(item_id==R.id.menu_set_iso_dir){
@@ -928,7 +998,7 @@ public class MainActivity extends AppCompatActivity {
 
 	}
 
-    private static class GameMetaInfoAdapter extends BaseAdapter {
+	static class GameMetaInfoAdapter extends BaseAdapter {
 		
 		private static final FileFilter dir_filter_=new FileFilter(){
             
@@ -1063,19 +1133,23 @@ public class MainActivity extends AppCompatActivity {
 
 		private static ArrayList<DocumentFile> get_game_iso_list(MainActivity context_){
 			ArrayList<DocumentFile> iso_list=new ArrayList<DocumentFile>();
-			Uri uri=context_.load_pref_iso_dir(context_);
-			if(uri==null)
-				return iso_list;
-			DocumentFile iso_dir=DocumentFile.fromTreeUri(context_, uri);
-			if(iso_dir==null||!iso_dir.exists())
-				return iso_list;
-			DocumentFile [] iso_files=iso_dir.listFiles();
-			if(iso_files==null)
-				return iso_list;
-			for(DocumentFile f:iso_files){
-				if(f.isFile()&&f.getName().endsWith(".iso"))
-					iso_list.add(f);
+			Uri main_uri=context_.load_pref_iso_dir(context_);
+			Set<Uri> uris=context_.load_pref_extra_iso_dirs(context_);
+			if(main_uri!=null)
+				uris.add(main_uri);
+			for(Uri uri:uris){
+				DocumentFile iso_dir=DocumentFile.fromTreeUri(context_, uri);
+				if(iso_dir==null||!iso_dir.exists())
+					continue;
+				DocumentFile [] iso_files=iso_dir.listFiles();
+				if(iso_files==null)
+					continue;
+				for(DocumentFile f:iso_files){
+					if(f.isFile()&&f.getName().endsWith(".iso"))
+						iso_list.add(f);
+				}
 			}
+
 			return iso_list;
 		}
 		

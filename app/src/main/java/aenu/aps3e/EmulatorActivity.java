@@ -127,6 +127,10 @@ public class EmulatorActivity extends AppCompatActivity {
 
 	final XOnBackPressedCallback emu_back_pressed_callback = new XOnBackPressedCallback(this,true);
 
+
+	boolean mem_searched = false;
+	Emulator.CheatInfo[] mem_search_results;
+
 	void on_create() {
 
 		//get meta info
@@ -218,6 +222,9 @@ public class EmulatorActivity extends AppCompatActivity {
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
+
+		supportRequestWindowFeature(Window.FEATURE_NO_TITLE);
+
 		super.onCreate(savedInstanceState);
 		Utils.enable_fullscreen(getWindow());
 		getOnBackPressedDispatcher().addCallback(emu_back_pressed_callback);
@@ -266,7 +273,6 @@ public class EmulatorActivity extends AppCompatActivity {
 		System.exit(0);
 	}
 
-
 	public static class DialogFragment extends androidx.fragment.app.DialogFragment{
 		private static final String KEY_DIALOG_TAG = "dialog_type";
 		public static DialogFragment newInstance(String dialog_tag) {
@@ -275,6 +281,26 @@ public class EmulatorActivity extends AppCompatActivity {
 			DialogFragment fragment = new DialogFragment();
 			fragment.setArguments(args);
 			return fragment;
+		}
+
+		static void update_mem_search_view(Context ctx,Emulator.CheatInfo[] searchResults,ListView searchListView,TextView searchResultTextView){
+
+			final ArrayAdapter<String> listAdapter = new ArrayAdapter<>(ctx, android.R.layout.simple_list_item_1);
+			if (searchResults == null || searchResults.length == 0) {
+				listAdapter.clear();
+				searchResultTextView.setText(R.string.search_results_0_matches);
+				//Toast.makeText(getContext(), R.string.no_matching_memory_address_found, Toast.LENGTH_SHORT).show();
+				searchListView.setAdapter(listAdapter);
+				return;
+			}
+			listAdapter.clear();
+			if (searchResults.length <= 50) {
+				for (Emulator.CheatInfo info : searchResults) {
+					listAdapter.add(String.format("0x%08X", info.addr));
+				}
+			}
+			searchListView.setAdapter(listAdapter);
+			searchResultTextView.setText(String.format(ctx.getString(R.string.search_results_n_matches), searchResults.length));
 		}
 		@NonNull
 		@Override
@@ -335,15 +361,30 @@ public class EmulatorActivity extends AppCompatActivity {
 					TextView selectedAddressTextView = (TextView) view.findViewById(R.id.selected_address);
 					EditText writeValueEditText = (EditText) view.findViewById(R.id.write_value);
 					Button btnSearch = (Button) view.findViewById(R.id.btn_search);
+					Button btnReset = (Button) view.findViewById(R.id.btn_reset);
 					Button btnWrite = (Button) view.findViewById(R.id.btn_write);
 
-					String[] searchTypes = {"U8", "U16", "U32"};
-					ArrayAdapter<String> adapter = new ArrayAdapter<>(getContext(), android.R.layout.simple_spinner_item, searchTypes);
+
+					final String[] strSearchTypes = {"u32", "u16", "u8"};
+					final int[] searchTypes = {Emulator.CheatInfo.TYPE_U32, Emulator.CheatInfo.TYPE_U16, Emulator.CheatInfo.TYPE_U8};
+					ArrayAdapter<String> adapter = new ArrayAdapter<>(getContext(), android.R.layout.simple_spinner_item, strSearchTypes);
 					adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
 					searchTypeSpinner.setAdapter(adapter);
 
-					final ArrayAdapter<String> listAdapter = new ArrayAdapter<>(getContext(), android.R.layout.simple_list_item_1);
-					searchListView.setAdapter(listAdapter);
+					EmulatorActivity activity = (EmulatorActivity) getActivity();
+					if(activity.mem_searched&&activity.mem_search_results!=null&&activity.mem_search_results.length!=0){
+						Emulator.CheatInfo cheatInfo=activity.mem_search_results[0];
+						for(int i=0;i<searchTypes.length;i++){
+							if(cheatInfo.type==searchTypes[i]){
+								searchTypeSpinner.setSelection(i);
+								break;
+							}
+						}
+						searchTypeSpinner.setEnabled(false);
+
+						update_mem_search_view(getContext(),activity.mem_search_results,searchListView,searchResultTextView);
+					}
+
 
 					btnSearch.setOnClickListener(new View.OnClickListener() {
 						@Override
@@ -356,20 +397,20 @@ public class EmulatorActivity extends AppCompatActivity {
 
 							try {
 								long searchValue = Utils.convert_hex_str_to_long(searchValueStr);
-								int searchType = searchTypeSpinner.getSelectedItemPosition() + 1;
+								int searchType = searchTypes[searchTypeSpinner.getSelectedItemPosition()];
 								String exception_msg_prefix = getString(R.string.search_value_cannot_be_greater_than);
 								switch (searchType) {
-									case 1:
+									case Emulator.CheatInfo.TYPE_U8:
 										if (searchValue > 0xFF)
 											throw new Exception(exception_msg_prefix + "0xFF");
 										break;
 
-									case 2:
+									case Emulator.CheatInfo.TYPE_U16:
 										if (searchValue > 0xFFFF)
 											throw new Exception(exception_msg_prefix + "0xFFFF");
 										break;
 
-									case 3:
+									case Emulator.CheatInfo.TYPE_U32:
 										if (searchValue > 0xFFFFFFFFL)
 											throw new Exception(exception_msg_prefix + "0xFFFFFFFF");
 										break;
@@ -378,23 +419,34 @@ public class EmulatorActivity extends AppCompatActivity {
 								Emulator.CheatInfo searchInfo = new Emulator.CheatInfo();
 								searchInfo.type = searchType;
 								searchInfo.value = searchValue;
-								Emulator.CheatInfo[] searchResults = Emulator.get.search_memory(searchInfo);
 
-								if (searchResults == null || searchResults.length == 0) {
-									listAdapter.clear();
-									searchResultTextView.setText(R.string.search_results_0_matches);
+								Emulator.CheatInfo[] searchResults;
+								if(!activity.mem_searched){
+									searchResults=activity.mem_search_results=Emulator.get.search_memory(searchInfo);
+									activity.mem_searched=true;
+								}
+								else{
+									searchResults=activity.mem_search_results;
+									if(searchResults!=null&&searchResults.length>0){
+										ArrayList<Emulator.CheatInfo> filteredResults = new ArrayList<>();
+										for (Emulator.CheatInfo info : searchResults) {
+											Emulator.get.get_cheat(info);
+											if (info.value == searchValue) {
+												filteredResults.add(info);
+											}
+										}
+										searchResults = filteredResults.toArray(new Emulator.CheatInfo[0]);
+										activity.mem_search_results=searchResults;
+									}
+								}
+
+								if(searchResults==null||searchResults.length==0){
 									selectedAddressTextView.setText(R.string.please_select_the_address_to_write_to_first);
-									Toast.makeText(getContext(), R.string.no_matching_memory_address_found, Toast.LENGTH_SHORT).show();
-									return;
 								}
 
-								listAdapter.clear();
-								final int RESULT_COUNT_MAX = 200;
-								for (int i = 0, n = Math.min(searchResults.length, RESULT_COUNT_MAX); i < n; i++) {
-									listAdapter.add(String.format("0x%08X", searchResults[i].addr));
-								}
+								searchTypeSpinner.setEnabled(false);
+								update_mem_search_view(getContext(),searchResults,searchListView,searchResultTextView);
 
-								searchResultTextView.setText(String.format(getString(R.string.search_results_n_matches), searchResults.length));
 								Toast.makeText(getContext(), String.format(getString(R.string.search_results_n_matches), searchResults.length), Toast.LENGTH_SHORT).show();
 
 							} catch (NumberFormatException e) {
@@ -405,10 +457,26 @@ public class EmulatorActivity extends AppCompatActivity {
 						}
 					});
 
+					btnReset.setOnClickListener(new View.OnClickListener() {
+						@Override
+						public void onClick(View v) {
+							EmulatorActivity activity = (EmulatorActivity) getActivity();
+							activity.mem_searched=false;
+							activity.mem_search_results=null;
+
+							searchTypeSpinner.setEnabled(true);
+							searchListView.setAdapter(new ArrayAdapter<>(getContext(), android.R.layout.simple_list_item_1));
+							searchResultTextView.setText("");
+							selectedAddressTextView.setText(R.string.please_select_the_memory_address_to_write_to_first);
+							searchValueEditText.setText("");
+							writeValueEditText.setText("");
+						}
+					});
+
 					searchListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
 						@Override
 						public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-							String selectedItem = listAdapter.getItem(position);
+							String selectedItem = (String) parent.getAdapter().getItem(position);
 							if (selectedItem != null) {
 								selectedAddressTextView.setText(getString(R.string.address_selected) + selectedItem);
 							}
@@ -434,21 +502,21 @@ public class EmulatorActivity extends AppCompatActivity {
 							try {
 								long address = Long.parseLong(selectedAddressStr.toUpperCase(), 16);
 								long writeValue = Utils.convert_hex_str_to_long(writeValueStr);
-								int writeType = searchTypeSpinner.getSelectedItemPosition() + 1;
+								int writeType = searchTypes[searchTypeSpinner.getSelectedItemPosition()];
 								String exception_msg_prefix = getString(R.string.the_value_to_be_written_cannot_be_greater_than);
 
 								switch (writeType) {
-									case 1:
+									case Emulator.CheatInfo.TYPE_U8:
 										if (writeValue > 0xFF)
 											throw new Exception(exception_msg_prefix + "0xFF");
 										break;
 
-									case 2:
+									case Emulator.CheatInfo.TYPE_U16:
 										if (writeValue > 0xFFFF)
 											throw new Exception(exception_msg_prefix + "0xFFFF");
 										break;
 
-									case 3:
+									case Emulator.CheatInfo.TYPE_U32:
 										if (writeValue > 0xFFFFFFFFL)
 											throw new Exception(exception_msg_prefix + "0xFFFFFFFF");
 										break;

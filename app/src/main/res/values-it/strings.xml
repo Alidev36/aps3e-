@@ -1,6 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+<string name="user_data_manager">Gestore dati utente</string>
+<string name="ppu_cache_manager">Gestore cache PPU</string>
+<string name="import_ppu_cache">Importa cache PPU</string>
+<string name="export_ppu_cache">Esporta cache PPU</string>
+<string name="import_ppu_cache_done">Importazione cache PPU completata</string>
+<string name="import_ppu_cache_failed">Importazione cache PPU non riuscita</string>
+<string name="iso_dir_manager">Gestore directory ISO</string>
+<string name="compatibility_table">Tabella di compatibilità giochi</string>
+<string name="driver_manager">Gestore driver</string>
+<string name="add_a_iso_dir">Aggiungi una directory iso</string>
+<string name="download_compatibility_data_sheet">Scarica foglio dati compatibilità</string>
+<string name="reset_search">Reimposta ricerca</string>
+<string name="save_to">Salva in %s</string>
+<string name="remove_directory">Rimuovi directory</string>
+<string name="downloading">Download in corso...</string>
+<string name="download_success">Download riuscito</string>
+<string name="download_failed">Download non riuscito</string>
+<string name="information">Informazioni</string>
+
     <string name="creating_ppu_cache">Creazione cache PPU</string>
 <string name="please_enter_a_search_value">Inserisci un valore di ricerca</string>
 <string name="search_value_cannot_be_greater_than">Il valore di ricerca non può essere maggiore di</string>
