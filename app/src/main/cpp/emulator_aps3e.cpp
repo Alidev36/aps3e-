@@ -539,6 +539,11 @@ static void j_get_cheat(JNIEnv* env,jobject self,jobject cheat_info){
     }
 }
 
+//public native void camera_frame(byte[] data, int width, int height, int format);
+static void j_camera_frame(JNIEnv* env,jobject self,jbyteArray data,jint width,jint height,jint format){
+
+}
+
 static auto gen_key=[](const std::string& name)->std::string{
     std::string k=name;
     if(size_t p=k.find("(");p!=std::string::npos){
@@ -1052,6 +1057,7 @@ int register_aps3e_Emulator(JNIEnv* env){
             { "set_cheat", "(Laenu/aps3e/Emulator$CheatInfo;)V", (void *) j_set_cheat},
             { "get_cheat", "(Laenu/aps3e/Emulator$CheatInfo;)V", (void *) j_get_cheat},
 
+            {"camera_frame", "([BIII)V", (void *) j_camera_frame},
     };
 
     jclass clazz = env->FindClass("aenu/aps3e/Emulator");

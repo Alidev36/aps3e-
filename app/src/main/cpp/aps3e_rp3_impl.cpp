@@ -232,6 +232,387 @@ extern const std::unordered_map<rsx::overlays::language_class,std::string>& cfg_
     return r;
 }
 
+
+android_camera_handler::android_camera_handler(JavaVM *vm) : camera_handler_base()
+{
+    aps3e_log.notice("android_camera_handler created");
+
+    jvm_ = vm;
+
+    if (!jvm_)
+    {
+        aps3e_log.error("No Java VM available");
+        m_state = camera_handler_state::closed;
+        return;
+    }
+
+    if (!init_java_camera())
+    {
+        aps3e_log.error("Failed to initialize Java camera");
+        m_state = camera_handler_state::closed;
+    }
+}
+
+android_camera_handler::~android_camera_handler()
+{
+    aps3e_log.notice("android_camera_handler destroyed");
+    Emu.BlockingCallFromMainThread([&]()
+                                   {
+                                       close_camera();
+                                       reset();
+                                   });
+}
+JNIEnv* android_camera_handler::get_env(JavaVM *vm){
+    JNIEnv* env = nullptr;
+    int status = vm->GetEnv((void**)&env, JNI_VERSION_1_6);
+    if (status == JNI_EDETACHED) {
+        vm->AttachCurrentThread(&env, nullptr);
+        //pthread_cleanup_push([](void* arg) {
+        //    jvm_->DetachCurrentThread();
+        //}, nullptr);
+    }
+    return env;
+}
+bool android_camera_handler::init_java_camera()
+{
+    JNIEnv* env = get_env(jvm_);
+    if (!env)
+    {
+        LOGE("Failed to get JNI environment");
+        return false;
+    }
+
+    jclass camera_class = env->FindClass("aenu/aps3e/io/Camera");
+    if (!camera_class)
+    {
+        LOGE("Failed to find AndroidCamera class");
+        return false;
+    }
+
+    jmethodID constructor = env->GetMethodID(camera_class, "<init>", "(Landroid/content/Context;)V");
+    if (!constructor)
+    {
+        LOGE("Failed to get AndroidCamera constructor");
+        env->DeleteLocalRef(camera_class);
+        return false;
+    }
+
+    jobject instance = env->NewObject(camera_class, constructor);//FIXME
+    if (!instance)
+    {
+        LOGE("Failed to create AndroidCamera instance");
+        env->DeleteLocalRef(camera_class);
+        return false;
+    }
+
+    j_camera_instance_ = env->NewGlobalRef(instance);
+
+    mth_open_ = env->GetMethodID(camera_class, "open_camera", "()V");
+    mth_close_ = env->GetMethodID(camera_class, "close_camera", "()V");
+    mth_start_ = env->GetMethodID(camera_class, "start_camera", "()V");
+    mth_stop_ = env->GetMethodID(camera_class, "stop_camera", "()V");
+    mth_set_resolution_ = env->GetMethodID(camera_class, "set_resolution", "(II)V");
+    mth_set_format_ = env->GetMethodID(camera_class, "set_format", "(I)V");
+    mth_set_mirrored_ = env->GetMethodID(camera_class, "set_mirrored", "(Z)V");
+
+    env->DeleteLocalRef(instance);
+    env->DeleteLocalRef(camera_class);
+
+    if (!mth_open_ || !mth_close_ || !mth_start_ || !mth_stop_)
+    {
+        LOGE("Failed to get camera method IDs");
+        cleanup_java_camera();
+        return false;
+    }
+
+    LOGI("Android camera initialized successfully");
+    return true;
+}
+
+void android_camera_handler::cleanup_java_camera()
+{
+    if (j_camera_instance_){
+        JNIEnv* env = get_env(jvm_);
+        env->DeleteGlobalRef(j_camera_instance_);
+        j_camera_instance_ = nullptr;
+    }
+}
+
+void android_camera_handler::reset()
+{
+    std::lock_guard<std::mutex> lock(frame_mutex_);
+    frame_buffer_.clear();
+    frame_width_ = 0;
+    frame_height_ = 0;
+    frame_number_ = 0;
+    has_new_frame_ = false;
+    cleanup_java_camera();
+}
+
+void android_camera_handler::open_camera()
+{
+    aps3e_log.notice("Opening android camera");
+
+    if (!j_camera_instance_)
+    {
+        aps3e_log.error("Java camera not initialized");
+        m_state = camera_handler_state::closed;
+        return;
+    }
+
+    JNIEnv* env = get_env(jvm_);
+    if (!env)
+    {
+        aps3e_log.error("Failed to get JNI environment");
+        m_state = camera_handler_state::closed;
+        return;
+    }
+
+    // Set resolution and format before opening
+    if (mth_set_resolution_)
+    {
+        env->CallVoidMethod(j_camera_instance_, mth_set_resolution_, m_width, m_height);
+    }
+
+    if (mth_set_format_)
+    {
+        env->CallVoidMethod(j_camera_instance_, mth_set_format_, m_format);
+    }
+
+    if (mth_set_mirrored_)
+    {
+        env->CallVoidMethod(j_camera_instance_, mth_set_mirrored_, m_mirrored ? JNI_TRUE : JNI_FALSE);
+    }
+
+    if (mth_open_)
+    {
+        env->CallVoidMethod(j_camera_instance_, mth_open_);
+    }
+
+    m_state = camera_handler_state::open;
+    aps3e_log.notice("Camera opened successfully");
+}
+
+void android_camera_handler::close_camera()
+{
+    aps3e_log.notice("Closing android camera");
+
+    if (!j_camera_instance_)
+    {
+        m_state = camera_handler_state::closed;
+        return;
+    }
+
+    JNIEnv* env = get_env(jvm_);
+    if (!env)
+    {
+        m_state = camera_handler_state::closed;
+        return;
+    }
+
+    if (mth_stop_ && m_state == camera_handler_state::running)
+    {
+        env->CallVoidMethod(j_camera_instance_, mth_stop_);
+    }
+
+    if (mth_close_)
+    {
+        env->CallVoidMethod(j_camera_instance_, mth_close_);
+    }
+
+    m_state = camera_handler_state::closed;
+    aps3e_log.notice("Camera closed");
+}
+
+void android_camera_handler::start_camera()
+{
+    aps3e_log.notice("Starting android camera");
+
+    if (!j_camera_instance_)
+    {
+        aps3e_log.error("Java camera not initialized");
+        m_state = camera_handler_state::closed;
+        return;
+    }
+
+    JNIEnv* env = get_env(jvm_);
+    if (!env)
+    {
+        aps3e_log.error("Failed to get JNI environment");
+        m_state = camera_handler_state::closed;
+        return;
+    }
+
+    if (mth_start_)
+    {
+        env->CallVoidMethod(j_camera_instance_, mth_start_);
+    }
+
+    m_state = camera_handler_state::running;
+    aps3e_log.notice("Camera started");
+}
+
+void android_camera_handler::stop_camera()
+{
+    aps3e_log.notice("Stopping android camera");
+
+    if (!j_camera_instance_)
+    {
+        m_state = camera_handler_state::closed;
+        return;
+    }
+
+    JNIEnv* env = get_env(jvm_);
+    if (!env)
+    {
+        m_state = camera_handler_state::closed;
+        return;
+    }
+
+    if (mth_stop_)
+    {
+        env->CallVoidMethod(j_camera_instance_, mth_stop_);
+    }
+
+    m_state = camera_handler_state::open;
+    aps3e_log.notice("Camera stopped");
+}
+
+void android_camera_handler::set_format(s32 format, u32 bytesize)
+{
+    m_format = format;
+    m_bytesize = bytesize;
+    aps3e_log.trace("Set format: %d, bytesize: %d", format, bytesize);
+}
+
+void android_camera_handler::set_frame_rate(u32 frame_rate)
+{
+    m_frame_rate = frame_rate;
+    aps3e_log.trace("Set frame rate: %d", frame_rate);
+}
+
+void android_camera_handler::set_resolution(u32 width, u32 height)
+{
+    m_width = width;
+    m_height = height;
+    aps3e_log.trace("Set resolution: %dx%d", width, height);
+}
+
+void android_camera_handler::set_mirrored(bool mirrored)
+{
+    m_mirrored = mirrored;
+    aps3e_log.trace("Set mirrored: %d", mirrored);
+}
+
+u64 android_camera_handler::frame_number() const
+{
+    return frame_number_.load();
+}
+
+void android_camera_handler::on_frame_available(void* data, int width, int height, int format)
+{
+    if (!data || width <= 0 || height <= 0)
+    {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(frame_mutex_);
+
+    size_t required_size = 0;
+    /*
+        * enum CellCameraFormat : s32
+{
+	CELL_CAMERA_FORMAT_UNKNOWN,
+	CELL_CAMERA_JPG,
+	CELL_CAMERA_RAW8,
+	CELL_CAMERA_YUV422,
+	CELL_CAMERA_RAW10,
+	CELL_CAMERA_RGBA,
+	CELL_CAMERA_YUV420,
+	CELL_CAMERA_V_Y1_U_Y0,
+	CELL_CAMERA_Y0_U_Y1_V = CELL_CAMERA_YUV422,
+};
+        * */
+    switch (format)
+    {
+        case 1: // CELL_CAMERA_JPG
+        case 5: // CELL_CAMERA_RGBA
+            required_size = width * height * 4;
+            break;
+        case 2: // CELL_CAMERA_RAW8
+            required_size = width * height;
+            break;
+        case 4: // CELL_CAMERA_YUV422
+            required_size = width * height * 2;
+            break;
+        case 6: // CELL_CAMERA_YUV420
+            required_size = width * height * 3 / 2;
+            break;
+        default:
+            required_size = width * height * 4; // Default to RGBA
+            break;
+    }
+
+    // Resize buffer if needed
+    if (frame_buffer_.size() < required_size)
+    {
+        frame_buffer_.resize(required_size);
+    }
+
+    // Copy frame data
+    std::memcpy(frame_buffer_.data(), data, required_size);
+
+    frame_width_ = width;
+    frame_height_ = height;
+    frame_number_++;
+    has_new_frame_ = true;
+}
+
+camera_handler_base::camera_handler_state android_camera_handler::get_image(
+        u8* buf, u64 size, u32& width, u32& height, u64& frame_number, u64& bytes_read)
+{
+    width = 0;
+    height = 0;
+    frame_number = 0;
+    bytes_read = 0;
+
+    if (!j_camera_instance_)
+    {
+        aps3e_log.error("Camera not initialized");
+        m_state = camera_handler_state::closed;
+        return camera_handler_state::closed;
+    }
+
+    const camera_handler_state current_state = m_state;
+
+    if (current_state == camera_handler_state::running)
+    {
+        std::lock_guard<std::mutex> lock(frame_mutex_);
+
+        if (has_new_frame_ && !frame_buffer_.empty())
+        {
+            size_t copy_size = std::min(static_cast<size_t>(size), frame_buffer_.size());
+            std::memcpy(buf, frame_buffer_.data(), copy_size);
+
+            width = frame_width_;
+            height = frame_height_;
+            frame_number = frame_number_.load();
+            bytes_read = copy_size;
+
+            has_new_frame_ = false;
+
+            aps3e_log.trace("Frame delivered: %dx%d, frame=%llu, bytes=%llu",
+                             width, height, frame_number, bytes_read);
+        }
+    }
+    else
+    {
+        aps3e_log.warning("Camera not running (state=%d)", static_cast<int>(current_state));
+    }
+
+    return current_state;
+}
+
 enum class APS3E_VKC:u32{
     none=0,
     l,u,r,d,

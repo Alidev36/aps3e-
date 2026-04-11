@@ -225,6 +225,7 @@ static void signal_handler(int /*sig*/, siginfo_t* info, void* uct) noexcept
 int register_Emulator(JNIEnv* env);
 int register_Emulator$Config(JNIEnv* env);
 int register_aps3e_Emulator(JNIEnv* env);
+JavaVM* g_jvm;
 
 extern "C" __attribute__((visibility("default")))
 jint JNI_OnLoad(JavaVM* vm, void* reserved){
@@ -233,6 +234,9 @@ jint JNI_OnLoad(JavaVM* vm, void* reserved){
     int result=-1;
 
     LOGW("JNI_OnLoad ");
+
+    g_jvm = vm;
+    
     if (vm->GetEnv((void**)&env, JNI_VERSION_1_6) != JNI_OK) {
         LOGE("GetEnv failed");
         goto bail;

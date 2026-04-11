@@ -352,18 +352,9 @@ namespace ae{
         callbacks.get_camera_handler = []() -> std::shared_ptr<camera_handler_base>
         {
             PRE("get_camera_handler");
-            /*switch (g_cfg.io.camera.get())
-            {
-            case camera_handler::null:
-            case camera_handler::fake:
-            {
-                return std::make_shared<null_camera_handler>();
-            }
-            case camera_handler::qt:
-            {
-                fmt::throw_exception("Headless mode can not be used with this camera handler. Current handler: %s", g_cfg.io.camera.get());
-            }
-            }*/
+            // Use android camera handler for real camera support
+            extern JavaVM* g_jvm;
+            //return std::make_shared<android_camera_handler>(g_jvm);
             return std::make_shared<null_camera_handler>();
         };
 

@@ -173,6 +173,51 @@
 extern std::string localized_strings[];
 extern void qt_events_aware_op(int repeat_duration_ms, std::function<bool()> wrapped_op);
 
+
+class android_camera_handler final : public camera_handler_base
+{
+public:
+    android_camera_handler(JavaVM *vm);
+    virtual ~android_camera_handler();
+
+    void open_camera() override;
+    void close_camera() override;
+    void start_camera() override;
+    void stop_camera() override;
+    void set_format(s32 format, u32 bytesize) override;
+    void set_frame_rate(u32 frame_rate) override;
+    void set_resolution(u32 width, u32 height) override;
+    void set_mirrored(bool mirrored) override;
+    u64 frame_number() const override;
+    camera_handler_state get_image(u8* buf, u64 size, u32& width, u32& height, u64& frame_number, u64& bytes_read) override;
+
+    void on_frame_available(void* data, int width, int height, int format);
+
+private:
+    void reset();
+    bool init_java_camera();
+    void cleanup_java_camera();
+    JNIEnv* get_env(JavaVM *vm);
+
+    mutable std::mutex frame_mutex_;
+    std::vector<u8> frame_buffer_;
+    int frame_width_ = 0;
+    int frame_height_ = 0;
+    atomic_t<u64> frame_number_{0};
+    bool has_new_frame_ = false;
+
+    jobject j_camera_instance_ = nullptr;
+    jmethodID mth_open_ = nullptr;
+    jmethodID mth_close_ = nullptr;
+    jmethodID mth_start_ = nullptr;
+    jmethodID mth_stop_ = nullptr;
+    jmethodID mth_set_resolution_ = nullptr;
+    jmethodID mth_set_format_ = nullptr;
+    jmethodID mth_set_mirrored_ = nullptr;
+
+    JavaVM *jvm_;
+};
+
 class AndroidVirtualPadHandler final : public PadHandlerBase
 {
 public:
