@@ -204,8 +204,9 @@ void iso_fs::read_dir(RootDirectoryRecord& dir_record, std::string path) {
 
         if(!(record.file_flags&0x2)) {
             file_identifier = file_identifier.substr(0, file_identifier.find(';'));
+            if(file_identifier.back()=='.')
+                file_identifier.pop_back();
         }
-
 #if 0
         if(auto it=files.find(file_identifier);it!=files.end()){
             it->second.blocks.push_back({
