@@ -3,6 +3,15 @@
     <!--string name="app_name">aPS3e Premium</string-->
 	<string name="app_name">aPS3e</string>
 
+	<string name="game_data_manager">Game Data Manager</string>
+	<string name="game_data_manager_desc">00000001</string>
+	<string name="import_game_data">Import Game Data</string>
+	<string name="export_game_data">Export Game Data</string>
+	<string name="import_game_data_done">Game data import completed</string>
+	<string name="import_game_data_failed">Game data import failed</string>
+	<string name="export_game_data_done">Game data export completed</string>
+	<string name="export_game_data_failed">Game data export failed</string>
+
 	<string name="user_data_manager">User Data Manager</string>
 	<string name="ppu_cache_manager">PPU Cache Manager</string>
 	<string name="import_ppu_cache">Import PPU Cache</string>

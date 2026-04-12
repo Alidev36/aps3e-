@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+    <string name="game_data_manager">गेम डेटा प्रबंधक</string>
+    <string name="game_data_manager_desc">00000001</string>
+    <string name="import_game_data">गेम डेटा आयात करें</string>
+    <string name="export_game_data">गेम डेटा निर्यात करें</string>
+    <string name="import_game_data_done">गेम डेटा आयात पूर्ण हुआ</string>
+    <string name="import_game_data_failed">गेम डेटा आयात विफल रहा</string>
+    <string name="export_game_data_done">गेम डेटा निर्यात पूर्ण हुआ</string>
+    <string name="export_game_data_failed">गेम डेटा निर्यात विफल रहा</string>
+
 <string name="user_data_manager">उपयोगकर्ता डेटा प्रबंधक</string>
 <string name="ppu_cache_manager">PPU कैश प्रबंधक</string>
 <string name="import_ppu_cache">PPU कैश आयात करें</string>

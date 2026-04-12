@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+<string name="game_data_manager">遊戲資料管理員</string>
+<string name="game_data_manager_desc">00000001</string>
+<string name="import_game_data">匯入遊戲資料</string>
+<string name="export_game_data">匯出遊戲資料</string>
+<string name="import_game_data_done">遊戲資料匯入完成</string>
+<string name="import_game_data_failed">遊戲資料匯入失敗</string>
+<string name="export_game_data_done">遊戲資料匯出完成</string>
+<string name="export_game_data_failed">遊戲資料匯出失敗</string>
+
 <string name="user_data_manager">使用者資料管理員</string>
 <string name="ppu_cache_manager">PPU快取管理員</string>
 <string name="import_ppu_cache">匯入PPU快取</string>

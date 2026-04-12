@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+	<string name="game_data_manager">Менеджер даних гри</string>
+	<string name="game_data_manager_desc">00000001</string>
+	<string name="import_game_data">Імпортувати дані гри</string>
+	<string name="export_game_data">Експортувати дані гри</string>
+	<string name="import_game_data_done">Імпорт даних гри завершено</string>
+	<string name="import_game_data_failed">Не вдалося імпортувати дані гри</string>
+	<string name="export_game_data_done">Експорт даних гри завершено</string>
+	<string name="export_game_data_failed">Не вдалося експортувати дані гри</string>
+
 <string name="user_data_manager">Менеджер даних користувача</string>
 <string name="ppu_cache_manager">Менеджер кешу PPU</string>
 <string name="import_ppu_cache">Імпортувати кеш PPU</string>

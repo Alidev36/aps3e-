@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+    <string name="game_data_manager">Oyun Veri Yöneticisi</string>
+    <string name="game_data_manager_desc">00000001</string>
+    <string name="import_game_data">Oyun Verilerini İçe Aktar</string>
+    <string name="export_game_data">Oyun Verilerini Dışa Aktar</string>
+    <string name="import_game_data_done">Oyun verileri içe aktarma tamamlandı</string>
+    <string name="import_game_data_failed">Oyun verileri içe aktarma başarısız oldu</string>
+    <string name="export_game_data_done">Oyun verileri dışa aktarma tamamlandı</string>
+    <string name="export_game_data_failed">Oyun verileri dışa aktarma başarısız oldu</string>
+
 <string name="user_data_manager">Kullanıcı Veri Yöneticisi</string>
 <string name="ppu_cache_manager">PPU Önbellek Yöneticisi</string>
 <string name="import_ppu_cache">PPU Önbelleğini İçe Aktar</string>

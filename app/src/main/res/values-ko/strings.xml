@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+<string name="game_data_manager">게임 데이터 관리자</string>
+<string name="game_data_manager_desc">00000001</string>
+<string name="import_game_data">게임 데이터 가져오기</string>
+<string name="export_game_data">게임 데이터 내보내기</string>
+<string name="import_game_data_done">게임 데이터 가져오기 완료</string>
+<string name="import_game_data_failed">게임 데이터 가져오기 실패</string>
+<string name="export_game_data_done">게임 데이터 내보내기 완료</string>
+<string name="export_game_data_failed">게임 데이터 내보내기 실패</string>
+
 <string name="user_data_manager">사용자 데이터 관리자</string>
 <string name="ppu_cache_manager">PPU 캐시 관리자</string>
 <string name="import_ppu_cache">PPU 캐시 가져오기</string>

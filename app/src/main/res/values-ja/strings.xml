@@ -2,6 +2,15 @@
 
 <resources>
 
+<string name="game_data_manager">ゲームデータマネージャー</string>
+<string name="game_data_manager_desc">00000001</string>
+<string name="import_game_data">ゲームデータをインポート</string>
+<string name="export_game_data">ゲームデータをエクスポート</string>
+<string name="import_game_data_done">ゲームデータのインポートが完了しました</string>
+<string name="import_game_data_failed">ゲームデータのインポートに失敗しました</string>
+<string name="export_game_data_done">ゲームデータのエクスポートが完了しました</string>
+<string name="export_game_data_failed">ゲームデータのエクスポートに失敗しました</string>
+
 <string name="user_data_manager">ユーザー データ マネージャー</string>
 <string name="ppu_cache_manager">PPU キャッシュ マネージャー</string>
 <string name="import_ppu_cache">PPU キャッシュのインポート</string>

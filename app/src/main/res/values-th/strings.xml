@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+	<string name="game_data_manager">ตัวจัดการข้อมูลเกม</string>
+	<string name="game_data_manager_desc">00000001</string>
+	<string name="import_game_data">นำเข้าข้อมูลเกม</string>
+	<string name="export_game_data">ส่งออกข้อมูลเกม</string>
+	<string name="import_game_data_done">นำเข้าข้อมูลเกมเสร็จสิ้น</string>
+	<string name="import_game_data_failed">ไม่สามารถนำเข้าข้อมูลเกมได้</string>
+	<string name="export_game_data_done">ส่งออกข้อมูลเกมเสร็จสิ้น</string>
+	<string name="export_game_data_failed">ไม่สามารถส่งออกข้อมูลเกมได้</string>
+
 <string name="user_data_manager">ตัวจัดการข้อมูลผู้ใช้</string>
 <string name="ppu_cache_manager">ตัวจัดการแคช PPU</string>
 <string name="import_ppu_cache">นำเข้าแคช PPU</string>

@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+	<string name="game_data_manager">Менеджер данных игры</string>
+	<string name="game_data_manager_desc">00000001</string>
+	<string name="import_game_data">Импорт данных игры</string>
+	<string name="export_game_data">Экспорт данных игры</string>
+	<string name="import_game_data_done">Импорт данных игры завершен</string>
+	<string name="import_game_data_failed">Не удалось импортировать данные игры</string>
+	<string name="export_game_data_done">Экспорт данных игры завершен</string>
+	<string name="export_game_data_failed">Не удалось экспортировать данные игры</string>
+
 <string name="user_data_manager">Менеджер пользовательских данных</string>
 <string name="ppu_cache_manager">Менеджер кэша PPU</string>
 <string name="import_ppu_cache">Импорт кэша PPU</string>

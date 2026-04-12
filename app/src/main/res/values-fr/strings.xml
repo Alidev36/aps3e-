@@ -4,6 +4,15 @@
 	<!--无法转义',&apos;会报错 -->
 	<!-- +++++++++++++++++++++++++++ -->
 
+	<string name="game_data_manager">Gestionnaire de données de jeu</string>
+	<string name="game_data_manager_desc">00000001</string>
+	<string name="import_game_data">Importer les données de jeu</string>
+	<string name="export_game_data">Exporter les données de jeu</string>
+	<string name="import_game_data_done">Importation des données de jeu terminée</string>
+	<string name="import_game_data_failed">Échec de l`importation des données de jeu</string>
+	<string name="export_game_data_done">Exportation des données de jeu terminée</string>
+	<string name="export_game_data_failed">Échec de l`exportation des données de jeu</string>
+
 <string name="user_data_manager">Gestionnaire de données utilisateur</string>
 <string name="ppu_cache_manager">Gestionnaire de cache PPU</string>
 <string name="import_ppu_cache">Importer le cache PPU</string>

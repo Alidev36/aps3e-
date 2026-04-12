@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+<string name="game_data_manager">Pengelola Data Game</string>
+<string name="game_data_manager_desc">00000001</string>
+<string name="import_game_data">Impor Data Game</string>
+<string name="export_game_data">Ekspor Data Game</string>
+<string name="import_game_data_done">Impor data game selesai</string>
+<string name="import_game_data_failed">Impor data game gagal</string>
+<string name="export_game_data_done">Ekspor data game selesai</string>
+<string name="export_game_data_failed">Ekspor data game gagal</string>
+
 <string name="user_data_manager">Pengelola Data Pengguna</string>
 <string name="ppu_cache_manager">Pengelola Cache PPU</string>
 <string name="import_ppu_cache">Impor Cache PPU</string>

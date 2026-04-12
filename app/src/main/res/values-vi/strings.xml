@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+	<string name="game_data_manager">Trình quản lý Dữ liệu Trò chơi</string>
+	<string name="game_data_manager_desc">00000001</string>
+	<string name="import_game_data">Nhập Dữ liệu Trò chơi</string>
+	<string name="export_game_data">Xuất Dữ liệu Trò chơi</string>
+	<string name="import_game_data_done">Đã hoàn thành việc nhập dữ liệu trò chơi</string>
+	<string name="import_game_data_failed">Nhập dữ liệu trò chơi thất bại</string>
+	<string name="export_game_data_done">Đã hoàn thành việc xuất dữ liệu trò chơi</string>
+	<string name="export_game_data_failed">Xuất dữ liệu trò chơi thất bại</string>
+
 <string name="user_data_manager">Trình quản lý dữ liệu người dùng</string>
 <string name="ppu_cache_manager">Trình quản lý bộ nhớ cache PPU</string>
 <string name="import_ppu_cache">Nhập bộ nhớ cache PPU</string>

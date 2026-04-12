@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+	<string name="game_data_manager">مدیریت داده‌های بازی</string>
+	<string name="game_data_manager_desc">00000001</string>
+	<string name="import_game_data">وارد کردن داده‌های بازی</string>
+	<string name="export_game_data">صادر کردن داده‌های بازی</string>
+	<string name="import_game_data_done">وارد کردن داده‌های بازی با موفقیت انجام شد</string>
+	<string name="import_game_data_failed">وارد کردن داده‌های بازی ناموفق بود</string>
+	<string name="export_game_data_done">صادر کردن داده‌های بازی با موفقیت انجام شد</string>
+	<string name="export_game_data_failed">صادر کردن داده‌های بازی ناموفق بود</string>
+
 <string name="user_data_manager">مدیریت داده‌های کاربر</string>
 <string name="ppu_cache_manager">مدیر کش PPU</string>
 <string name="import_ppu_cache">واردات کش PPU</string>

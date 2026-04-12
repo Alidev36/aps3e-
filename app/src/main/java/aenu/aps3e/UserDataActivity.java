@@ -71,10 +71,12 @@ public class UserDataActivity extends AppCompatActivity {
     public static final int PAGE_TYPE_ISO_DIR_MANAGER = 2;
     public static final int PAGE_TYPE_COMPATIBILITY_TABLE = 3;
     public static final int PAGE_TYPE_DRIVER_MANAGER = 4;
+    public static final int PAGE_TYPE_GAME_DATA_MANAGER = 5;
 
     private static final int REQUEST_EXPORT_PPU_CACHE = 6201;
     private static final int REQUEST_IMPORT_PPU_CACHE = 6202;
     private static final int REQUEST_SELECT_ISO_DIR = 6203;
+    private static final int REQUEST_IMPORT_GAME_DATA = 6204;
 
     private int current_page_type = PAGE_TYPE_MAIN;
 
@@ -124,6 +126,7 @@ public class UserDataActivity extends AppCompatActivity {
         layout_list.put(PAGE_TYPE_ISO_DIR_MANAGER, findViewById(R.id.iso_dir_view));
         layout_list.put(PAGE_TYPE_COMPATIBILITY_TABLE, findViewById(R.id.compatibility_table_view));
         layout_list.put(PAGE_TYPE_DRIVER_MANAGER, findViewById(R.id.list_driver));
+        layout_list.put(PAGE_TYPE_GAME_DATA_MANAGER, findViewById(R.id.game_data_view));
     }
 
     private void handle_back_pressed() {
@@ -150,6 +153,9 @@ public class UserDataActivity extends AppCompatActivity {
                 case PAGE_TYPE_DRIVER_MANAGER:
                     show_driver_manager_page();
                     break;
+                case PAGE_TYPE_GAME_DATA_MANAGER:
+                    show_game_data_page();
+                    break;
             }
         } else if (current_page_type == PAGE_TYPE_PPU_CACHE_MANAGER) {
             handle_ppu_cache_item_click(adapter, position);
@@ -174,6 +180,7 @@ public class UserDataActivity extends AppCompatActivity {
         titles.add(new PageInfo(R.string.ppu_cache_manager, PAGE_TYPE_PPU_CACHE_MANAGER));
         titles.add(new PageInfo(R.string.iso_dir_manager, PAGE_TYPE_ISO_DIR_MANAGER));
         titles.add(new PageInfo(R.string.compatibility_table, PAGE_TYPE_COMPATIBILITY_TABLE));
+        titles.add(new PageInfo(R.string.game_data_manager, PAGE_TYPE_GAME_DATA_MANAGER));
 
         if(Emulator.get.support_custom_driver()) {
             titles.add(new PageInfo(R.string.driver_manager, PAGE_TYPE_DRIVER_MANAGER));
@@ -289,7 +296,7 @@ public class UserDataActivity extends AppCompatActivity {
             @Override
             public void run(ProgressTask task) {
                 try {
-                    zip(dir, save_to_file);
+                    zip_ppu_cache(dir, save_to_file);
                     task.task_handler.sendEmptyMessage(ProgressTask.TASK_DONE);
                 } catch (Exception e) {
                     task.task_handler.sendEmptyMessage(ProgressTask.TASK_FAILED);
@@ -298,13 +305,13 @@ public class UserDataActivity extends AppCompatActivity {
         });
     }
 
-    private static boolean zip(File dir, File out_f) throws Exception {
+    private static boolean zip_ppu_cache(File dir, File out_f) throws Exception {
         FileOutputStream fos=null;
         ZipOutputStream zos=null;
         try{
             fos=new FileOutputStream(out_f);
             zos=new java.util.zip.ZipOutputStream(fos);
-            zip_file(dir, zos, "");
+            zip_ppu_cache_file(dir, zos, "");
         } catch (Exception e) {
             throw e;
         }
@@ -315,17 +322,57 @@ public class UserDataActivity extends AppCompatActivity {
         return true;
     }
 
-    private static void zip_file(File file, ZipOutputStream zos, String path) throws Exception {
+    private static void zip_ppu_cache_file(File file, ZipOutputStream zos, String path) throws Exception {
         String entryName = path + file.getName();
 
         if (file.isDirectory()) {
             File[] files = file.listFiles();
             if (files != null) {
                 for (File f : files) {
-                    zip_file(f, zos, entryName + "/");
+                    zip_ppu_cache_file(f, zos, entryName + "/");
                 }
             }
         } else if(file.getName().endsWith(".obj.gz")){
+            ZipEntry zip_entry = new ZipEntry(entryName);
+            zos.putNextEntry(zip_entry);
+            try (FileInputStream fis = new FileInputStream(file)) {
+                byte[] buffer = new byte[16384];
+                int len;
+                while ((len = fis.read(buffer)) > 0) {
+                    zos.write(buffer, 0, len);
+                }
+            }
+            zos.closeEntry();
+        }
+    }
+    private static boolean zip_user_data(File dir, File out_f) throws Exception {
+        FileOutputStream fos=null;
+        ZipOutputStream zos=null;
+        try{
+            fos=new FileOutputStream(out_f);
+            zos=new java.util.zip.ZipOutputStream(fos);
+            zip_user_data_file(dir, zos, "");
+        } catch (Exception e) {
+            throw e;
+        }
+        finally {
+            if(zos!=null) zos.close();
+            if(fos!=null) fos.close();
+        }
+        return true;
+    }
+
+    private static void zip_user_data_file(File file, ZipOutputStream zos, String path) throws Exception {
+        String entryName = path + file.getName();
+
+        if (file.isDirectory()) {
+            File[] files = file.listFiles();
+            if (files != null) {
+                for (File f : files) {
+                    zip_user_data_file(f, zos, entryName + "/");
+                }
+            }
+        } else{
             ZipEntry zip_entry = new ZipEntry(entryName);
             zos.putNextEntry(zip_entry);
             try (FileInputStream fis = new FileInputStream(file)) {
@@ -451,6 +498,9 @@ public class UserDataActivity extends AppCompatActivity {
                 break;
             case REQUEST_SELECT_ISO_DIR:
                 handle_add_iso_dir(uri);
+                break;
+            case REQUEST_IMPORT_GAME_DATA:
+                handle_import_game_data(uri);
                 break;
         }
     }
@@ -800,6 +850,150 @@ public class UserDataActivity extends AppCompatActivity {
             .setMessage(info)
             .setPositiveButton(android.R.string.ok, null)
             .show();
+    }
+
+    private void show_game_data_page() {
+        View layout = select_layout(PAGE_TYPE_GAME_DATA_MANAGER);
+
+        final int titleResId = R.string.game_data_manager;
+        if(getSupportActionBar()!=null) {
+            getSupportActionBar().setTitle(getString(titleResId));
+        }
+
+        Button btn_import = (Button) layout.findViewById(R.id.btn_game_data_import);
+        btn_import.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                MainActivity.request_file_select(UserDataActivity.this, REQUEST_IMPORT_GAME_DATA);
+            }
+        });
+
+        Button btn_export = (Button) layout.findViewById(R.id.btn_game_data_export);
+        btn_export.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                export_game_data();
+            }
+        });
+
+        current_page_type = PAGE_TYPE_GAME_DATA_MANAGER;
+    }
+
+    void export_game_data(){
+        File save_to_dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "aps3e");
+        if (!save_to_dir.exists()) {
+            save_to_dir.mkdirs();
+        }
+        final String save_name = "user_data_00000001.zip";
+        final File save_to_file = new File(save_to_dir, save_name);
+
+        final String user_id = "00000001";
+        final String child = String.format("config/dev_hdd0/home/%s", user_id);
+        final File user_dir = new File(Application.get_app_data_dir(), child);
+
+        ProgressTask pt=new ProgressTask(this);
+        pt.set_done_task(new ProgressTask.UI_Task(){
+            @Override
+            public void run() {
+                Toast.makeText(UserDataActivity.this,String.format(getString(R.string.save_to),save_to_file.getAbsolutePath()),Toast.LENGTH_LONG).show();
+            }
+        }).call(new ProgressTask.Task(){
+            @Override
+            public void run(ProgressTask task) {
+                try {
+                    if (user_dir.exists()) {
+                        zip_user_data(user_dir, save_to_file);
+                    }
+                    task.task_handler.sendEmptyMessage(ProgressTask.TASK_DONE);
+                } catch (Exception e) {
+                    Log.e("APS3E", "Export game data failed: " + e.getMessage());
+                    e.printStackTrace();
+                    task.task_handler.sendEmptyMessage(ProgressTask.TASK_FAILED);
+                }
+            }
+        });
+    }
+
+    void handle_import_game_data(Uri uri) {
+        ProgressTask pt = new ProgressTask(this);
+        pt.set_done_task(new ProgressTask.UI_Task() {
+            @Override
+            public void run() {
+                Toast.makeText(UserDataActivity.this, R.string.import_game_data_done, Toast.LENGTH_SHORT).show();
+            }
+        }).set_failed_task(new ProgressTask.UI_Task() {
+            @Override
+            public void run() {
+                Toast.makeText(UserDataActivity.this, R.string.import_game_data_failed, Toast.LENGTH_SHORT).show();
+            }
+        }).call(new ProgressTask.Task() {
+            @Override
+            public void run(ProgressTask task) {
+                try {
+                    import_game_data_from_uri(uri);
+                    task.task_handler.sendEmptyMessage(ProgressTask.TASK_DONE);
+                } catch (Exception e) {
+                    Log.e("APS3E", "Import game data failed: " + e.getMessage());
+                    e.printStackTrace();
+                    task.task_handler.sendEmptyMessage(ProgressTask.TASK_FAILED);
+                }
+            }
+        });
+    }
+
+    private void import_game_data_from_uri(Uri uri) throws Exception {
+        ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(uri, "r");
+        if (pfd == null) {
+            throw new RuntimeException("Failed to open file");
+        }
+
+        FileInputStream fis = new FileInputStream(pfd.getFileDescriptor());
+        ZipInputStream zis = new ZipInputStream(fis);
+
+        //final String user_id = "00000001";
+        final String child = String.format("config/dev_hdd0/home");
+        final File home_dir = new File(Application.get_app_data_dir(), child);
+        
+        if (!home_dir.exists()) {
+            home_dir.mkdirs();
+        }
+
+        ZipEntry entry;
+        int extracted_count = 0;
+
+        while ((entry = zis.getNextEntry()) != null) {
+            if (entry.isDirectory()) {
+                zis.closeEntry();
+                continue;
+            }
+
+            String entry_name = entry.getName();
+            File out_f = new File(home_dir, entry_name);
+
+            File parentDir = out_f.getParentFile();
+            if (parentDir != null && !parentDir.exists()) {
+                parentDir.mkdirs();
+            }
+
+            FileOutputStream fos = new FileOutputStream(out_f);
+            byte[] buffer = new byte[16384];
+            int len;
+            while ((len = zis.read(buffer)) > 0) {
+                fos.write(buffer, 0, len);
+            }
+            fos.close();
+            extracted_count++;
+
+            zis.closeEntry();
+        }
+
+        zis.close();
+        fis.close();
+        pfd.close();
+
+        if (extracted_count == 0) {
+            throw new Exception("Invalid file");
+        }
     }
 
     private String getGameName(String serial) {

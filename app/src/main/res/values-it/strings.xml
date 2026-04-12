@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+	<string name="game_data_manager">Gestore dati di gioco</string>
+	<string name="game_data_manager_desc">00000001</string>
+	<string name="import_game_data">Importa dati di gioco</string>
+	<string name="export_game_data">Esporta dati di gioco</string>
+	<string name="import_game_data_done">Importazione dati di gioco completata</string>
+	<string name="import_game_data_failed">Importazione dati di gioco non riuscita</string>
+	<string name="export_game_data_done">Esportazione dati di gioco completata</string>
+	<string name="export_game_data_failed">Esportazione dati di gioco non riuscita</string>
+
 <string name="user_data_manager">Gestore dati utente</string>
 <string name="ppu_cache_manager">Gestore cache PPU</string>
 <string name="import_ppu_cache">Importa cache PPU</string>

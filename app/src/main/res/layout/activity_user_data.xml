@@ -107,6 +107,39 @@
 			android:scrollbars="vertical"
 			android:visibility="gone" />
 
+		<!-- 游戏数据管理 -->
+		<LinearLayout
+			android:id="@+id/game_data_view"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:orientation="vertical"
+			android:visibility="gone"
+			android:gravity="top|center_horizontal"
+			android:padding="16dp">
+			
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="@string/game_data_manager_desc"
+				android:textSize="14sp"
+				android:textColor="?android:attr/textColorSecondary"
+				android:layout_marginBottom="24dp"
+				android:gravity="center" />
+			
+			<Button
+				android:id="@+id/btn_game_data_import"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:text="@string/import_game_data"
+				android:layout_marginBottom="12dp" />
+			
+			<Button
+				android:id="@+id/btn_game_data_export"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:text="@string/export_game_data" />
+		</LinearLayout>
+
 		
 	</FrameLayout>
 </LinearLayout>

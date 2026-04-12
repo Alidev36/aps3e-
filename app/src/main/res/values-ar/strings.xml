@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+	<string name="game_data_manager">مدير بيانات اللعبة</string>
+	<string name="game_data_manager_desc">00000001</string>
+	<string name="import_game_data">استيراد بيانات اللعبة</string>
+	<string name="export_game_data">تصدير بيانات اللعبة</string>
+	<string name="import_game_data_done">تم استيراد بيانات اللعبة بنجاح</string>
+	<string name="import_game_data_failed">فشل استيراد بيانات اللعبة</string>
+	<string name="export_game_data_done">تم تصدير بيانات اللعبة بنجاح</string>
+	<string name="export_game_data_failed">فشل تصدير بيانات اللعبة</string>
+
     <string name="user_data_manager">مدير بيانات المستخدم</string>
     <string name="ppu_cache_manager">مدير ذاكرة التخزين المؤقتة لـ PPU</string>
     <string name="import_ppu_cache">استيراد ذاكرة التخزين المؤقتة لـ PPU</string>
