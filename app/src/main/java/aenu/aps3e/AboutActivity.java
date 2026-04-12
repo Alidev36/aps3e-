@@ -210,6 +210,8 @@ public class AboutActivity extends AppCompatActivity {
                 + " *适配不支持触屏的设备\n"
                 + " *增加用户数据管理页面\n"
                 + " *优化了内存搜索\n"
+                + "1.38(2026-04-13)\n"
+                + " *部分修正与完善\n"
                 + " \n";
 
         return log;
