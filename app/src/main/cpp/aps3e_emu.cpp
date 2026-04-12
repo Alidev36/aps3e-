@@ -477,8 +477,8 @@ namespace ae{
             LOGW("RLIMIT_NOFILE: rlim_max 0x%x ,rlim_cur 0x%x",rlim.rlim_max,rlim.rlim_cur);
         }
 
-        rlim.rlim_cur = 0x80000000;
-        rlim.rlim_max = 0x80000000;
+        rlim.rlim_cur = RLIM_INFINITY;
+        rlim.rlim_max = RLIM_INFINITY;
         if (setrlimit64(RLIMIT_MEMLOCK, &rlim) != 0)
         {
             LOGE("Failed to get RLIMIT_MEMLOCK size");
