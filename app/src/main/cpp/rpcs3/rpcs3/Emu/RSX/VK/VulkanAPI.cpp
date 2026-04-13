@@ -44,6 +44,12 @@ namespace vk
         std::string custom_lib_path=g_cfg.video.vk.custom_driver_lib_path.to_string();
         if(g_cfg.video.vk.use_custom_driver&&std::filesystem::exists(custom_lib_path)){
 
+            // libadrenotools is specifically designed for Qualcomm Adreno drivers and might cause
+            // vk_load failures or initialization conflicts on MediaTek/Mali devices.
+            // Ideally we'd check gpu vendor here, but VulkanAPI init happens before device.cpp detection.
+            // As a basic workaround, avoid adrenotools if a custom driver is not explicitly valid Adreno driver.
+            // But since aPS3e uses adrenotools for this hook, we let it run only if custom driver is enabled.
+
             std::string hook_dir=std::string(getenv("APS3E_NATIVE_LIB_DIR"))+'/';
 
             std::string custom_lib_dir=custom_lib_path.substr(0,custom_lib_path.find_last_of('/')+1);

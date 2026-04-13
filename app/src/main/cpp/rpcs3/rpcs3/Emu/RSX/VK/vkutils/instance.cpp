@@ -318,7 +318,14 @@ namespace vk
 			present_possible = false;
 		}
 
-        const VkFormat surf_color_fmt=g_cfg.video.bgra_format?VK_FORMAT_B8G8R8A8_UNORM:VK_FORMAT_R8G8B8A8_UNORM;
+        VkFormat surf_color_fmt=g_cfg.video.bgra_format?VK_FORMAT_B8G8R8A8_UNORM:VK_FORMAT_R8G8B8A8_UNORM;
+
+        // Android Mali hardware composers might reject format 0x38 (VK_FORMAT_R8G8B8A8_UNORM) with certain usages (like 0xb00)
+        // Check if the current device is Mali Valhall and force B8G8R8A8_UNORM, as R8G8B8A8 causes unrecognized format crashes.
+        if (dev.get_driver_vendor() == driver_vendor::ARM_MALI_G57) {
+            surf_color_fmt = VK_FORMAT_B8G8R8A8_UNORM;
+        }
+
 		if (!present_possible)
 		{
 			//Native(sw) swapchain

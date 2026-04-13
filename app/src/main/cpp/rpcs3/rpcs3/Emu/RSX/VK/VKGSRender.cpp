@@ -571,10 +571,17 @@ VKGSRender::VKGSRender(utils::serial* ar) noexcept : GSRender(ar)
 
 	const auto limits = m_device->gpu().get_limits();
 
-        m_texbuffer_view_size = std::min(limits.maxTexelBufferElements, VK_ATTRIB_RING_BUFFER_SIZE_M * 0x100000u);
+    m_texbuffer_view_size = std::min(limits.maxTexelBufferElements, VK_ATTRIB_RING_BUFFER_SIZE_M * 0x100000u);
 
     if(!cfg_vertex_buffer_upload_mode_use_buffer_view())
-        m_texbuffer_view_size=VK_ATTRIB_RING_BUFFER_SIZE_M * 0x100000u;
+    {
+        // For Mali-G57 (Valhall), forcing a size larger than maxTexelBufferElements can cause VK_ERROR_DEVICE_LOST.
+        // Therefore, we still respect maxTexelBufferElements if the GPU is an ARM MALI G57.
+        if (m_device->gpu().get_driver_vendor() == driver_vendor::ARM_MALI_G57)
+            m_texbuffer_view_size = std::min(limits.maxTexelBufferElements, VK_ATTRIB_RING_BUFFER_SIZE_M * 0x100000u);
+        else
+            m_texbuffer_view_size=VK_ATTRIB_RING_BUFFER_SIZE_M * 0x100000u;
+    }
 
 	if (m_texbuffer_view_size < 0x800000)
 	{
