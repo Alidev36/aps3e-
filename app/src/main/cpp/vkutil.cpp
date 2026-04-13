@@ -156,14 +156,14 @@ std::optional<VkPipelineLayout> vk_create_pipeline_layout(VkDevice dev,VkDescrip
      return layout;
 }
 
-std::optional<std::vector<uint32_t>> vk_compile_glsl_to_spv(VkDevice dev,const std::string& source,VkPhysicalDeviceLimits limits) {
+std::optional<std::vector<uint32_t>> vk_compile_glsl_to_spv(VkDevice dev,const std::string& source,VkPhysicalDeviceLimits limits, bool allow_float16) {
     glsl2spv_init(limits);
     struct clean_t{
         ~ clean_t(){
             glsl2spv_finalize();
         }
     }  clean;
-     return glsl2spv_compile(source, EShLangCompute);
+     return glsl2spv_compile(source, EShLangCompute, allow_float16);
 }
 
 std::optional<VkShaderModule> vk_create_shader_module(VkDevice dev,const std::vector<uint32_t>& code) {
