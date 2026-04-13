@@ -143,12 +143,25 @@ void glsl2spv_init(const VkPhysicalDeviceLimits& limits){
 
     glslang::InitializeProcess();
 }
-std::optional<std::vector<uint32_t >> glsl2spv_compile(const std::string& source,EShLanguage lang){
+std::optional<std::vector<uint32_t >> glsl2spv_compile(const std::string& source,EShLanguage lang, bool allow_float16){
     glslang::TShader shader(lang);
 
     shader.setEnvInput(glslang::EShSourceGlsl,lang,glslang::EShClientVulkan,450);
     shader.setEnvClient(glslang::EShClientVulkan,glslang::EShTargetVulkan_1_0);
     shader.setEnvTarget(glslang::EshTargetSpv,glslang::EShTargetSpv_1_0);
+
+    // Disable float16 explicitly if requested (Mali-G57 Valhall workaround)
+    if (!allow_float16) {
+        // Preamble forces 32-bit float fallback internally by redefining float16 types to float
+        shader.setPreamble("#extension GL_EXT_shader_explicit_arithmetic_types_float16 : disable\n"
+                           "#define float16_t float\n"
+                           "#define f16vec2 vec2\n"
+                           "#define f16vec3 vec3\n"
+                           "#define f16vec4 vec4\n"
+                           "#define f16mat2 mat2\n"
+                           "#define f16mat3 mat3\n"
+                           "#define f16mat4 mat4\n");
+    }
 
     const char* shader_source = source.c_str();
     shader.setStrings(&shader_source,1);
