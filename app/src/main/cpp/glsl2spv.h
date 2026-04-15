@@ -15,7 +15,7 @@
 #include "glslang/Include/glslang_c_interface.h"
 
 void glsl2spv_init(const VkPhysicalDeviceLimits& limits);
-std::optional<std::vector<uint32_t >> glsl2spv_compile(const std::string& source,EShLanguage lang);
+std::optional<std::vector<uint32_t >> glsl2spv_compile(const std::string& source,EShLanguage lang, bool allow_float16 = true);
 void glsl2spv_finalize();
 
 #endif //APS3E_GLSL2SPV_H

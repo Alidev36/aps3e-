@@ -49,6 +49,10 @@ namespace vk
 		info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 		info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
+        // Mali drivers are highly dependent on format/usage combinations being explicit and correct.
+        // Even if we are creating a raw sub-buffer, if it is to be viewed as a format, we should use a proper view,
+        // or ensure the base buffer was created with proper usages for this format.
+
 		CHECK_RESULT(_vkCreateBuffer(buf.m_device, &info, nullptr, &value));
 		_vkBindBufferMemory(buf.m_device, value, buf.memory->get_vk_device_memory(), buf.memory->get_vk_device_memory_offset() + offset);
 	}
