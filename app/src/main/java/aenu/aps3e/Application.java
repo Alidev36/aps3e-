@@ -100,10 +100,12 @@ public class Application extends android.app.Application
         //get_internal_data_dir().mkdirs();
         get_custom_driver_dir().mkdirs();
 
+		default_handler = Thread.getDefaultUncaughtExceptionHandler();
 		Thread.setDefaultUncaughtExceptionHandler(exception_handler);
     }
 
     private static ExceptionHandler exception_handler=new ExceptionHandler();
+    private static Thread.UncaughtExceptionHandler default_handler;
 
     private static class ExceptionHandler implements Thread.UncaughtExceptionHandler{
 
@@ -117,7 +119,13 @@ public class Application extends android.app.Application
                 android.util.Log.e("aps3e_java",err.toString());
             }
             catch (Exception e)
-            {}
+            {
+                android.util.Log.e("aps3e_java","Exception in exception handler: "+e.getMessage());
+            }
+            // Chain to default handler
+            if (default_handler != null) {
+                default_handler.uncaughtException(p1, p2);
+            }
         }
 
         

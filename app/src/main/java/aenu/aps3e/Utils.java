@@ -13,6 +13,7 @@ import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.net.Uri;
+import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract;
 import android.view.Window;
 import android.view.WindowManager;
@@ -21,6 +22,7 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -75,13 +77,14 @@ public class Utils {
     }
 
     public  static byte[] load_assets_file(Context ctx,String asset_file_path) {
-        try {
-            InputStream in = ctx.getAssets().open(asset_file_path);
-            int size = in.available();
-            byte[] buffer = new byte[size];
-            in.read(buffer);
-            in.close();
-            return buffer;
+        try (InputStream in = ctx.getAssets().open(asset_file_path)) {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            byte[] buffer = new byte[16384];
+            int len;
+            while ((len = in.read(buffer)) != -1) {
+                baos.write(buffer, 0, len);
+            }
+            return baos.toByteArray();
         } catch (IOException e) {
             e.printStackTrace();
             return null;
@@ -89,28 +92,26 @@ public class Utils {
     }
 
     static void copy_file(File src,File dst) {
-        try {
-            FileInputStream in=new FileInputStream(src);
-            FileOutputStream out=new FileOutputStream(dst);
-            byte buf[]=new byte[16384];
+        try (FileInputStream in = new FileInputStream(src);
+             FileOutputStream out = new FileOutputStream(dst)) {
+            byte[] buf = new byte[16384];
             int n;
             while((n=in.read(buf))!=-1)
                 out.write(buf,0,n);
-            in.close();
-            out.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
     static String read_file_as_str(File f) {
-        try {
-            FileInputStream in=new FileInputStream(f);
-            int size=in.available();
-            byte[] buffer=new byte[size];
-            in.read(buffer);
-            in.close();
-            return new String(buffer);
+        try (FileInputStream in = new FileInputStream(f);
+             ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[16384];
+            int len;
+            while ((len = in.read(buffer)) != -1) {
+                baos.write(buffer, 0, len);
+            }
+            return baos.toString("UTF-8");
         } catch (IOException e) {
             e.printStackTrace();
             return null;
@@ -129,18 +130,18 @@ public class Utils {
 
     static String getFileNameFromUri(Uri uri) {
         String fileName = null;
-        Cursor cursor = Application.ctx.getContentResolver().query(
+        try (Cursor cursor = Application.ctx.getContentResolver().query(
                 uri,
                 new String[]{DocumentsContract.Document.COLUMN_DISPLAY_NAME},
                 null, null, null
-        );
-        if (cursor != null) {
-            if (cursor.moveToFirst()) {
+        )) {
+            if (cursor != null && cursor.moveToFirst()) {
                 fileName = cursor.getString(cursor.getColumnIndexOrThrow(
                         DocumentsContract.Document.COLUMN_DISPLAY_NAME
                 ));
             }
-            cursor.close();
+        } catch (Exception e) {
+            e.printStackTrace();
         }
         return fileName;
     }
@@ -159,10 +160,21 @@ public class Utils {
     }
 
     static int detach_open_uri(Context ctx,Uri uri){
+        ParcelFileDescriptor pfd = null;
         try {
-            return ctx.getContentResolver().openFileDescriptor(uri,"r").detachFd();
+            pfd = ctx.getContentResolver().openFileDescriptor(uri,"r");
+            int fd = pfd.detachFd();
+            return fd;
         } catch (FileNotFoundException e) {
             throw new RuntimeException(e);
+        } finally {
+            if (pfd != null) {
+                try {
+                    pfd.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
         }
     }
 
@@ -180,6 +192,7 @@ public class Utils {
             return;
         }
         catch(Exception e){
+            android.util.Log.w("Utils", "Failed to open com.android.documentsui: " + e.getMessage());
         }
         try{
             Intent it=new Intent(Intent.ACTION_VIEW);
@@ -190,6 +203,7 @@ public class Utils {
 
         }
         catch(Exception e){
+            android.util.Log.w("Utils", "Failed to open com.google.android.documentsui: " + e.getMessage());
         }
     }
 }

@@ -305,14 +305,13 @@ public class DocumentsProvider extends android.provider.DocumentsProvider{
     }*/
 
     void copy_file(File src_file,File dst_file) throws IOException {
-        FileInputStream in=new FileInputStream(src_file);
-        FileOutputStream out=new FileOutputStream(dst_file);
-        byte buf[]=new byte[16384];
-        int n;
-        while((n=in.read(buf))!=-1)
-            out.write(buf,0,n);
-        in.close();
-        out.close();
+        try (FileInputStream in = new FileInputStream(src_file);
+             FileOutputStream out = new FileOutputStream(dst_file)) {
+            byte[] buf = new byte[16384];
+            int n;
+            while((n=in.read(buf))!=-1)
+                out.write(buf,0,n);
+        }
     }
     void recursive_copy_sub_files(File src_dir,File dst_dir) throws IOException {
         File[] files = src_dir.listFiles();
@@ -518,6 +517,17 @@ public class DocumentsProvider extends android.provider.DocumentsProvider{
     private File getFileForDocId(String docId) throws FileNotFoundException {
         File f = new File(docId);
         if (!f.exists()) throw new FileNotFoundException(f.getAbsolutePath() + " not found");
+        
+        // Security fix: Validate file is within base directory (Path traversal protection)
+        try {
+            File canonicalFile = f.getCanonicalFile();
+            File canonicalBase = baseDir().getCanonicalFile();
+            if (!canonicalFile.getPath().startsWith(canonicalBase.getPath())) {
+                throw new SecurityException("Path traversal detected: " + docId);
+            }
+        } catch (IOException e) {
+            throw new FileNotFoundException("Failed to resolve path: " + docId);
+        }
         return f;
     }
 }

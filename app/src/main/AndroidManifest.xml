@@ -68,15 +68,11 @@
 			android:screenOrientation="sensorLandscape"
 			android:launchMode="singleTask"
 			android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
-			android:exported="true"
+			android:exported="false"
 			android:process=":emu"
 			>
 			<intent-filter>
 				<action android:name="aenu.intent.action.APS3E" />
-				<category android:name="android.intent.category.DEFAULT" />
-			</intent-filter>
-			<intent-filter>
-				<action android:name="android.intent.action.VIEW" />
 				<category android:name="android.intent.category.DEFAULT" />
 			</intent-filter>
 		</activity>

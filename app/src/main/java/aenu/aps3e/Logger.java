@@ -25,7 +25,7 @@ public class Logger
 					SimpleDateFormat date_fmt=new SimpleDateFormat("yyMMdd_HHmmss");
 					Date cur_date=new Date(System.currentTimeMillis());
 					File log_file=new File(log_dir,"aps3e_java_"+date_fmt.format(cur_date)+"_"+android.os.Process.myPid()+".txt");
-					String cmd=String.format("/system/bin/logcat -f %s *:I",log_file.getAbsolutePath());
+					String[] cmd=new String[]{"/system/bin/logcat","-f",log_file.getAbsolutePath(),"*:I"};
 					Runtime.getRuntime().exec(cmd).getInputStream();
 				}
 				catch (IOException e)
@@ -38,7 +38,9 @@ public class Logger
 					e.printStackTrace(print);
 					print.close();
 					fout.close();
-					}catch(Exception _e){}
+					}catch(Exception _e){
+						android.util.Log.e("Logger", "Failed to write exception log: " + _e.getMessage());
+					}
 				}
 			}
 		}.start();

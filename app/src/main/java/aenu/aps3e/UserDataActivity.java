@@ -450,6 +450,13 @@ public class UserDataActivity extends AppCompatActivity {
             String sub_path=entry_name.substring(0, entry_name.lastIndexOf( "/"));
             File targetDir = new File(cache_base_dir, sub_path);
 
+            // Security fix: Validate path is within target directory (Zip Slip protection)
+            File canonicalBase = cache_base_dir.getCanonicalFile();
+            File canonicalTarget = targetDir.getCanonicalFile();
+            if (!canonicalTarget.getPath().startsWith(canonicalBase.getPath())) {
+                throw new SecurityException("Zip Slip detected: Invalid entry path");
+            }
+
             if (!targetDir.exists()) {
                 targetDir.mkdirs();
             }
@@ -969,6 +976,13 @@ public class UserDataActivity extends AppCompatActivity {
 
             String entry_name = entry.getName();
             File out_f = new File(home_dir, entry_name);
+
+            // Security fix: Validate path is within target directory (Zip Slip protection)
+            File canonicalBase = home_dir.getCanonicalFile();
+            File canonicalOut = out_f.getCanonicalFile();
+            if (!canonicalOut.getPath().startsWith(canonicalBase.getPath())) {
+                throw new SecurityException("Zip Slip detected: Invalid entry path");
+            }
 
             File parentDir = out_f.getParentFile();
             if (parentDir != null && !parentDir.exists()) {

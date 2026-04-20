@@ -825,15 +825,12 @@ public class MainActivity extends AppCompatActivity {
 	}
 
 	static void copy_file(File src,File dst){
-		try {
-			FileInputStream in=new FileInputStream(src);
-			FileOutputStream out=new FileOutputStream(dst);
-			byte buf[]=new byte[16384];
+		try (FileInputStream in = new FileInputStream(src);
+			 FileOutputStream out = new FileOutputStream(dst)) {
+			byte[] buf = new byte[16384];
 			int n;
 			while((n=in.read(buf))!=-1)
 				out.write(buf,0,n);
-			in.close();
-			out.close();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
