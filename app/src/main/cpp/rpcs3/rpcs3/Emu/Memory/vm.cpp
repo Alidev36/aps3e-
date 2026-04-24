@@ -47,7 +47,7 @@ namespace vm
 	u8* const g_sudo_addr = g_base_addr + 0x1'0000'0000;
 
 	// Auxiliary virtual memory for executable areas
-	u8* const g_exec_addr = memory_reserve_4GiB(g_sudo_addr, 0x200000000);
+	u8* const g_exec_addr = memory_reserve_4GiB(g_sudo_addr, 0x300000000);
 
 	// Hooks for memory R/W interception (default: zero offset to some function with only ret instructions)
 	u8* const g_hook_addr = memory_reserve_4GiB(g_exec_addr, 0x800000000);
@@ -74,7 +74,7 @@ namespace vm
 	std::array<atomic_t<cpu_thread*>, g_cfg.core.ppu_threads.max> g_locks{};
 
 	// Range lock slot allocation bits
-	atomic_t<u64, 64> g_range_lock_bits[2]{};
+	atomic_t<u64, 128> g_range_lock_bits[2]{};
 
 	auto& get_range_lock_bits(bool is_exclusive_range)
 	{
@@ -82,7 +82,7 @@ namespace vm
 	}
 
 	// Memory range lock slots (sparse atomics)
-	atomic_t<u64, 64> g_range_lock_set[64]{};
+	atomic_t<u64, 128> g_range_lock_set[64]{};
 
 	// Memory pages
 	std::array<memory_page, 0x100000000 / 4096> g_pages;
@@ -98,7 +98,6 @@ namespace vm
 
 	void reservation_update(u32 addr)
 	{
-		u64 old = -1;
 		const auto cpu = get_current_cpu_thread();
 
 		const bool had_wait = cpu && cpu->state & cpu_flag::wait;
@@ -112,12 +111,12 @@ namespace vm
 		{
 			const auto [ok, rtime] = try_reservation_update(addr);
 
-			if (ok || (old & -128) < (rtime & -128))
+			if (ok)
 			{
-				if (ok)
-				{
-					reservation_notifier_notify(addr);
-				}
+				// Notify all waiters for an address
+				// This is because reservation_update is often brought after the actual reservation update and not by a fused operation
+				reservation_notifier_notify(addr, rtime);
+				reservation_notifier_notify(addr, rtime - 128);
 
 				if (cpu && !had_wait && cpu->test_stopped())
 				{
@@ -126,8 +125,6 @@ namespace vm
 
 				return;
 			}
-
-			old = rtime;
 		}
 	}
 
@@ -145,7 +142,7 @@ namespace vm
 		}
 	}
 
-	atomic_t<u64, 64>* alloc_range_lock()
+	atomic_t<u64, 128>* alloc_range_lock()
 	{
 		const auto [bits, ok] = get_range_lock_bits(false).fetch_op([](u64& bits)
 		{
@@ -170,7 +167,7 @@ namespace vm
 	template <typename F>
 	static u64 for_all_range_locks(u64 input, F func);
 
-	void range_lock_internal(atomic_t<u64, 64>* range_lock, u32 begin, u32 size)
+	void range_lock_internal(atomic_t<u64, 128>* range_lock, u32 begin, u32 size)
 	{
 		perf_meter<"RHW_LOCK"_u64> perf0(0);
 
@@ -278,7 +275,7 @@ namespace vm
 		}
 	}
 
-	void free_range_lock(atomic_t<u64, 64>* range_lock) noexcept
+	void free_range_lock(atomic_t<u64, 128>* range_lock) noexcept
 	{
 		if (range_lock < g_range_lock_set || range_lock >= std::end(g_range_lock_set))
 		{
@@ -319,7 +316,7 @@ namespace vm
 		return result;
 	}
 
-	static atomic_t<u64, 64>* _lock_main_range_lock(u64 flags, u32 addr, u32 size)
+	static atomic_t<u64, 128>* _lock_main_range_lock(u64 flags, u32 addr, u32 size)
 	{
 		// Shouldn't really happen
 		if (size == 0)
@@ -342,7 +339,7 @@ namespace vm
 		utils::prefetch_read(g_range_lock_set + 2);
 		utils::prefetch_read(g_range_lock_set + 4);
 
-		const auto range = utils::address_range::start_length(addr, size);
+		const auto range = utils::address_range32::start_length(addr, size);
 
 		u64 to_clear = get_range_lock_bits(false).load();
 
@@ -350,7 +347,7 @@ namespace vm
 		{
 			to_clear = for_all_range_locks(to_clear, [&](u32 addr2, u32 size2)
 			{
-				if (range.overlaps(utils::address_range::start_length(addr2, size2))) [[unlikely]]
+				if (range.overlaps(utils::address_range32::start_length(addr2, size2))) [[unlikely]]
 				{
 					return 1;
 				}
@@ -463,7 +460,7 @@ namespace vm
 	{
 	}
 
-	writer_lock::writer_lock(u32 const addr, atomic_t<u64, 64>* range_lock, u32 const size, u64 const flags) noexcept
+	writer_lock::writer_lock(u32 const addr, atomic_t<u64, 128>* range_lock, u32 const size, u64 const flags) noexcept
 		: range_lock(range_lock)
 	{
 		cpu_thread* cpu{};
@@ -550,6 +547,13 @@ namespace vm
 			{
 				to_clear = for_all_range_locks(to_clear & ~get_range_lock_bits(true), [&](u64 addr2, u32 size2)
 				{
+					constexpr u32 range_size_loc = vm::range_pos - 32;
+
+					if ((size2 >> range_size_loc) == (vm::range_readable >> vm::range_pos))
+					{
+						return 0;
+					}
+
 					// Split and check every 64K page separately
 					for (u64 hi = addr2 >> 16, max = (addr2 + size2 - 1) >> 16; hi <= max; hi++)
 					{
@@ -597,6 +601,38 @@ namespace vm
 		{
 			cpu->state -= cpu_flag::memory + cpu_flag::wait;
 		}
+	}
+
+	atomic_t<u32>* reservation_notifier_notify(u32 raddr, u64 rtime, bool postpone)
+	{
+		const auto waiter = reservation_notifier(raddr, rtime);
+
+		if (waiter->load().wait_flag % 2 == 1)
+		{
+			if (!waiter->fetch_op([](reservation_waiter_t& value)
+			{
+				if (value.wait_flag % 2 == 1)
+				{
+					// Notify and make it even
+					value.wait_flag++;
+					return true;
+				}
+
+				return false;
+			}).second)
+			{
+				return nullptr;
+			}
+
+			if (postpone)
+			{
+				return utils::bless<atomic_t<u32>>(&waiter->raw().wait_flag);
+			}
+
+			utils::bless<atomic_t<u32>>(&waiter->raw().wait_flag)->notify_all();
+		}
+
+		return nullptr;
 	}
 
 	u64 reservation_lock_internal(u32 addr, atomic_t<u64>& res)
@@ -921,7 +957,7 @@ namespace vm
 		return true;
 	}
 
-	static u32 _page_unmap(u32 addr, u32 max_size, u64 bflags, utils::shm* shm, std::vector<std::pair<u64, u64>>& unmap_events)
+	static u32 _page_unmap(u32 addr, u32 max_size, u64 bflags, utils::shm* shm, std::vector<std::pair<u64, u64>>& unmap_events, bool is_block_termination = false)
 	{
 		perf_meter<"PAGE_UNm"_u64> perf0;
 
@@ -992,7 +1028,11 @@ namespace vm
 		ppu_remove_hle_instructions(addr, size);
 
 		// Actually unmap memory
-		if (is_noop)
+		if (is_block_termination && (!shm || is_noop))
+		{
+			// We can skip it if the block is freed
+		}
+		else if (is_noop)
 		{
 			std::memset(g_sudo_addr + addr, 0, size);
 		}
@@ -1298,7 +1338,17 @@ namespace vm
 				const auto size = it->second.first;
 
 				std::vector<std::pair<u64, u64>> event_data;
-				ensure(size == _page_unmap(it->first, size, this->flags, it->second.second.get(), unmapped ? *unmapped : event_data));
+				ensure(size == _page_unmap(it->first, size, this->flags, it->second.second.get(), unmapped ? *unmapped : event_data, true));
+
+				if (it->second.second && addr < 0xE0000000)
+				{
+					if (it->second.second.use_count() != 1)
+					{
+						fmt::throw_exception("External memory usage at block 0x%x (addr=0x%x, size=0x%x)", this->addr, it->first, size);
+					}
+
+					it->second.second.reset();
+				}
 
 				it = next;
 			}
@@ -1309,6 +1359,8 @@ namespace vm
 #ifdef _WIN32
 				m_common->unmap_critical(vm::get_super_ptr(addr));
 #endif
+				ensure(m_common.use_count() == 1);
+				m_common.reset();
 			}
 
 			return true;
@@ -1320,6 +1372,7 @@ namespace vm
 	block_t::~block_t()
 	{
 		ensure(!is_valid());
+		ensure(!m_common || m_common.use_count() == 1);
 	}
 
 	u32 block_t::alloc(const u32 orig_size, const std::shared_ptr<utils::shm>* src, u32 align, u64 flags)
@@ -1816,7 +1869,7 @@ namespace vm
 
 	static bool _test_map(u32 addr, u32 size)
 	{
-		const auto range = utils::address_range::start_length(addr, size);
+		const auto range = utils::address_range32::start_length(addr, size);
 
 		if (!range.valid())
 		{
@@ -1830,7 +1883,7 @@ namespace vm
 				continue;
 			}
 
-			if (range.overlaps(utils::address_range::start_length(block->addr, block->size)))
+			if (range.overlaps(utils::address_range32::start_length(block->addr, block->size)))
 			{
 				return false;
 			}
@@ -2215,7 +2268,11 @@ namespace vm
 
 			for (auto& block : g_locations)
 			{
-				if (block) _unmap_block(block);
+				if (block)
+				{
+					_unmap_block(block);
+					ensure(block.use_count() == 1);
+				}
 			}
 
 			g_locations.clear();

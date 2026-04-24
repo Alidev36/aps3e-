@@ -4,6 +4,7 @@
 nobase_include_HEADERS+= \
                          wolfssl/wolfcrypt/aes.h \
                          wolfssl/wolfcrypt/arc4.h \
+                         wolfssl/wolfcrypt/ascon.h \
                          wolfssl/wolfcrypt/asn.h \
                          wolfssl/wolfcrypt/asn_public.h \
                          wolfssl/wolfcrypt/poly1305.h \
@@ -46,6 +47,8 @@ nobase_include_HEADERS+= \
                          wolfssl/wolfcrypt/chacha.h \
                          wolfssl/wolfcrypt/chacha20_poly1305.h \
                          wolfssl/wolfcrypt/random.h \
+                         wolfssl/wolfcrypt/wolfentropy.h \
+                         wolfssl/wolfcrypt/rng_bank.h \
                          wolfssl/wolfcrypt/ripemd.h \
                          wolfssl/wolfcrypt/rsa.h \
                          wolfssl/wolfcrypt/rc2.h \
@@ -73,9 +76,9 @@ nobase_include_HEADERS+= \
                          wolfssl/wolfcrypt/siphash.h \
                          wolfssl/wolfcrypt/cpuid.h \
                          wolfssl/wolfcrypt/cryptocb.h \
-                         wolfssl/wolfcrypt/kyber.h \
-                         wolfssl/wolfcrypt/wc_kyber.h \
-                         wolfssl/wolfcrypt/ext_kyber.h \
+                         wolfssl/wolfcrypt/mlkem.h \
+                         wolfssl/wolfcrypt/wc_mlkem.h \
+                         wolfssl/wolfcrypt/ext_mlkem.h \
                          wolfssl/wolfcrypt/sm2.h \
                          wolfssl/wolfcrypt/sm3.h \
                          wolfssl/wolfcrypt/sm4.h \
@@ -84,7 +87,9 @@ nobase_include_HEADERS+= \
                          wolfssl/wolfcrypt/ext_lms.h \
                          wolfssl/wolfcrypt/xmss.h \
                          wolfssl/wolfcrypt/wc_xmss.h \
-                         wolfssl/wolfcrypt/ext_xmss.h
+                         wolfssl/wolfcrypt/ext_xmss.h \
+                         wolfssl/wolfcrypt/wc_slhdsa.h \
+                         wolfssl/wolfcrypt/oid_sum.h
 
 noinst_HEADERS+= \
                          wolfssl/wolfcrypt/port/aria/aria-crypt.h \
@@ -107,8 +112,10 @@ noinst_HEADERS+= \
                          wolfssl/wolfcrypt/port/silabs/silabs_random.h \
                          wolfssl/wolfcrypt/port/st/stm32.h \
                          wolfssl/wolfcrypt/port/st/stsafe.h \
-                         wolfssl/wolfcrypt/port/Espressif/esp32-crypt.h \
+                         wolfssl/wolfcrypt/port/tropicsquare/tropic01.h \
                          wolfssl/wolfcrypt/port/Espressif/esp-sdk-lib.h \
+                         wolfssl/wolfcrypt/port/Espressif/esp32-crypt.h \
+                         wolfssl/wolfcrypt/port/Espressif/esp_crt_bundle.h \
                          wolfssl/wolfcrypt/port/arm/cryptoCell.h \
                          wolfssl/wolfcrypt/port/Renesas/renesas-tsip-crypt.h \
                          wolfssl/wolfcrypt/port/Renesas/renesas-fspsm-crypt.h \
@@ -116,7 +123,14 @@ noinst_HEADERS+= \
                          wolfssl/wolfcrypt/port/Renesas/renesas_sync.h \
                          wolfssl/wolfcrypt/port/Renesas/renesas_cmn.h \
                          wolfssl/wolfcrypt/port/Renesas/renesas_tsip_types.h \
-                         wolfssl/wolfcrypt/port/cypress/psoc6_crypto.h
+                         wolfssl/wolfcrypt/port/Renesas/renesas_tsip_internal.h \
+                         wolfssl/wolfcrypt/port/cypress/psoc6_crypto.h \
+                         wolfssl/wolfcrypt/port/maxim/max3266x.h \
+                         wolfssl/wolfcrypt/port/maxim/max3266x-cryptocb.h \
+                         wolfssl/wolfcrypt/port/rpi_pico/pico.h \
+                         wolfssl/wolfcrypt/libwolfssl_sources.h \
+                         wolfssl/wolfcrypt/libwolfssl_sources_asm.h
+
 
 if BUILD_CRYPTOAUTHLIB
 nobase_include_HEADERS+= wolfssl/wolfcrypt/port/atmel/atmel.h
@@ -218,6 +232,10 @@ endif
 
 if BUILD_SE050
 nobase_include_HEADERS+= wolfssl/wolfcrypt/port/nxp/se050_port.h
+endif
+
+if BUILD_TROPIC01
+nobase_include_HEADERS+= wolfssl/wolfcrypt/port/tropicsquare/tropic01.h
 endif
 
 if BUILD_MAXQ10XX

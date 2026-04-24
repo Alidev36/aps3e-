@@ -23,6 +23,20 @@ namespace gui
 {
 	namespace utils
 	{
+		enum class align_h
+		{
+			left,
+			center,
+			right
+		};
+
+		enum class align_v
+		{
+			top,
+			center,
+			bottom
+		};
+
 		class circle_pixmap : public QPixmap
 		{
 		public:
@@ -68,11 +82,14 @@ namespace gui
 		// Returns a list of all base names of files in dir whose complete file names contain one of the given name_filters
 		QStringList get_dir_entries(const QDir& dir, const QStringList& name_filters, bool full_path = false);
 
-		// Returns the foreground color of QLabel with respect to the current light/dark mode.
-		QColor get_foreground_color();
+		// Returns the foreground color of QLabel or the given widget with respect to the current light/dark mode.
+		QColor get_foreground_color(QWidget* widget = nullptr);
 
-		// Returns the background color of QLabel with respect to the current light/dark mode.
-		QColor get_background_color();
+		// Returns the background color of QLabel or the given widget with respect to the current light/dark mode.
+		QColor get_background_color(QWidget* widget = nullptr);
+
+		// Returns an adjusted color with better contrast, depending on the background.
+		QColor adjust_color_for_background(const QColor& fg, const QColor& bg);
 
 		// Returns the color specified by its color_role for the QLabels with object_name
 		QColor get_label_color(const QString& object_name, const QColor& fallback_light, const QColor& fallback_dark, QPalette::ColorRole color_role = QPalette::WindowText);
@@ -92,6 +109,15 @@ namespace gui
 		// Returns the style for richtext <a> links. e.g. style="color: #123456;"
 		QString get_link_style(const QString& name = "richtext_link_color");
 
+		// Returns a richtext link
+		QString make_link(const QString& text, const QString& url);
+
+		// Returns a bold richtext string
+		QString make_bold(const QString& text);
+
+		// Returns a richtext paragraph with white-space: nowrap;
+		QString make_paragraph(QString text, const QString& white_space_style = "nowrap");
+
 		template <typename T>
 		void set_font_size(T& qobj, int size)
 		{
@@ -100,14 +126,11 @@ namespace gui
 			qobj.setFont(font);
 		}
 
-		// Returns a scaled, centered QPixmap
-		QPixmap get_centered_pixmap(QPixmap pixmap, const QSize& icon_size, int offset_x, int offset_y, qreal device_pixel_ratio, Qt::TransformationMode mode);
+		// Returns a scaled, aligned QPixmap
+		QPixmap get_aligned_pixmap(QPixmap pixmap, const QSize& icon_size, qreal device_pixel_ratio, Qt::TransformationMode mode, align_h h_alignment, align_v v_alignment);
 
-		// Returns a scaled, centered QPixmap
-		QPixmap get_centered_pixmap(const QString& path, const QSize& icon_size, int offset_x, int offset_y, qreal device_pixel_ratio, Qt::TransformationMode mode);
-
-		// Returns the part of the image loaded from path that is inside the bounding box of its opaque areas
-		QImage get_opaque_image_area(const QString& path);
+		// Returns a scaled, aligned QPixmap
+		QPixmap get_aligned_pixmap(const QString& path, const QSize& icon_size, qreal device_pixel_ratio, Qt::TransformationMode mode, align_h h_alignment, align_v v_alignment);
 
 		// Workaround: resize the dropdown combobox items
 		void resize_combo_box_view(QComboBox* combo);
@@ -131,7 +154,7 @@ namespace gui
 		QTreeWidgetItem* find_child(QTreeWidgetItem* parent, const QString& text);
 
 		// Finds all children of a QTreeWidgetItem that match the given criteria
-		QList<QTreeWidgetItem*> find_children_by_data(QTreeWidgetItem* parent, const QList<QPair<int /*role*/, QVariant /*data*/>>& criteria, bool recursive);
+		void find_children_by_data(QTreeWidgetItem* parent, std::vector<QTreeWidgetItem*>& children, const std::vector<std::pair<int /*role*/, QVariant /*data*/>>& criteria, bool recursive);
 
 		// Constructs and adds a child to a QTreeWidgetItem
 		QTreeWidgetItem* add_child(QTreeWidgetItem* parent, const QString& text, int column = 0);
@@ -140,7 +163,7 @@ namespace gui
 		void remove_children(QTreeWidgetItem* parent);
 
 		// Removes all children of a QTreeWidgetItem that don't match the given criteria
-		void remove_children(QTreeWidgetItem* parent, const QList<QPair<int /*role*/, QVariant /*data*/>>& criteria, bool recursive);
+		void remove_children(QTreeWidgetItem* parent, const std::vector<std::pair<int /*role*/, QVariant /*data*/>>& criteria, bool recursive);
 
 		// Sort a QTreeWidget (currently only column 0)
 		void sort_tree(QTreeWidget* tree, Qt::SortOrder sort_order, bool recursive);
@@ -148,15 +171,32 @@ namespace gui
 		// Convert an arbitrary count of bytes to a readable format using global units (KB, MB...)
 		QString format_byte_size(usz size);
 
+		// Get a QDateTime from a timestamp
+		QDateTime datetime(s64 time);
+
+		// Convert a QDateTime to a readable string
+		QString format_datetime(const QDateTime& date, const QString& fmt = "yyyy-MM-dd HH:mm:ss", bool is_relative = false, const QString& fmt_relative = "HH:mm:ss");
+
+		// Convert a timestamp to a readable string
+		QString format_timestamp(s64 time, const QString& fmt = "yyyy-MM-dd HH:mm:ss");
+
 		static inline Qt::ColorScheme color_scheme()
 		{
+			// use the QGuiApplication's properties to report the default GUI color scheme
 			return QGuiApplication::styleHints()->colorScheme();
 		}
 
 		static inline bool dark_mode_active()
 		{
+			// "true" if the default GUI color scheme is dark. "false" otherwise
 			return color_scheme() == Qt::ColorScheme::Dark;
 		}
+
+		// Loads an icon from an (ISO) archive file.
+		bool load_iso_icon(QPixmap& icon, const std::string& icon_path, const std::string& archive_path);
+
+		// Loads an icon (optionally from an (ISO) archive file).
+		bool load_icon(QPixmap& icon, const std::string& icon_path, const std::string& archive_path);
 
 		template <typename T>
 		void stop_future_watcher(QFutureWatcher<T>& watcher, bool cancel, std::shared_ptr<atomic_t<bool>> cancel_flag = nullptr)

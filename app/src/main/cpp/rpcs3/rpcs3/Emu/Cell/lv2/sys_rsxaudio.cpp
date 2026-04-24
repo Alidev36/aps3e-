@@ -3,11 +3,9 @@
 #include "Emu/IdManager.h"
 #include "Emu/System.h"
 #include "Emu/system_config.h"
-//#include "Emu//Audio/audio_utils.h"
-#include "Emu//Cell/Modules/cellAudioOut.h"
+#include "Emu//Audio/audio_utils.h"
 #include "util/video_provider.h"
 
-#include "sys_process.h"
 #include "sys_rsxaudio.h"
 
 #include <cmath>
@@ -48,14 +46,14 @@ namespace rsxaudio_ringbuf_reader
 	static void set_timestamp(rsxaudio_shmem::ringbuf_t& ring_buf, u64 timestamp)
 	{
 		const s32 entry_idx_raw = (ring_buf.read_idx + ring_buf.rw_max_idx - (ring_buf.rw_max_idx > 2) - 1) % ring_buf.rw_max_idx;
-		const s32 entry_idx = std::clamp<s32>(entry_idx_raw, 0, SYS_RSXAUDIO_RINGBUF_SZ);
+		const s32 entry_idx = std::clamp<s32>(entry_idx_raw, 0, SYS_RSXAUDIO_RINGBUF_SZ - 1);
 
 		ring_buf.entries[entry_idx].timestamp = convert_to_timebased_time(timestamp);
 	}
 
 	static std::tuple<bool /*notify*/, u64 /*blk_idx*/, u64 /*timestamp*/> update_status(rsxaudio_shmem::ringbuf_t& ring_buf)
 	{
-		const s32 read_idx = std::clamp<s32>(ring_buf.read_idx, 0, SYS_RSXAUDIO_RINGBUF_SZ);
+		const s32 read_idx = std::clamp<s32>(ring_buf.read_idx, 0, SYS_RSXAUDIO_RINGBUF_SZ - 1);
 
 		if ((ring_buf.entries[read_idx].valid & 1) == 0U)
 		{
@@ -63,7 +61,7 @@ namespace rsxaudio_ringbuf_reader
 		}
 
 		const s32 entry_idx_raw = (ring_buf.read_idx + ring_buf.rw_max_idx - (ring_buf.rw_max_idx > 2)) % ring_buf.rw_max_idx;
-		const s32 entry_idx = std::clamp<s32>(entry_idx_raw, 0, SYS_RSXAUDIO_RINGBUF_SZ);
+		const s32 entry_idx = std::clamp<s32>(entry_idx_raw, 0, SYS_RSXAUDIO_RINGBUF_SZ - 1);
 
 		ring_buf.entries[read_idx].valid = 0;
 		ring_buf.queue_notify_idx = (ring_buf.queue_notify_idx + 1) % ring_buf.queue_notify_step;
@@ -74,7 +72,7 @@ namespace rsxaudio_ringbuf_reader
 
 	static std::pair<bool /*entry_valid*/, u32 /*addr*/> get_addr(const rsxaudio_shmem::ringbuf_t& ring_buf)
 	{
-		const s32 read_idx = std::clamp<s32>(ring_buf.read_idx, 0, SYS_RSXAUDIO_RINGBUF_SZ);
+		const s32 read_idx = std::clamp<s32>(ring_buf.read_idx, 0, SYS_RSXAUDIO_RINGBUF_SZ - 1);
 
 		if (ring_buf.entries[read_idx].valid & 1)
 		{
@@ -1309,11 +1307,11 @@ rsxaudio_backend_thread::rsxaudio_backend_thread()
 {
 	new_emu_cfg = get_emu_cfg();
 
-	const u64 new_vol = g_cfg.audio.volume;
+	const f32 new_vol = audio::get_volume();
 
 	callback_cfg.atomic_op([&](callback_config& val)
 	{
-		val.target_volume = static_cast<u16>(new_vol / 100.0 * callback_config::VOL_NOMINAL);
+		val.target_volume = static_cast<u16>(new_vol * callback_config::VOL_NOMINAL);
 		val.initial_volume = val.current_volume;
 	});
 }
@@ -1333,11 +1331,11 @@ void rsxaudio_backend_thread::update_emu_cfg()
 {
 	std::unique_lock lock(state_update_m);
 	const emu_audio_cfg _new_emu_cfg = get_emu_cfg();
-	const u64 new_vol = g_cfg.audio.volume;
+	const f32 new_vol = audio::get_volume();
 
 	callback_cfg.atomic_op([&](callback_config& val)
 	{
-		val.target_volume = static_cast<u16>(new_vol / 100.0 * callback_config::VOL_NOMINAL);
+		val.target_volume = static_cast<u16>(new_vol * callback_config::VOL_NOMINAL);
 		val.initial_volume = val.current_volume;
 	});
 
@@ -1394,9 +1392,9 @@ void rsxaudio_backend_thread::operator()()
 		return;
 	}
 
-	static rsxaudio_state ra_state{};
-	static emu_audio_cfg emu_cfg{};
-	static bool backend_failed = false;
+	rsxaudio_state ra_state{};
+	emu_audio_cfg emu_cfg{};
+	bool backend_failed = false;
 
 	for (;;)
 	{
@@ -1860,7 +1858,7 @@ u32 rsxaudio_backend_thread::write_data_callback(u32 bytes, void* buf)
 		if (g_recording_mode != recording_mode::stopped)
 		{
 			utils::video_provider& provider = g_fxo->get<utils::video_provider>();
-			provider.present_samples(reinterpret_cast<u8*>(callback_tmp_buf.data()), sample_cnt / cb_cfg.input_ch_cnt, cb_cfg.input_ch_cnt);
+			provider.present_samples(reinterpret_cast<const u8*>(callback_tmp_buf.data()), sample_cnt / cb_cfg.input_ch_cnt, cb_cfg.input_ch_cnt);
 		}
 
 		// Downmix if necessary
@@ -2020,7 +2018,7 @@ void rsxaudio_periodic_tmr::cancel_timer_unlocked()
 	{
 		const u64 flag = 1;
 		const auto wr_res = write(cancel_event, &flag, sizeof(flag));
-		ensure(wr_res == sizeof(flag) || wr_res == -EAGAIN);
+		ensure(wr_res == sizeof(flag) || errno == EAGAIN);
 	}
 #elif defined(BSD) || defined(__APPLE__)
 	handle[TIMER_ID].flags = (handle[TIMER_ID].flags & ~EV_ENABLE) | EV_DISABLE;

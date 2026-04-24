@@ -1,7 +1,5 @@
 #pragma once
 
-#include "util/types.hpp"
-
 #include <QTextEdit>
 #include <QDropEvent>
 
@@ -38,5 +36,4 @@ protected:
 	void dropEvent(QDropEvent* ev) override;
 	void dragEnterEvent(QDragEnterEvent* ev) override;
 	void dragMoveEvent(QDragMoveEvent* ev) override;
-	void dragLeaveEvent(QDragLeaveEvent* ev) override;
 };

@@ -5,7 +5,7 @@ namespace vk
 {
 	// Swapchain image RPCS3
 	swapchain_image_RPCS3::swapchain_image_RPCS3(render_device& dev, const memory_type_mapping& memory_map, u32 width, u32 height)
-		:image(dev, memory_map.device_local, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_TYPE_2D, g_cfg.video.bgra_format?VK_FORMAT_B8G8R8A8_UNORM:VK_FORMAT_R8G8B8A8_UNORM, width, height, 1, 1, 1,
+		:image(dev, memory_map.device_local, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_TYPE_2D, VK_FORMAT_B8G8R8A8_UNORM, width, height, 1, 1, 1,
 			VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 0, VMM_ALLOCATION_POOL_SWAPCHAIN)
 	{
@@ -105,12 +105,12 @@ namespace vk
 	swapchain_WSI::swapchain_WSI(vk::physical_device& gpu, u32 present_queue, u32 graphics_queue, u32 transfer_queue, VkFormat format, VkSurfaceKHR surface, VkColorSpaceKHR color_space, bool force_wm_reporting_off)
 		: WSI_swapchain_base(gpu, present_queue, graphics_queue, transfer_queue, format)
 	{
-		/*_vkCreateSwapchainKHR = reinterpret_cast<PFN_vkCreateSwapchainKHR>(_vkGetDeviceProcAddr(dev, "_vkCreateSwapchainKHR"));
-		_vkDestroySwapchainKHR = reinterpret_cast<PFN_vkDestroySwapchainKHR>(_vkGetDeviceProcAddr(dev, "_vkDestroySwapchainKHR"));
-		_vkGetSwapchainImagesKHR = reinterpret_cast<PFN_vkGetSwapchainImagesKHR>(_vkGetDeviceProcAddr(dev, "_vkGetSwapchainImagesKHR"));
-		_vkAcquireNextImageKHR = reinterpret_cast<PFN_vkAcquireNextImageKHR>(_vkGetDeviceProcAddr(dev, "_vkAcquireNextImageKHR"));
-		_vkQueuePresentKHR = reinterpret_cast<PFN_vkQueuePresentKHR>(_vkGetDeviceProcAddr(dev, "_vkQueuePresentKHR"));*/
-
+		/*_vkCreateSwapchainKHR = reinterpret_cast<PFN_vkCreateSwapchainKHR>(vkGetDeviceProcAddr(dev, "vkCreateSwapchainKHR"));
+		_vkDestroySwapchainKHR = reinterpret_cast<PFN_vkDestroySwapchainKHR>(vkGetDeviceProcAddr(dev, "vkDestroySwapchainKHR"));
+		_vkGetSwapchainImagesKHR = reinterpret_cast<PFN_vkGetSwapchainImagesKHR>(vkGetDeviceProcAddr(dev, "vkGetSwapchainImagesKHR"));
+		_vkAcquireNextImageKHR = reinterpret_cast<PFN_vkAcquireNextImageKHR>(vkGetDeviceProcAddr(dev, "vkAcquireNextImageKHR"));
+		_vkQueuePresentKHR = reinterpret_cast<PFN_vkQueuePresentKHR>(vkGetDeviceProcAddr(dev, "vkQueuePresentKHR"));
+*/
 		m_surface = surface;
 		m_color_space = color_space;
 
@@ -132,21 +132,6 @@ namespace vk
 			}
 		}
 	}
-
-    void swapchain_WSI::create(display_handle_t& handle) {
-        if(m_vk_swapchain){
-            _vkDestroySwapchainKHR(dev, m_vk_swapchain, nullptr);
-            m_vk_swapchain = VK_NULL_HANDLE;
-        }
-        if(!swapchain_images.empty()){
-            swapchain_images.clear();
-        }
-        WSI_config surface_config
-                {
-                        .supports_automatic_wm_reports = true
-                };
-        m_surface= make_WSI_surface(dev.gpu(),handle, &surface_config);
-    }
 
 	void swapchain_WSI::destroy(bool)
 	{
@@ -188,7 +173,7 @@ namespace vk
 				pSurfaceInfo.pNext = &full_screen_exclusive_win32_info;
 
 				auto getPhysicalDeviceSurfaceCapabilities2KHR = reinterpret_cast<PFN_vkGetPhysicalDeviceSurfaceCapabilities2KHR>(
-					_vkGetInstanceProcAddr(dev.gpu(), "_vkGetPhysicalDeviceSurfaceCapabilities2KHR")
+					vkGetInstanceProcAddr(dev.gpu(), "vkGetPhysicalDeviceSurfaceCapabilities2KHR")
 					);
 				ensure(getPhysicalDeviceSurfaceCapabilities2KHR);
 				CHECK_RESULT(getPhysicalDeviceSurfaceCapabilities2KHR(dev.gpu(), &pSurfaceInfo, &pSurfaceCapabilities));
@@ -249,14 +234,19 @@ namespace vk
 		VkPresentModeKHR swapchain_present_mode = VK_PRESENT_MODE_FIFO_KHR;
 		std::vector<VkPresentModeKHR> preferred_modes;
 
-		if (!g_cfg.video.vk.force_fifo)
+		switch (g_cfg.video.vsync)
 		{
-			// List of preferred modes in decreasing desirability
-			// NOTE: Always picks "triple-buffered vsync" types if possible
-			if (!g_cfg.video.vsync)
-			{
-				preferred_modes = { VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_FIFO_RELAXED_KHR };
-			}
+		case vsync_mode::off:
+			preferred_modes = { VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_FIFO_RELAXED_KHR };
+			break;
+		case vsync_mode::adaptive:
+			preferred_modes = { VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_FIFO_RELAXED_KHR };
+			break;
+		case vsync_mode::full:
+		default:
+			// FIFO is guaranteed to be supported, no need to go through a preference chain
+			preferred_modes = {};
+			break;
 		}
 
 		bool mode_found = false;
@@ -306,11 +296,7 @@ namespace vk
 
 		swap_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 		swap_info.preTransform = pre_transform;
-#ifdef __ANDROID__
-        swap_info.compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
-#else
 		swap_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-#endif
 		swap_info.imageArrayLayers = 1;
 		swap_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		swap_info.presentMode = swapchain_present_mode;

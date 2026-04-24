@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "main_application.h"
 #include "display_sleep_control.h"
+#include "gamemode_control.h"
 
 #include "util/types.hpp"
 #include "util/logs.hpp"
@@ -17,6 +18,7 @@
 #include "Emu/Io/Null/NullMouseHandler.h"
 #include "Emu/Io/KeyboardHandler.h"
 #include "Emu/Io/MouseHandler.h"
+#include "Emu/VFS.h"
 #include "Input/basic_keyboard_handler.h"
 #include "Input/basic_mouse_handler.h"
 #include "Input/raw_mouse_handler.h"
@@ -35,6 +37,7 @@
 #include "Emu/Audio/FAudio/faudio_enumerator.h"
 #endif
 
+#include <QDateTime>
 #include <QFileInfo> // This shouldn't be outside rpcs3qt...
 #include <QImageReader> // This shouldn't be outside rpcs3qt...
 #include <QStandardPaths> // This shouldn't be outside rpcs3qt...
@@ -54,6 +57,8 @@ namespace rsx::overlays
 	extern void reset_debug_overlay();
 }
 
+extern void qt_events_aware_op(int repeat_duration_ms, std::function<bool()> wrapped_op);
+
 /** Emu.Init() wrapper for user management */
 void main_application::InitializeEmulator(const std::string& user, bool show_gui)
 {
@@ -65,27 +70,22 @@ void main_application::InitializeEmulator(const std::string& user, bool show_gui
 	const std::string firmware_version = utils::get_firmware_version();
 	const std::string firmware_string  = firmware_version.empty() ? "Missing Firmware" : ("Firmware version: " + firmware_version);
 	sys_log.always()("%s", firmware_string);
+
+	rpcs3::utils::configure_logs(Emu.IsStopped());
 }
 
 void main_application::OnEmuSettingsChange()
 {
+	// Change logging
+	rpcs3::utils::configure_logs(Emu.IsStopped());
+
 	if (Emu.IsRunning())
 	{
-		if (g_cfg.misc.prevent_display_sleep)
-		{
-			disable_display_sleep();
-		}
-		else
-		{
-			enable_display_sleep();
-		}
+		enable_display_sleep(!g_cfg.misc.prevent_display_sleep);
 	}
 
 	if (!Emu.IsStopped())
 	{
-		// Change logging (only allowed during gameplay)
-		rpcs3::utils::configure_logs();
-
 		// Force audio provider
 		g_cfg.audio.provider.set(Emu.IsVsh() ? audio_provider::rsxaudio : audio_provider::cell_audio);
 	}
@@ -123,7 +123,7 @@ EmuCallbacks main_application::CreateCallbacks()
 		{
 		case keyboard_handler::null:
 		{
-			g_fxo->init<KeyboardHandlerBase, NullKeyboardHandler>(Emu.DeserialManager());
+			ensure(g_fxo->init<KeyboardHandlerBase, NullKeyboardHandler>(Emu.DeserialManager()));
 			break;
 		}
 		case keyboard_handler::basic:
@@ -131,7 +131,7 @@ EmuCallbacks main_application::CreateCallbacks()
 			basic_keyboard_handler* ret = g_fxo->init<KeyboardHandlerBase, basic_keyboard_handler>(Emu.DeserialManager());
 			ensure(ret);
 			ret->moveToThread(get_thread());
-			ret->SetTargetWindow(m_game_window);
+			ret->SetTargetWindow(reinterpret_cast<QWindow*>(m_game_window));
 			break;
 		}
 		}
@@ -160,7 +160,7 @@ EmuCallbacks main_application::CreateCallbacks()
 		{
 		case mouse_handler::null:
 		{
-			g_fxo->init<MouseHandlerBase, NullMouseHandler>(Emu.DeserialManager());
+			ensure(g_fxo->init<MouseHandlerBase, NullMouseHandler>(Emu.DeserialManager()));
 			break;
 		}
 		case mouse_handler::basic:
@@ -168,12 +168,12 @@ EmuCallbacks main_application::CreateCallbacks()
 			basic_mouse_handler* ret = g_fxo->init<MouseHandlerBase, basic_mouse_handler>(Emu.DeserialManager());
 			ensure(ret);
 			ret->moveToThread(get_thread());
-			ret->SetTargetWindow(m_game_window);
+			ret->SetTargetWindow(reinterpret_cast<QWindow*>(m_game_window));
 			break;
 		}
 		case mouse_handler::raw:
 		{
-			g_fxo->init<MouseHandlerBase, raw_mouse_handler>(Emu.DeserialManager());
+			ensure(g_fxo->init<MouseHandlerBase, raw_mouse_handler>(Emu.DeserialManager()));
 			break;
 		}
 		}
@@ -182,8 +182,8 @@ EmuCallbacks main_application::CreateCallbacks()
 	callbacks.init_pad_handler = [this](std::string_view title_id)
 	{
 		ensure(g_fxo->init<named_thread<pad_thread>>(get_thread(), m_game_window, title_id));
-		extern void process_qt_events();
-		while (!pad::g_started) process_qt_events();
+
+		qt_events_aware_op(0, [](){ return !!pad::g_started; });
 	};
 
 	callbacks.get_audio = []() -> std::shared_ptr<AudioBackend>
@@ -377,6 +377,36 @@ EmuCallbacks main_application::CreateCallbacks()
 			}
 		}
 		return true;
+	};
+
+	callbacks.enable_gamemode = [](bool enabled){ enable_gamemode(enabled); };
+
+	callbacks.get_photo_path = [](std::string_view title)
+	{
+		const QDateTime date_time = QDateTime::currentDateTime();
+		const QDate date = date_time.date();
+		const QTime time = date_time.time();
+
+		std::string_view extension = ".png";
+		if (const auto extension_start = title.find_last_of('.');
+			extension_start != umax)
+		{
+			extension = title.substr(extension_start);
+			title = title.substr(0, extension_start);
+		}
+
+		std::string suffix = std::string(extension);
+		const std::string path = vfs::get(fmt::format("/dev_hdd0/photo/%04d/%02d/%02d/%s %02d-%02d-%04d %02d-%02d-%02d",
+		                                              date.year(), date.month(), date.day(), vfs::escape(title, true),
+		                                              date.day(), date.month(), date.year(), time.hour(), time.minute(), time.second()));
+
+		u32 counter = 0;
+		while (!Emu.IsStopped() && fs::is_file(path + suffix))
+		{
+			suffix = fmt::format(" %d%s", ++counter, extension);
+		}
+
+		return path + suffix;
 	};
 
 	return callbacks;

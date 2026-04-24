@@ -36,12 +36,8 @@ lv2_memory::lv2_memory(u32 size, u32 align, u64 flags, u64 key, bool pshared, lv
 	, key(key)
 	, pshared(pshared)
 	, ct(ct)
-	, shm(std::make_shared<utils::shm>(size, 1 /* shareable flag */))
+	, shm(null_ptr)
 {
-#ifndef _WIN32
-	// Optimization that's useless on Windows :puke:
-	utils::memory_lock(shm->map_self(), size);
-#endif
 }
 
 lv2_memory::lv2_memory(utils::serial& ar)
@@ -51,23 +47,17 @@ lv2_memory::lv2_memory(utils::serial& ar)
 	, key(ar)
 	, pshared(ar)
 	, ct(lv2_memory_container::search(ar.pop<u32>()))
-	, shm([&](u32 addr)
+	, shm([&](u32 addr) -> shared_ptr<std::shared_ptr<utils::shm>>
 	{
 		if (addr)
 		{
-			return ensure(vm::get(vm::any, addr)->peek(addr).second);
+			return make_single_value(ensure(vm::get(vm::any, addr)->peek(addr).second));
 		}
 
-		const auto _shm = std::make_shared<utils::shm>(size, 1);
-		ar(std::span(_shm->map_self(), size));
-		return _shm;
+		return null_ptr;
 	}(ar.pop<u32>()))
 	, counter(ar)
 {
-#ifndef _WIN32
-	// Optimization that's useless on Windows :puke:
-	utils::memory_lock(shm->map_self(), size);
-#endif
 }
 
 CellError lv2_memory::on_id_create()
@@ -84,7 +74,7 @@ CellError lv2_memory::on_id_create()
 
 std::function<void(void*)> lv2_memory::load(utils::serial& ar)
 {
-	auto mem = make_shared<lv2_memory>(ar);
+	auto mem = make_shared<lv2_memory>(stx::exact_t<utils::serial&>(ar));
 	mem->exists++; // Disable on_id_create()
 	auto func = load_func(mem, +mem->pshared);
 	mem->exists--;
@@ -96,13 +86,7 @@ void lv2_memory::save(utils::serial& ar)
 	USING_SERIALIZATION_VERSION(lv2_memory);
 
 	ar(size, align, flags, key, pshared, ct->id);
-	ar(counter ? vm::get_shm_addr(shm) : 0);
-
-	if (!counter)
-	{
-		ar(std::span(shm->map_self(), size));
-	}
-
+	ar(counter ? vm::get_shm_addr(*shm.load()) : 0);
 	ar(counter);
 }
 
@@ -349,7 +333,7 @@ error_code sys_mmapper_allocate_shared_memory_ext(ppu_thread& ppu, u64 ipc_key, 
 	}
 	}
 
-	if (flags & ~SYS_MEMORY_PAGE_SIZE_MASK)
+	if (flags & ~SYS_MEMORY_GRANULARITY_MASK)
 	{
 		return CELL_EINVAL;
 	}
@@ -416,6 +400,11 @@ error_code sys_mmapper_allocate_shared_memory_from_container_ext(ppu_thread& ppu
 
 	sys_mmapper.todo("sys_mmapper_allocate_shared_memory_from_container_ext(ipc_key=0x%x, size=0x%x, flags=0x%x, cid=0x%x, entries=*0x%x, entry_count=0x%x, mem_id=*0x%x)", ipc_key, size, flags, cid, entries,
 		entry_count, mem_id);
+
+	if (size == 0)
+	{
+		return CELL_EALIGN;
+	}
 
 	switch (flags & SYS_MEMORY_PAGE_SIZE_MASK)
 	{
@@ -562,8 +551,7 @@ error_code sys_mmapper_free_address(ppu_thread& ppu, u32 addr)
 
 	// If a memory block is freed, remove it from page notification table.
 	auto& pf_entries = g_fxo->get<page_fault_notification_entries>();
-	std::lock_guard lock(pf_entries.mutex);
-
+	std::unique_lock lock(pf_entries.mutex);
 	auto ind_to_remove = pf_entries.entries.begin();
 	for (; ind_to_remove != pf_entries.entries.end(); ++ind_to_remove)
 	{
@@ -574,7 +562,11 @@ error_code sys_mmapper_free_address(ppu_thread& ppu, u32 addr)
 	}
 	if (ind_to_remove != pf_entries.entries.end())
 	{
+		u32 port_id = ind_to_remove->port_id;
 		pf_entries.entries.erase(ind_to_remove);
+		lock.unlock();
+		sys_event_port_disconnect(ppu, port_id);
+		sys_event_port_destroy(ppu, port_id);
 	}
 
 	return CELL_OK;
@@ -645,6 +637,22 @@ error_code sys_mmapper_map_shared_memory(ppu_thread& ppu, u32 addr, u32 mem_id, 
 			return CELL_EALIGN;
 		}
 
+		for (stx::shared_ptr<std::shared_ptr<utils::shm>> to_insert, null; !mem.shm;)
+		{
+			// Insert atomically the memory handle (laziliy allocated)
+			if (!to_insert)
+			{
+				to_insert = make_single_value(std::make_shared<utils::shm>(mem.size, 1 /* shareable flag */));
+			}
+
+			null.reset();
+
+			if (mem.shm.compare_exchange(null, to_insert))
+			{
+				break;
+			}
+		}
+
 		mem.counter++;
 		return {};
 	});
@@ -659,7 +667,9 @@ error_code sys_mmapper_map_shared_memory(ppu_thread& ppu, u32 addr, u32 mem_id, 
 		return mem.ret;
 	}
 
-	if (!area->falloc(addr, mem->size, &mem->shm, mem->align == 0x10000 ? SYS_MEMORY_PAGE_SIZE_64K : SYS_MEMORY_PAGE_SIZE_1M))
+	auto shm_ptr = *mem->shm.load();
+
+	if (!area->falloc(addr, mem->size, &shm_ptr, mem->align == 0x10000 ? SYS_MEMORY_PAGE_SIZE_64K : SYS_MEMORY_PAGE_SIZE_1M))
 	{
 		mem->counter--;
 
@@ -697,6 +707,22 @@ error_code sys_mmapper_search_and_map(ppu_thread& ppu, u32 start_addr, u32 mem_i
 			return CELL_EALIGN;
 		}
 
+		for (stx::shared_ptr<std::shared_ptr<utils::shm>> to_insert, null; !mem.shm;)
+		{
+			// Insert atomically the memory handle (laziliy allocated)
+			if (!to_insert)
+			{
+				to_insert = make_single_value(std::make_shared<utils::shm>(mem.size, 1 /* shareable flag */));
+			}
+
+			null.reset();
+
+			if (mem.shm.compare_exchange(null, to_insert))
+			{
+				break;
+			}
+		}
+
 		mem.counter++;
 		return {};
 	});
@@ -711,7 +737,9 @@ error_code sys_mmapper_search_and_map(ppu_thread& ppu, u32 start_addr, u32 mem_i
 		return mem.ret;
 	}
 
-	const u32 addr = area->alloc(mem->size, &mem->shm, mem->align, mem->align == 0x10000 ? SYS_MEMORY_PAGE_SIZE_64K : SYS_MEMORY_PAGE_SIZE_1M);
+	auto shm_ptr = *mem->shm.load();
+
+	const u32 addr = area->alloc(mem->size, &shm_ptr, mem->align, mem->align == 0x10000 ? SYS_MEMORY_PAGE_SIZE_64K : SYS_MEMORY_PAGE_SIZE_1M);
 
 	if (!addr)
 	{
@@ -755,7 +783,7 @@ error_code sys_mmapper_unmap_shared_memory(ppu_thread& ppu, u32 addr, vm::ptr<u3
 
 	const auto mem = idm::select<lv2_obj, lv2_memory>([&](u32 id, lv2_memory& mem) -> u32
 	{
-		if (mem.shm.get() == shm.second.get())
+		if (auto shm0 = mem.shm.load(); shm0 && shm0->get() == shm.second.get())
 		{
 			return id;
 		}
@@ -806,13 +834,14 @@ error_code sys_mmapper_enable_page_fault_notification(ppu_thread& ppu, u32 start
 
 	vm::var<u32> port_id(0);
 	error_code res = sys_event_port_create(ppu, port_id, SYS_EVENT_PORT_LOCAL, SYS_MEMORY_PAGE_FAULT_EVENT_KEY);
-	sys_event_port_connect_local(ppu, *port_id, event_queue_id);
 
 	if (res + 0u == CELL_EAGAIN)
 	{
 		// Not enough system resources.
 		return CELL_EAGAIN;
 	}
+
+	sys_event_port_connect_local(ppu, *port_id, event_queue_id);
 
 	auto& pf_entries = g_fxo->get<page_fault_notification_entries>();
 	std::unique_lock lock(pf_entries.mutex);

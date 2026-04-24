@@ -1,12 +1,12 @@
 /* sp_int.c
  *
- * Copyright (C) 2006-2023 wolfSSL Inc.
+ * Copyright (C) 2006-2026 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
  * wolfSSL is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * wolfSSL is distributed in the hope that it will be useful,
@@ -26,26 +26,10 @@ DESCRIPTION
 This library provides single precision (SP) integer math functions.
 
 */
-#ifdef HAVE_CONFIG_H
-    #include <config.h>
-#endif
 
-#include <wolfssl/wolfcrypt/settings.h>
+#include <wolfssl/wolfcrypt/libwolfssl_sources.h>
 
 #if defined(WOLFSSL_SP_MATH) || defined(WOLFSSL_SP_MATH_ALL)
-
-#if (!defined(WOLFSSL_SMALL_STACK) && !defined(SP_ALLOC)) || \
-    defined(WOLFSSL_SP_NO_MALLOC)
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) && \
-    !defined(WOLFSSL_SP_NO_DYN_STACK)
-#pragma GCC diagnostic push
-/* We are statically declaring a variable smaller than sp_int.
- * We track available memory in the 'size' field.
- * Disable warnings of sp_int being partly outside array bounds of variable.
- */
-#pragma GCC diagnostic ignored "-Warray-bounds"
-#endif
-#endif
 
 #ifdef NO_INLINE
     #include <wolfssl/wolfcrypt/misc.h>
@@ -115,12 +99,22 @@ This library provides single precision (SP) integer math functions.
 
 #include <wolfssl/wolfcrypt/sp_int.h>
 
-#if defined(WOLFSSL_LINUXKM) && !defined(WOLFSSL_SP_ASM)
+#ifdef WOLFSSL_SP_DYN_STACK
+/* We are statically declaring a variable smaller than sp_int.
+ * We track available memory in the 'size' field.
+ * Disable warnings of sp_int being partly outside array bounds of variable.
+ */
+    PRAGMA_GCC_DIAG_PUSH
+    PRAGMA_GCC("GCC diagnostic ignored \"-Warray-bounds\"")
+#endif
+
+#if defined(WOLFSSL_USE_SAVE_VECTOR_REGISTERS) && !defined(WOLFSSL_SP_ASM)
     /* force off unneeded vector register save/restore. */
     #undef SAVE_VECTOR_REGISTERS
-    #define SAVE_VECTOR_REGISTERS(...) WC_DO_NOTHING
+    #define SAVE_VECTOR_REGISTERS(fail_clause) \
+        SAVE_NO_VECTOR_REGISTERS(fail_clause)
     #undef RESTORE_VECTOR_REGISTERS
-    #define RESTORE_VECTOR_REGISTERS() WC_DO_NOTHING
+    #define RESTORE_VECTOR_REGISTERS() RESTORE_NO_VECTOR_REGISTERS()
 #endif
 
 /* DECL_SP_INT: Declare one variable of type 'sp_int'. */
@@ -130,11 +124,10 @@ This library provides single precision (SP) integer math functions.
     #define DECL_SP_INT(n, s)   \
         sp_int* n = NULL
 #else
-    #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) && \
-        !defined(WOLFSSL_SP_NO_DYN_STACK)
+    #ifdef WOLFSSL_SP_DYN_STACK
         /* Declare a variable on the stack with the required data size. */
-        #define DECL_SP_INT(n, s)               \
-            byte    n##d[MP_INT_SIZEOF(s)];     \
+        #define DECL_SP_INT(n, s)                       \
+            sp_int_digit n##d[MP_INT_SIZEOF_DIGITS(s)]; \
             sp_int* (n) = (sp_int*)n##d
     #else
         /* Declare a variable on the stack. */
@@ -167,7 +160,7 @@ This library provides single precision (SP) integer math functions.
     do {                                                                       \
         ALLOC_SP_INT(n, s, err, h);                                            \
         if ((err) == MP_OKAY) {                                                \
-            (n)->size = (s);                                                   \
+            (n)->size = (sp_size_t)(s);                                        \
         }                                                                      \
     }                                                                          \
     while (0)
@@ -175,7 +168,7 @@ This library provides single precision (SP) integer math functions.
     /* Array declared on stack - check size is valid. */
     #define ALLOC_SP_INT(n, s, err, h)                                         \
     do {                                                                       \
-        if (((err) == MP_OKAY) && ((s) > SP_INT_DIGITS)) {                     \
+        if (((err) == MP_OKAY) && ((s) > (int)SP_INT_DIGITS)) {                \
             (err) = MP_VAL;                                                    \
         }                                                                      \
     }                                                                          \
@@ -186,7 +179,7 @@ This library provides single precision (SP) integer math functions.
     do {                                                                       \
         ALLOC_SP_INT(n, s, err, h);                                            \
         if ((err) == MP_OKAY) {                                                \
-            (n)->size = (unsigned int)(s);                                     \
+            (n)->size = (sp_size_t)(s);                                        \
         }                                                                      \
     }                                                                          \
     while (0)
@@ -210,9 +203,10 @@ This library provides single precision (SP) integer math functions.
 
 
 /* Declare a variable that will be assigned a value on XMALLOC. */
-#define DECL_DYN_SP_INT_ARRAY(n, s, c)  \
-    sp_int* n##d = NULL;            \
-    sp_int* (n)[c] = { NULL, }
+#define DECL_DYN_SP_INT_ARRAY(n, s, c)               \
+    sp_int* n##d = NULL;                             \
+    sp_int* (n)[c];                                  \
+    void *n ## _dummy_var = XMEMSET(n, 0, sizeof(n))
 
 /* DECL_SP_INT_ARRAY: Declare array of 'sp_int'. */
 #if (defined(WOLFSSL_SMALL_STACK) || defined(SP_ALLOC)) && \
@@ -220,19 +214,16 @@ This library provides single precision (SP) integer math functions.
     /* Declare a variable that will be assigned a value on XMALLOC. */
     #define DECL_SP_INT_ARRAY(n, s, c)  \
         DECL_DYN_SP_INT_ARRAY(n, s, c)
+#elif defined(WOLFSSL_SP_DYN_STACK)
+    /* Declare a variable on the stack with the required data size. */
+    #define DECL_SP_INT_ARRAY(n, s, c)                    \
+        sp_int_digit n##d[MP_INT_SIZEOF_DIGITS(s) * (c)]; \
+        sp_int* (n)[c] = { NULL, }
 #else
-    #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) && \
-        !defined(WOLFSSL_SP_NO_DYN_STACK)
-        /* Declare a variable on the stack with the required data size. */
-        #define DECL_SP_INT_ARRAY(n, s, c)          \
-            byte    n##d[MP_INT_SIZEOF(s) * (c)];   \
-            sp_int* (n)[c] = { NULL, }
-    #else
-        /* Declare a variable on the stack. */
-        #define DECL_SP_INT_ARRAY(n, s, c)      \
-            sp_int n##d[c];                     \
-            sp_int* (n)[c]
-    #endif
+    /* Declare a variable on the stack. */
+    #define DECL_SP_INT_ARRAY(n, s, c)      \
+        sp_int n##d[c];                     \
+        sp_int* (n)[c]
 #endif
 
 /* Dynamically allocate just enough data to support multiple sp_ints of the
@@ -240,6 +231,7 @@ This library provides single precision (SP) integer math functions.
  */
 #define ALLOC_DYN_SP_INT_ARRAY(n, s, c, err, h)                                \
 do {                                                                           \
+    (void)n ## _dummy_var;                                                     \
     if (((err) == MP_OKAY) && ((s) > SP_INT_DIGITS)) {                         \
         (err) = MP_VAL;                                                        \
     }                                                                          \
@@ -252,10 +244,10 @@ do {                                                                           \
         else {                                                                 \
             int n##ii;                                                         \
             (n)[0] = n##d;                                                     \
-            (n)[0]->size = (s);                                                \
+            (n)[0]->size = (sp_size_t)(s);                                     \
             for (n##ii = 1; n##ii < (int)(c); n##ii++) {                       \
                 (n)[n##ii] = MP_INT_NEXT((n)[n##ii-1], s);                     \
-                (n)[n##ii]->size = (s);                                        \
+                (n)[n##ii]->size = (sp_size_t)(s);                             \
             }                                                                  \
         }                                                                      \
     }                                                                          \
@@ -267,47 +259,44 @@ while (0)
     !defined(WOLFSSL_SP_NO_MALLOC)
     #define ALLOC_SP_INT_ARRAY(n, s, c, err, h) \
         ALLOC_DYN_SP_INT_ARRAY(n, s, c, err, h)
+#elif defined(WOLFSSL_SP_DYN_STACK)
+    /* Data declared on stack that supports multiple sp_ints of the
+     * required size. Use pointers into data to make up array and set sizes.
+     */
+    #define ALLOC_SP_INT_ARRAY(n, s, c, err, h)                                \
+    do {                                                                       \
+        if (((err) == MP_OKAY) && ((s) > SP_INT_DIGITS)) {                     \
+            (err) = MP_VAL;                                                    \
+        }                                                                      \
+        if ((err) == MP_OKAY) {                                                \
+            int n##ii;                                                         \
+            (n)[0] = (sp_int*)n##d;                                            \
+            ((sp_int_minimal*)(n)[0])->size = (sp_size_t)(s);                  \
+            for (n##ii = 1; n##ii < (int)(c); n##ii++) {                       \
+                (n)[n##ii] = MP_INT_NEXT((n)[n##ii-1], s);                     \
+                ((sp_int_minimal*)(n)[n##ii])->size = (sp_size_t)(s);          \
+            }                                                                  \
+        }                                                                      \
+    }                                                                          \
+    while (0)
 #else
-    #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) && \
-        !defined(WOLFSSL_SP_NO_DYN_STACK)
-        /* Data declared on stack that supports multiple sp_ints of the
-         * required size. Use pointers into data to make up array and set sizes.
-         */
-        #define ALLOC_SP_INT_ARRAY(n, s, c, err, h)                            \
-        do {                                                                   \
-            if (((err) == MP_OKAY) && ((s) > SP_INT_DIGITS)) {                 \
-                (err) = MP_VAL;                                                \
-            }                                                                  \
-            if ((err) == MP_OKAY) {                                            \
-                int n##ii;                                                     \
-                (n)[0] = (sp_int*)n##d;                                        \
-                ((sp_int_minimal*)(n)[0])->size = (s);                         \
-                for (n##ii = 1; n##ii < (int)(c); n##ii++) {                   \
-                    (n)[n##ii] = MP_INT_NEXT((n)[n##ii-1], s);                 \
-                    ((sp_int_minimal*)(n)[n##ii])->size = (s);                 \
-                }                                                              \
+    /* Data declared on stack that supports multiple sp_ints of the
+     * required size. Set into array and set sizes.
+     */
+    #define ALLOC_SP_INT_ARRAY(n, s, c, err, h)                                \
+    do {                                                                       \
+        if (((err) == MP_OKAY) && ((s) > SP_INT_DIGITS)) {                     \
+            (err) = MP_VAL;                                                    \
+        }                                                                      \
+        if ((err) == MP_OKAY) {                                                \
+            int n##ii;                                                         \
+            for (n##ii = 0; n##ii < (int)(c); n##ii++) {                       \
+                (n)[n##ii] = &n##d[n##ii];                                     \
+                (n)[n##ii]->size = (sp_size_t)(s);                             \
             }                                                                  \
         }                                                                      \
-        while (0)
-    #else
-        /* Data declared on stack that supports multiple sp_ints of the
-         * required size. Set into array and set sizes.
-         */
-        #define ALLOC_SP_INT_ARRAY(n, s, c, err, h)                            \
-        do {                                                                   \
-            if (((err) == MP_OKAY) && ((s) > SP_INT_DIGITS)) {                 \
-                (err) = MP_VAL;                                                \
-            }                                                                  \
-            if ((err) == MP_OKAY) {                                            \
-                int n##ii;                                                     \
-                for (n##ii = 0; n##ii < (int)(c); n##ii++) {                   \
-                    (n)[n##ii] = &n##d[n##ii];                                 \
-                    (n)[n##ii]->size = (s);                                    \
-                }                                                              \
-            }                                                                  \
-        }                                                                      \
-        while (0)
-    #endif
+    }                                                                          \
+    while (0)
 #endif
 
 /* Free data variable that was dynamically allocated. */
@@ -354,8 +343,8 @@ while (0)
         "movq	%%rax, %[l]	\n\t"                    \
         "movq	%%rdx, %[h]	\n\t"                    \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
-        : [a] "m" (va), [b] "m" (vb)                     \
-        : "memory", "%rax", "%rdx", "cc"                 \
+        : [a] "rm" (va), [b] "rm" (vb)                   \
+        : "%rax", "%rdx", "cc"                           \
     )
 /* Multiply va by vb and store double size result in: vo | vh | vl */
 #define SP_ASM_MUL_SET(vl, vh, vo, va, vb)               \
@@ -378,7 +367,7 @@ while (0)
         "adcq	%%rdx, %[h]	\n\t"                    \
         "adcq	$0   , %[o]	\n\t"                    \
         : [l] "+r" (vl), [h] "+r" (vh), [o] "+r" (vo)    \
-        : [a] "m" (va), [b] "m" (vb)                     \
+        : [a] "rm" (va), [b] "rm" (vb)                   \
         : "%rax", "%rdx", "cc"                           \
     )
 /* Multiply va by vb and add double size result into: vh | vl */
@@ -389,7 +378,7 @@ while (0)
         "addq	%%rax, %[l]	\n\t"                    \
         "adcq	%%rdx, %[h]	\n\t"                    \
         : [l] "+r" (vl), [h] "+r" (vh)                   \
-        : [a] "m" (va), [b] "m" (vb)                     \
+        : [a] "rm" (va), [b] "rm" (vb)                   \
         : "%rax", "%rdx", "cc"                           \
     )
 /* Multiply va by vb and add double size result twice into: vo | vh | vl */
@@ -404,7 +393,7 @@ while (0)
         "adcq	%%rdx, %[h]	\n\t"                    \
         "adcq	$0   , %[o]	\n\t"                    \
         : [l] "+r" (vl), [h] "+r" (vh), [o] "+r" (vo)    \
-        : [a] "m" (va), [b] "m" (vb)                     \
+        : [a] "rm" (va), [b] "rm" (vb)                   \
         : "%rax", "%rdx", "cc"                           \
     )
 /* Multiply va by vb and add double size result twice into: vo | vh | vl
@@ -420,7 +409,7 @@ while (0)
         "adcq	%%rdx, %[h]	\n\t"                    \
         "adcq	$0   , %[o]	\n\t"                    \
         : [l] "+r" (vl), [h] "+r" (vh), [o] "+r" (vo)    \
-        : [a] "m" (va), [b] "m" (vb)                     \
+        : [a] "rm" (va), [b] "rm" (vb)                   \
         : "%rax", "%rdx", "cc"                           \
     )
 /* Square va and store double size result in: vh | vl */
@@ -431,8 +420,8 @@ while (0)
         "movq	%%rax, %[l]	\n\t"                    \
         "movq	%%rdx, %[h]	\n\t"                    \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
-        : [a] "m" (va)                                   \
-        : "memory", "%rax", "%rdx", "cc"                 \
+        : [a] "rm" (va)                                  \
+        : "%rax", "%rdx", "cc"                           \
     )
 /* Square va and add double size result into: vo | vh | vl */
 #define SP_ASM_SQR_ADD(vl, vh, vo, va)                   \
@@ -443,7 +432,7 @@ while (0)
         "adcq	%%rdx, %[h]	\n\t"                    \
         "adcq	$0   , %[o]	\n\t"                    \
         : [l] "+r" (vl), [h] "+r" (vh), [o] "+r" (vo)    \
-        : [a] "m" (va)                                   \
+        : [a] "rm" (va)                                  \
         : "%rax", "%rdx", "cc"                           \
     )
 /* Square va and add double size result into: vh | vl */
@@ -454,7 +443,7 @@ while (0)
         "addq	%%rax, %[l]	\n\t"                    \
         "adcq	%%rdx, %[h]	\n\t"                    \
         : [l] "+r" (vl), [h] "+r" (vh)                   \
-        : [a] "m" (va)                                   \
+        : [a] "rm" (va)                                  \
         : "%rax", "%rdx", "cc"                           \
     )
 /* Add va into: vh | vl */
@@ -463,10 +452,9 @@ while (0)
         "addq	%[a], %[l]	\n\t"                    \
         "adcq	$0  , %[h]	\n\t"                    \
         : [l] "+r" (vl), [h] "+r" (vh)                   \
-        : [a] "m" (va)                                   \
+        : [a] "rm" (va)                                  \
         : "cc"                                           \
     )
-/* Add va, variable in a register, into: vh | vl */
 #define SP_ASM_ADDC_REG(vl, vh, va)                      \
     __asm__ __volatile__ (                               \
         "addq	%[a], %[l]	\n\t"                    \
@@ -481,7 +469,7 @@ while (0)
         "subq	%[a], %[l]	\n\t"                    \
         "sbbq	$0  , %[h]	\n\t"                    \
         : [l] "+r" (vl), [h] "+r" (vh)                   \
-        : [a] "m" (va)                                   \
+        : [a] "rm" (va)                                  \
         : "cc"                                           \
     )
 /* Sub va from: vh | vl */
@@ -664,9 +652,9 @@ while (0)
  *
  * Using divq instruction on Intel x64.
  *
- * @param  [in]  hi  SP integer digit. High digit of the dividend.
- * @param  [in]  lo  SP integer digit. Lower digit of the dividend.
- * @param  [in]  d   SP integer digit. Number to divide by.
+ * @param [in] hi  SP integer digit. High digit of the dividend.
+ * @param [in] lo  SP integer digit. Low digit of the dividend.
+ * @param [in] d   SP integer digit. Number to divide by.
  * @return  The division result.
  */
 static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
@@ -704,8 +692,8 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "movl	%%eax, %[l]	\n\t"                    \
         "movl	%%edx, %[h]	\n\t"                    \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
-        : [a] "m" (va), [b] "m" (vb)                     \
-        : "memory", "eax", "edx", "cc"                   \
+        : [a] "rm" (va), [b] "rm" (vb)                   \
+        : "eax", "edx", "cc"                             \
     )
 /* Multiply va by vb and store double size result in: vo | vh | vl */
 #define SP_ASM_MUL_SET(vl, vh, vo, va, vb)               \
@@ -727,8 +715,8 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "addl	%%eax, %[l]	\n\t"                    \
         "adcl	%%edx, %[h]	\n\t"                    \
         "adcl	$0   , %[o]	\n\t"                    \
-        : [l] "+rm" (vl), [h] "+rm" (vh), [o] "+rm" (vo) \
-        : [a] "r" (va), [b] "r" (vb)                     \
+        : [l] "+r" (vl), [h] "+r" (vh), [o] "+r" (vo)    \
+        : [a] "rm" (va), [b] "rm" (vb)                   \
         : "eax", "edx", "cc"                             \
     )
 /* Multiply va by vb and add double size result into: vh | vl */
@@ -739,7 +727,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "addl	%%eax, %[l]	\n\t"                    \
         "adcl	%%edx, %[h]	\n\t"                    \
         : [l] "+r" (vl), [h] "+r" (vh)                   \
-        : [a] "m" (va), [b] "m" (vb)                     \
+        : [a] "rm" (va), [b] "rm" (vb)                   \
         : "eax", "edx", "cc"                             \
     )
 /* Multiply va by vb and add double size result twice into: vo | vh | vl */
@@ -753,8 +741,8 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "addl	%%eax, %[l]	\n\t"                    \
         "adcl	%%edx, %[h]	\n\t"                    \
         "adcl	$0   , %[o]	\n\t"                    \
-        : [l] "+rm" (vl), [h] "+rm" (vh), [o] "+rm" (vo) \
-        : [a] "r" (va), [b] "r" (vb)                     \
+        : [l] "+r" (vl), [h] "+r" (vh), [o] "+r" (vo)    \
+        : [a] "rm" (va), [b] "rm" (vb)                   \
         : "eax", "edx", "cc"                             \
     )
 /* Multiply va by vb and add double size result twice into: vo | vh | vl
@@ -770,7 +758,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "adcl	%%edx, %[h]	\n\t"                    \
         "adcl	$0   , %[o]	\n\t"                    \
         : [l] "+r" (vl), [h] "+r" (vh), [o] "+r" (vo)    \
-        : [a] "m" (va), [b] "m" (vb)                     \
+        : [a] "rm" (va), [b] "rm" (vb)                   \
         : "eax", "edx", "cc"                             \
     )
 /* Square va and store double size result in: vh | vl */
@@ -781,8 +769,8 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "movl	%%eax, %[l]	\n\t"                    \
         "movl	%%edx, %[h]	\n\t"                    \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
-        : [a] "m" (va)                                   \
-        : "memory", "eax", "edx", "cc"                   \
+        : [a] "rm" (va)                                  \
+        : "eax", "edx", "cc"                             \
     )
 /* Square va and add double size result into: vo | vh | vl */
 #define SP_ASM_SQR_ADD(vl, vh, vo, va)                   \
@@ -792,8 +780,8 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "addl	%%eax, %[l]	\n\t"                    \
         "adcl	%%edx, %[h]	\n\t"                    \
         "adcl	$0   , %[o]	\n\t"                    \
-        : [l] "+rm" (vl), [h] "+rm" (vh), [o] "+rm" (vo) \
-        : [a] "m" (va)                                   \
+        : [l] "+r" (vl), [h] "+r" (vh), [o] "+r" (vo)    \
+        : [a] "rm" (va)                                  \
         : "eax", "edx", "cc"                             \
     )
 /* Square va and add double size result into: vh | vl */
@@ -804,7 +792,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "addl	%%eax, %[l]	\n\t"                    \
         "adcl	%%edx, %[h]	\n\t"                    \
         : [l] "+r" (vl), [h] "+r" (vh)                   \
-        : [a] "m" (va)                                   \
+        : [a] "rm" (va)                                  \
         : "eax", "edx", "cc"                             \
     )
 /* Add va into: vh | vl */
@@ -813,10 +801,9 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "addl	%[a], %[l]	\n\t"                    \
         "adcl	$0  , %[h]	\n\t"                    \
         : [l] "+r" (vl), [h] "+r" (vh)                   \
-        : [a] "m" (va)                                   \
+        : [a] "rm" (va)                                  \
         : "cc"                                           \
     )
-/* Add va, variable in a register, into: vh | vl */
 #define SP_ASM_ADDC_REG(vl, vh, va)                      \
     __asm__ __volatile__ (                               \
         "addl	%[a], %[l]	\n\t"                    \
@@ -831,7 +818,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "subl	%[a], %[l]	\n\t"                    \
         "sbbl	$0  , %[h]	\n\t"                    \
         : [l] "+r" (vl), [h] "+r" (vh)                   \
-        : [a] "m" (va)                                   \
+        : [a] "rm" (va)                                  \
         : "cc"                                           \
     )
 /* Sub va from: vh | vl */
@@ -870,9 +857,9 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
  *
  * Using divl instruction on Intel x64.
  *
- * @param  [in]  hi  SP integer digit. High digit of the dividend.
- * @param  [in]  lo  SP integer digit. Lower digit of the dividend.
- * @param  [in]  d   SP integer digit. Number to divide by.
+ * @param [in] hi  SP integer digit. High digit of the dividend.
+ * @param [in] lo  SP integer digit. Low digit of the dividend.
+ * @param [in] d   SP integer digit. Number to divide by.
  * @return  The division result.
  */
 static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
@@ -905,7 +892,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "umulh	%[h], %[a], %[b]	\n\t"            \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
         : [a] "r" (va), [b] "r" (vb)                     \
-        : "memory", "cc"                                 \
+        : "cc"                                           \
     )
 /* Multiply va by vb and store double size result in: vo | vh | vl */
 #define SP_ASM_MUL_SET(vl, vh, vo, va, vb)               \
@@ -916,7 +903,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "mov	%[o], xzr		\n\t"            \
         : [l] "+r" (vl), [h] "+r" (vh), [o] "=r" (vo)    \
         : [a] "r" (va), [b] "r" (vb)                     \
-        : "x8"                                           \
+        : "x8", "cc"                                     \
     )
 /* Multiply va by vb and add double size result into: vo | vh | vl */
 #define SP_ASM_MUL_ADD(vl, vh, vo, va, vb)               \
@@ -979,7 +966,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "umulh	%[h], %[a], %[a]	\n\t"            \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
         : [a] "r" (va)                                   \
-        : "memory"                                       \
+        : "cc"                                           \
     )
 /* Square va and add double size result into: vo | vh | vl */
 #define SP_ASM_SQR_ADD(vl, vh, vo, va)                   \
@@ -1050,9 +1037,9 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
  * Using udiv instruction on Aarch64.
  * Constant time.
  *
- * @param  [in]  hi  SP integer digit. High digit of the dividend.
- * @param  [in]  lo  SP integer digit. Lower digit of the dividend.
- * @param  [in]  d   SP integer digit. Number to divide by.
+ * @param [in] hi  SP integer digit. High digit of the dividend.
+ * @param [in] lo  SP integer digit. Low digit of the dividend.
+ * @param [in] d   SP integer digit. Number to divide by.
  * @return  The division result.
  */
 static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
@@ -1136,7 +1123,6 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "umull	%[l], %[h], %[a], %[b]	\n\t"            \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
         : [a] "r" (va), [b] "r" (vb)                     \
-        : "memory"                                       \
     )
 /* Multiply va by vb and store double size result in: vo | vh | vl */
 #define SP_ASM_MUL_SET(vl, vh, vo, va, vb)               \
@@ -1145,7 +1131,6 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "mov	%[o], #0		\n\t"            \
         : [l] "+r" (vl), [h] "+r" (vh), [o] "=r" (vo)    \
         : [a] "r" (va), [b] "r" (vb)                     \
-        :                                                \
     )
 /* Multiply va by vb and add double size result into: vo | vh | vl */
 #define SP_ASM_MUL_ADD(vl, vh, vo, va, vb)               \
@@ -1164,7 +1149,6 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "umlal	%[l], %[h], %[a], %[b]	\n\t"            \
         : [l] "+r" (vl), [h] "+r" (vh)                   \
         : [a] "r" (va), [b] "r" (vb)                     \
-        :                                                \
     )
 /* Multiply va by vb and add double size result twice into: vo | vh | vl */
 #define SP_ASM_MUL_ADD2(vl, vh, vo, va, vb)              \
@@ -1201,7 +1185,6 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "umull	%[l], %[h], %[a], %[a]	\n\t"            \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
         : [a] "r" (va)                                   \
-        : "memory"                                       \
     )
 /* Square va and add double size result into: vo | vh | vl */
 #define SP_ASM_SQR_ADD(vl, vh, vo, va)                   \
@@ -1260,7 +1243,6 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "clz	%[n], %[a]	\n\t"                    \
         : [n] "=r" (vn)                                  \
         : [a] "r" (va)                                   \
-        :                                                \
     )
 #endif
 
@@ -1271,9 +1253,9 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
  * No division instruction used - does operation bit by bit.
  * Constant time.
  *
- * @param  [in]  hi  SP integer digit. High digit of the dividend.
- * @param  [in]  lo  SP integer digit. Lower digit of the dividend.
- * @param  [in]  d   SP integer digit. Number to divide by.
+ * @param [in] hi  SP integer digit. High digit of the dividend.
+ * @param [in] lo  SP integer digit. Low digit of the dividend.
+ * @param [in] d   SP integer digit. Number to divide by.
  * @return  The division result.
  */
 static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
@@ -1373,12 +1355,12 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
 #else
 /* Divide a two digit number by a digit number and return. (hi | lo) / d
  *
- * Using udiv instruction on arm32
+ * Using udiv instruction on ARM32.
  * Constant time.
  *
- * @param  [in]  hi  SP integer digit. High digit of the dividend.
- * @param  [in]  lo  SP integer digit. Lower digit of the dividend.
- * @param  [in]  d   SP integer digit. Number to divide by.
+ * @param [in] hi  SP integer digit. High digit of the dividend.
+ * @param [in] lo  SP integer digit. Low digit of the dividend.
+ * @param [in] d   SP integer digit. Number to divide by.
  * @return  The division result.
  */
 static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
@@ -2914,9 +2896,9 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
  * No division instruction used - does operation bit by bit.
  * Constant time.
  *
- * @param  [in]  hi  SP integer digit. High digit of the dividend.
- * @param  [in]  lo  SP integer digit. Lower digit of the dividend.
- * @param  [in]  d   SP integer digit. Number to divide by.
+ * @param [in] hi  SP integer digit. High digit of the dividend.
+ * @param [in] lo  SP integer digit. Low digit of the dividend.
+ * @param [in] d   SP integer digit. Number to divide by.
  * @return  The division result.
  */
 static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
@@ -3459,7 +3441,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         :
         : "r3", "r4", "r5", "r6", "r7", "r8", "r9", "cc"
     );
-    return (uint32_t)(size_t)hi;
+    return (sp_uint32)(size_t)hi;
 }
 
 #define SP_ASM_DIV_WORD
@@ -3474,6 +3456,8 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
  * CPU: PPC64
  */
 
+    #ifdef __APPLE__
+
 /* Multiply va by vb and store double size result in: vh | vl */
 #define SP_ASM_MUL(vl, vh, va, vb)                       \
     __asm__ __volatile__ (                               \
@@ -3481,7 +3465,155 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "mulhdu	%[h], %[a], %[b]	\n\t"            \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
         : [a] "r" (va), [b] "r" (vb)                     \
-        : "memory"                                       \
+        :                                                \
+    )
+/* Multiply va by vb and store double size result in: vo | vh | vl */
+#define SP_ASM_MUL_SET(vl, vh, vo, va, vb)               \
+    __asm__ __volatile__ (                               \
+        "mulhdu	%[h], %[a], %[b]	\n\t"            \
+        "mulld	%[l], %[a], %[b]	\n\t"            \
+        "li	%[o], 0			\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh), [o] "=r" (vo)    \
+        : [a] "r" (va), [b] "r" (vb)                     \
+        :                                                \
+    )
+/* Multiply va by vb and add double size result into: vo | vh | vl */
+#define SP_ASM_MUL_ADD(vl, vh, vo, va, vb)               \
+    __asm__ __volatile__ (                               \
+        "mulld	r16, %[a], %[b]		\n\t"            \
+        "mulhdu	r17, %[a], %[b]		\n\t"            \
+        "addc	%[l], %[l], r16		\n\t"            \
+        "adde	%[h], %[h], r17		\n\t"            \
+        "addze	%[o], %[o]		\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh), [o] "+r" (vo)    \
+        : [a] "r" (va), [b] "r" (vb)                     \
+        : "r16", "r17", "cc"                             \
+    )
+/* Multiply va by vb and add double size result into: vh | vl */
+#define SP_ASM_MUL_ADD_NO(vl, vh, va, vb)                \
+    __asm__ __volatile__ (                               \
+        "mulld	r16, %[a], %[b]		\n\t"            \
+        "mulhdu	r17, %[a], %[b]		\n\t"            \
+        "addc	%[l], %[l], r16		\n\t"            \
+        "adde	%[h], %[h], r17		\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh)                   \
+        : [a] "r" (va), [b] "r" (vb)                     \
+        : "r16", "r17", "cc"                             \
+    )
+/* Multiply va by vb and add double size result twice into: vo | vh | vl */
+#define SP_ASM_MUL_ADD2(vl, vh, vo, va, vb)              \
+    __asm__ __volatile__ (                               \
+        "mulld	r16, %[a], %[b]		\n\t"            \
+        "mulhdu	r17, %[a], %[b]		\n\t"            \
+        "addc	%[l], %[l], r16		\n\t"            \
+        "adde	%[h], %[h], r17		\n\t"            \
+        "addze	%[o], %[o]		\n\t"            \
+        "addc	%[l], %[l], r16		\n\t"            \
+        "adde	%[h], %[h], r17		\n\t"            \
+        "addze	%[o], %[o]		\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh), [o] "+r" (vo)    \
+        : [a] "r" (va), [b] "r" (vb)                     \
+        : "r16", "r17", "cc"                             \
+    )
+/* Multiply va by vb and add double size result twice into: vo | vh | vl
+ * Assumes first add will not overflow vh | vl
+ */
+#define SP_ASM_MUL_ADD2_NO(vl, vh, vo, va, vb)           \
+    __asm__ __volatile__ (                               \
+        "mulld	r16, %[a], %[b]		\n\t"            \
+        "mulhdu	r17, %[a], %[b]		\n\t"            \
+        "addc	%[l], %[l], r16		\n\t"            \
+        "adde	%[h], %[h], r17		\n\t"            \
+        "addc	%[l], %[l], r16		\n\t"            \
+        "adde	%[h], %[h], r17		\n\t"            \
+        "addze	%[o], %[o]		\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh), [o] "+r" (vo)    \
+        : [a] "r" (va), [b] "r" (vb)                     \
+        : "r16", "r17", "cc"                             \
+    )
+/* Square va and store double size result in: vh | vl */
+#define SP_ASM_SQR(vl, vh, va)                           \
+    __asm__ __volatile__ (                               \
+        "mulld	%[l], %[a], %[a]	\n\t"            \
+        "mulhdu	%[h], %[a], %[a]	\n\t"            \
+        : [h] "+r" (vh), [l] "+r" (vl)                   \
+        : [a] "r" (va)                                   \
+        :                                                \
+    )
+/* Square va and add double size result into: vo | vh | vl */
+#define SP_ASM_SQR_ADD(vl, vh, vo, va)                   \
+    __asm__ __volatile__ (                               \
+        "mulld	r16, %[a], %[a]		\n\t"            \
+        "mulhdu	r17, %[a], %[a]		\n\t"            \
+        "addc	%[l], %[l], r16		\n\t"            \
+        "adde	%[h], %[h], r17		\n\t"            \
+        "addze	%[o], %[o]		\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh), [o] "+r" (vo)    \
+        : [a] "r" (va)                                   \
+        : "r16", "r17", "cc"                             \
+    )
+/* Square va and add double size result into: vh | vl */
+#define SP_ASM_SQR_ADD_NO(vl, vh, va)                    \
+    __asm__ __volatile__ (                               \
+        "mulld	r16, %[a], %[a]		\n\t"            \
+        "mulhdu	r17, %[a], %[a]		\n\t"            \
+        "addc	%[l], %[l], r16		\n\t"            \
+        "adde	%[h], %[h], r17		\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh)                   \
+        : [a] "r" (va)                                   \
+        : "r16", "r17", "cc"                             \
+    )
+/* Add va into: vh | vl */
+#define SP_ASM_ADDC(vl, vh, va)                          \
+    __asm__ __volatile__ (                               \
+        "addc	%[l], %[l], %[a]	\n\t"            \
+        "addze	%[h], %[h]		\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh)                   \
+        : [a] "r" (va)                                   \
+        : "cc"                                           \
+    )
+/* Sub va from: vh | vl */
+#define SP_ASM_SUBB(vl, vh, va)                          \
+    __asm__ __volatile__ (                               \
+        "subfc	%[l], %[a], %[l]	\n\t"            \
+        "li    r16, 0			\n\t"            \
+        "subfe %[h], r16, %[h]		\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh)                   \
+        : [a] "r" (va)                                   \
+        : "r16", "cc"                                    \
+    )
+/* Add two times vc | vb | va into vo | vh | vl */
+#define SP_ASM_ADD_DBL_3(vl, vh, vo, va, vb, vc)         \
+    __asm__ __volatile__ (                               \
+        "addc	%[l], %[l], %[a]	\n\t"            \
+        "adde	%[h], %[h], %[b]	\n\t"            \
+        "adde	%[o], %[o], %[c]	\n\t"            \
+        "addc	%[l], %[l], %[a]	\n\t"            \
+        "adde	%[h], %[h], %[b]	\n\t"            \
+        "adde	%[o], %[o], %[c]	\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh), [o] "+r" (vo)    \
+        : [a] "r" (va), [b] "r" (vb), [c] "r" (vc)       \
+        : "cc"                                           \
+    )
+/* Count leading zeros. */
+#define SP_ASM_LZCNT(va, vn)                             \
+    __asm__ __volatile__ (                               \
+        "cntlzd	%[n], %[a]	\n\t"                    \
+        : [n] "=r" (vn)                                  \
+        : [a] "r" (va)                                   \
+        :                                                \
+    )
+
+    #else  /* !defined(__APPLE__) */
+
+/* Multiply va by vb and store double size result in: vh | vl */
+#define SP_ASM_MUL(vl, vh, va, vb)                       \
+    __asm__ __volatile__ (                               \
+        "mulld	%[l], %[a], %[b]	\n\t"            \
+        "mulhdu	%[h], %[a], %[b]	\n\t"            \
+        : [h] "+r" (vh), [l] "+r" (vl)                   \
+        : [a] "r" (va), [b] "r" (vb)                     \
+        :                                                \
     )
 /* Multiply va by vb and store double size result in: vo | vh | vl */
 #define SP_ASM_MUL_SET(vl, vh, vo, va, vb)               \
@@ -3554,7 +3686,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "mulhdu	%[h], %[a], %[a]	\n\t"            \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
         : [a] "r" (va)                                   \
-        : "memory"                                       \
+        :                                                \
     )
 /* Square va and add double size result into: vo | vh | vl */
 #define SP_ASM_SQR_ADD(vl, vh, vo, va)                   \
@@ -3620,6 +3752,8 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         :                                                \
     )
 
+    #endif /* !defined(__APPLE__) */
+
 #define SP_INT_ASM_AVAILABLE
 
     #endif /* WOLFSSL_SP_PPC64 && SP_WORD_SIZE == 64 */
@@ -3629,6 +3763,8 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
  * CPU: PPC 32-bit
  */
 
+    #ifdef __APPLE__
+
 /* Multiply va by vb and store double size result in: vh | vl */
 #define SP_ASM_MUL(vl, vh, va, vb)                       \
     __asm__ __volatile__ (                               \
@@ -3636,7 +3772,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "mulhwu	%[h], %[a], %[b]	\n\t"            \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
         : [a] "r" (va), [b] "r" (vb)                     \
-        : "memory"                                       \
+        :                                                \
     )
 /* Multiply va by vb and store double size result in: vo | vh | vl */
 #define SP_ASM_MUL_SET(vl, vh, vo, va, vb)               \
@@ -3644,6 +3780,152 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "mulhwu	%[h], %[a], %[b]	\n\t"            \
         "mullw	%[l], %[a], %[b]	\n\t"            \
         "li	%[o], 0			\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh), [o] "=r" (vo)    \
+        : [a] "r" (va), [b] "r" (vb)                     \
+    )
+/* Multiply va by vb and add double size result into: vo | vh | vl */
+#define SP_ASM_MUL_ADD(vl, vh, vo, va, vb)               \
+    __asm__ __volatile__ (                               \
+        "mullw	r16, %[a], %[b]		\n\t"            \
+        "mulhwu	r17, %[a], %[b]		\n\t"            \
+        "addc	%[l], %[l], r16		\n\t"            \
+        "adde	%[h], %[h], r17		\n\t"            \
+        "addze	%[o], %[o]		\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh), [o] "+r" (vo)    \
+        : [a] "r" (va), [b] "r" (vb)                     \
+        : "r16", "r17", "cc"                             \
+    )
+/* Multiply va by vb and add double size result into: vh | vl */
+#define SP_ASM_MUL_ADD_NO(vl, vh, va, vb)                \
+    __asm__ __volatile__ (                               \
+        "mullw	r16, %[a], %[b]		\n\t"            \
+        "mulhwu	r17, %[a], %[b]		\n\t"            \
+        "addc	%[l], %[l], r16		\n\t"            \
+        "adde	%[h], %[h], r17		\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh)                   \
+        : [a] "r" (va), [b] "r" (vb)                     \
+        : "r16", "r17", "cc"                             \
+    )
+/* Multiply va by vb and add double size result twice into: vo | vh | vl */
+#define SP_ASM_MUL_ADD2(vl, vh, vo, va, vb)              \
+    __asm__ __volatile__ (                               \
+        "mullw	r16, %[a], %[b]		\n\t"            \
+        "mulhwu	r17, %[a], %[b]		\n\t"            \
+        "addc	%[l], %[l], r16		\n\t"            \
+        "adde	%[h], %[h], r17		\n\t"            \
+        "addze	%[o], %[o]		\n\t"            \
+        "addc	%[l], %[l], r16		\n\t"            \
+        "adde	%[h], %[h], r17		\n\t"            \
+        "addze	%[o], %[o]		\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh), [o] "+r" (vo)    \
+        : [a] "r" (va), [b] "r" (vb)                     \
+        : "r16", "r17", "cc"                             \
+    )
+/* Multiply va by vb and add double size result twice into: vo | vh | vl
+ * Assumes first add will not overflow vh | vl
+ */
+#define SP_ASM_MUL_ADD2_NO(vl, vh, vo, va, vb)           \
+    __asm__ __volatile__ (                               \
+        "mullw	r16, %[a], %[b]		\n\t"            \
+        "mulhwu	r17, %[a], %[b]		\n\t"            \
+        "addc	%[l], %[l], r16		\n\t"            \
+        "adde	%[h], %[h], r17		\n\t"            \
+        "addc	%[l], %[l], r16		\n\t"            \
+        "adde	%[h], %[h], r17		\n\t"            \
+        "addze	%[o], %[o]		\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh), [o] "+r" (vo)    \
+        : [a] "r" (va), [b] "r" (vb)                     \
+        : "r16", "r17", "cc"                             \
+    )
+/* Square va and store double size result in: vh | vl */
+#define SP_ASM_SQR(vl, vh, va)                           \
+    __asm__ __volatile__ (                               \
+        "mullw	%[l], %[a], %[a]	\n\t"            \
+        "mulhwu	%[h], %[a], %[a]	\n\t"            \
+        : [h] "+r" (vh), [l] "+r" (vl)                   \
+        : [a] "r" (va)                                   \
+        :                                                \
+    )
+/* Square va and add double size result into: vo | vh | vl */
+#define SP_ASM_SQR_ADD(vl, vh, vo, va)                   \
+    __asm__ __volatile__ (                               \
+        "mullw	r16, %[a], %[a]		\n\t"            \
+        "mulhwu	r17, %[a], %[a]		\n\t"            \
+        "addc	%[l], %[l], r16		\n\t"            \
+        "adde	%[h], %[h], r17		\n\t"            \
+        "addze	%[o], %[o]		\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh), [o] "+r" (vo)    \
+        : [a] "r" (va)                                   \
+        : "r16", "r17", "cc"                             \
+    )
+/* Square va and add double size result into: vh | vl */
+#define SP_ASM_SQR_ADD_NO(vl, vh, va)                    \
+    __asm__ __volatile__ (                               \
+        "mullw	r16, %[a], %[a]		\n\t"            \
+        "mulhwu	r17, %[a], %[a]		\n\t"            \
+        "addc	%[l], %[l], r16		\n\t"            \
+        "adde	%[h], %[h], r17		\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh)                   \
+        : [a] "r" (va)                                   \
+        : "r16", "r17", "cc"                             \
+    )
+/* Add va into: vh | vl */
+#define SP_ASM_ADDC(vl, vh, va)                          \
+    __asm__ __volatile__ (                               \
+        "addc	%[l], %[l], %[a]	\n\t"            \
+        "addze	%[h], %[h]		\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh)                   \
+        : [a] "r" (va)                                   \
+        : "cc"                                           \
+    )
+/* Sub va from: vh | vl */
+#define SP_ASM_SUBB(vl, vh, va)                          \
+    __asm__ __volatile__ (                               \
+        "subfc	%[l], %[a], %[l]	\n\t"            \
+        "li	r16, 0			\n\t"            \
+        "subfe	%[h], r16, %[h]		\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh)                   \
+        : [a] "r" (va)                                   \
+        : "r16", "cc"                                    \
+    )
+/* Add two times vc | vb | va into vo | vh | vl */
+#define SP_ASM_ADD_DBL_3(vl, vh, vo, va, vb, vc)         \
+    __asm__ __volatile__ (                               \
+        "addc	%[l], %[l], %[a]	\n\t"            \
+        "adde	%[h], %[h], %[b]	\n\t"            \
+        "adde	%[o], %[o], %[c]	\n\t"            \
+        "addc	%[l], %[l], %[a]	\n\t"            \
+        "adde	%[h], %[h], %[b]	\n\t"            \
+        "adde	%[o], %[o], %[c]	\n\t"            \
+        : [l] "+r" (vl), [h] "+r" (vh), [o] "+r" (vo)    \
+        : [a] "r" (va), [b] "r" (vb), [c] "r" (vc)       \
+        : "cc"                                           \
+    )
+/* Count leading zeros. */
+#define SP_ASM_LZCNT(va, vn)                             \
+    __asm__ __volatile__ (                               \
+        "cntlzw	%[n], %[a]	\n\t"                    \
+        : [n] "=r" (vn)                                  \
+        : [a] "r" (va)                                   \
+    )
+
+    #else /* !defined(__APPLE__) */
+
+/* Multiply va by vb and store double size result in: vh | vl */
+#define SP_ASM_MUL(vl, vh, va, vb)                       \
+    __asm__ __volatile__ (                               \
+        "mullw	%[l], %[a], %[b]	\n\t"            \
+        "mulhwu	%[h], %[a], %[b]	\n\t"            \
+        : [h] "+r" (vh), [l] "+r" (vl)                   \
+        : [a] "r" (va), [b] "r" (vb)                     \
+        :                                                \
+    )
+/* Multiply va by vb and store double size result in: vo | vh | vl */
+#define SP_ASM_MUL_SET(vl, vh, vo, va, vb)               \
+    __asm__ __volatile__ (                               \
+        "mulhwu	%[h], %[a], %[b]	\n\t"            \
+        "mullw	%[l], %[a], %[b]	\n\t"            \
+        "xor	%[o], %[o], %[o]	\n\t"            \
         : [l] "+r" (vl), [h] "+r" (vh), [o] "=r" (vo)    \
         : [a] "r" (va), [b] "r" (vb)                     \
     )
@@ -3708,7 +3990,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "mulhwu	%[h], %[a], %[a]	\n\t"            \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
         : [a] "r" (va)                                   \
-        : "memory"                                       \
+        :                                                \
     )
 /* Square va and add double size result into: vo | vh | vl */
 #define SP_ASM_SQR_ADD(vl, vh, vo, va)                   \
@@ -3746,7 +4028,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
 #define SP_ASM_SUBB(vl, vh, va)                          \
     __asm__ __volatile__ (                               \
         "subfc	%[l], %[a], %[l]	\n\t"            \
-        "li	16, 0			\n\t"            \
+        "xor	16, 16, 16		\n\t"            \
         "subfe	%[h], 16, %[h]		\n\t"            \
         : [l] "+r" (vl), [h] "+r" (vh)                   \
         : [a] "r" (va)                                   \
@@ -3773,6 +4055,8 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         : [a] "r" (va)                                   \
     )
 
+    #endif /* !defined(__APPLE__) */
+
 #define SP_INT_ASM_AVAILABLE
 
     #endif /* WOLFSSL_SP_PPC && SP_WORD_SIZE == 64 */
@@ -3790,7 +4074,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "mfhi	%[h]			\n\t"            \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
         : [a] "r" (va), [b] "r" (vb)                     \
-        : "memory", "$lo", "$hi"                         \
+        : "$lo", "$hi"                                   \
     )
 /* Multiply va by vb and store double size result in: vo | vh | vl */
 #define SP_ASM_MUL_SET(vl, vh, vo, va, vb)               \
@@ -3893,7 +4177,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "mfhi	%[h]			\n\t"            \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
         : [a] "r" (va)                                   \
-        : "memory", "$lo", "$hi"                         \
+        : "$lo", "$hi"                                   \
     )
 /* Square va and add double size result into: vo | vh | vl */
 #define SP_ASM_SQR_ADD(vl, vh, vo, va)                   \
@@ -3991,7 +4275,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "mfhi	%[h]			\n\t"            \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
         : [a] "r" (va), [b] "r" (vb)                     \
-        : "memory", "%lo", "%hi"                         \
+        : "%lo", "%hi"                                   \
     )
 /* Multiply va by vb and store double size result in: vo | vh | vl */
 #define SP_ASM_MUL_SET(vl, vh, vo, va, vb)               \
@@ -4094,7 +4378,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "mfhi	%[h]			\n\t"            \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
         : [a] "r" (va)                                   \
-        : "memory", "%lo", "%hi"                         \
+        : "%lo", "%hi"                                   \
     )
 /* Square va and add double size result into: vo | vh | vl */
 #define SP_ASM_SQR_ADD(vl, vh, vo, va)                   \
@@ -4191,7 +4475,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "mulhu	%[h], %[a], %[b]	\n\t"            \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
         : [a] "r" (va), [b] "r" (vb)                     \
-        : "memory"                                       \
+        :                                                \
     )
 /* Multiply va by vb and store double size result in: vo | vh | vl */
 #define SP_ASM_MUL_SET(vl, vh, vo, va, vb)               \
@@ -4288,7 +4572,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "mulhu	%[h], %[a], %[a]	\n\t"            \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
         : [a] "r" (va)                                   \
-        : "memory"                                       \
+        :                                                \
     )
 /* Square va and add double size result into: vo | vh | vl */
 #define SP_ASM_SQR_ADD(vl, vh, vo, va)                   \
@@ -4383,7 +4667,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "mulhu	%[h], %[a], %[b]	\n\t"            \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
         : [a] "r" (va), [b] "r" (vb)                     \
-        : "memory"                                       \
+        :                                                \
     )
 /* Multiply va by vb and store double size result in: vo | vh | vl */
 #define SP_ASM_MUL_SET(vl, vh, vo, va, vb)               \
@@ -4480,7 +4764,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "mulhu	%[h], %[a], %[a]	\n\t"            \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
         : [a] "r" (va)                                   \
-        : "memory"                                       \
+        :                                                \
     )
 /* Square va and add double size result into: vo | vh | vl */
 #define SP_ASM_SQR_ADD(vl, vh, vo, va)                   \
@@ -4577,7 +4861,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "lgr	%[h], %%r0		\n\t"            \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
         : [a] "r" (va), [b] "r" (vb)                     \
-        : "memory", "r0", "r1"                           \
+        : "r0", "r1"                                     \
     )
 /* Multiply va by vb and store double size result in: vo | vh | vl */
 #define SP_ASM_MUL_SET(vl, vh, vo, va, vb)               \
@@ -4657,7 +4941,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
         "lgr	%[h], %%r0		\n\t"            \
         : [h] "+r" (vh), [l] "+r" (vl)                   \
         : [a] "r" (va)                                   \
-        : "memory", "r0", "r1"                           \
+        : "r0", "r1"                                     \
     )
 /* Square va and add double size result into: vo | vh | vl */
 #define SP_ASM_SQR_ADD(vl, vh, vo, va)                   \
@@ -4730,7 +5014,7 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
     #endif /* SP_ASM_ADDC_REG */
     #ifndef SP_ASM_SUBB_REG
         #define SP_ASM_SUBB_REG  SP_ASM_SUBB
-    #endif /* SP_ASM_ADDC_REG */
+    #endif /* SP_ASM_SUBB_REG */
 #endif /* SQR_MUL_ASM */
 
 #endif /* !WOLFSSL_NO_ASM */
@@ -4786,52 +5070,12 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct);
 static void _sp_mont_setup(const sp_int* m, sp_int_digit* rho);
 #endif
 
-/* Determine when mp_add_d is required. */
-#if !defined(NO_PWDBASED) || defined(WOLFSSL_KEY_GEN) || !defined(NO_DH) || \
-    !defined(NO_DSA) || defined(HAVE_ECC) || \
-    (!defined(NO_RSA) && !defined(WOLFSSL_RSA_VERIFY_ONLY)) || \
-    defined(OPENSSL_EXTRA)
-#define WOLFSSL_SP_ADD_D
-#endif
-/* Determine when mp_sub_d is required. */
-#if (!defined(NO_RSA) && !defined(WOLFSSL_RSA_VERIFY_ONLY)) || \
-    !defined(NO_DH) || defined(HAVE_ECC) || !defined(NO_DSA)
-#define WOLFSSL_SP_SUB_D
-#endif
-/* Determine when mp_read_radix with a radix of 10 is required. */
-#if (defined(WOLFSSL_SP_MATH_ALL) && !defined(NO_RSA) && \
-    !defined(WOLFSSL_RSA_VERIFY_ONLY)) || defined(HAVE_ECC) || \
-    !defined(NO_DSA) || defined(OPENSSL_EXTRA)
-#define WOLFSSL_SP_READ_RADIX_16
-#endif
-/* Determine when mp_read_radix with a radix of 10 is required. */
-#if defined(WOLFSSL_SP_MATH_ALL) && !defined(NO_RSA) && \
-    !defined(WOLFSSL_RSA_VERIFY_ONLY)
-#define WOLFSSL_SP_READ_RADIX_10
-#endif
-/* Determine when mp_invmod is required. */
-#if defined(HAVE_ECC) || !defined(NO_DSA) || defined(OPENSSL_EXTRA) || \
-    (!defined(NO_RSA) && !defined(WOLFSSL_RSA_VERIFY_ONLY) && \
-     !defined(WOLFSSL_RSA_PUBLIC_ONLY))
-#define WOLFSSL_SP_INVMOD
-#endif
-/* Determine when mp_invmod_mont_ct is required. */
-#if defined(WOLFSSL_SP_MATH_ALL) && defined(HAVE_ECC)
-#define WOLFSSL_SP_INVMOD_MONT_CT
-#endif
-
-/* Determine when mp_prime_gen is required. */
-#if (defined(WOLFSSL_SP_MATH_ALL) && !defined(WOLFSSL_RSA_VERIFY_ONLY) && \
-    !defined(WOLFSSL_RSA_PUBLIC_ONLY)) || !defined(NO_DH) || \
-    (!defined(NO_RSA) && defined(WOLFSSL_KEY_GEN))
-#define WOLFSSL_SP_PRIME_GEN
-#endif
 
 /* Set the multi-precision number to zero.
  *
  * Assumes a is not NULL.
  *
- * @param  [out]  a  SP integer to set to zero.
+ * @param [out] a  SP integer to set to zero.
  */
 static void _sp_zero(sp_int* a)
 {
@@ -4847,8 +5091,8 @@ static void _sp_zero(sp_int* a)
 
 /* Initialize the multi-precision number to be zero with a given max size.
  *
- * @param  [out]  a     SP integer.
- * @param  [in]   size  Number of words to say are available.
+ * @param [out] a     SP integer.
+ * @param [in]  size  Number of words to make available.
  */
 static void _sp_init_size(sp_int* a, unsigned int size)
 {
@@ -4859,13 +5103,13 @@ static void _sp_init_size(sp_int* a, unsigned int size)
 #endif
     _sp_zero((sp_int*)am);
 
-    a->size = size;
+    am->size = (sp_size_t)size;
 }
 
 /* Initialize the multi-precision number to be zero with a given max size.
  *
- * @param  [out]  a     SP integer.
- * @param  [in]   size  Number of words to say are available.
+ * @param [out] a     SP integer.
+ * @param [in]  size  Number of words to make available.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a is NULL.
@@ -4875,7 +5119,7 @@ int sp_init_size(sp_int* a, unsigned int size)
     int err = MP_OKAY;
 
     /* Validate parameters. Don't use size more than max compiled. */
-    if ((a == NULL) || ((size <= 0) || (size > SP_INT_DIGITS))) {
+    if ((a == NULL) || ((size == 0) || (size > SP_INT_DIGITS))) {
         err = MP_VAL;
     }
 
@@ -4888,7 +5132,7 @@ int sp_init_size(sp_int* a, unsigned int size)
 
 /* Initialize the multi-precision number to be zero.
  *
- * @param  [out]  a  SP integer.
+ * @param [out] a  SP integer.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a is NULL.
@@ -4912,12 +5156,12 @@ int sp_init(sp_int* a)
 #if !defined(WOLFSSL_RSA_PUBLIC_ONLY) || !defined(NO_DH) || defined(HAVE_ECC)
 /* Initialize up to six multi-precision numbers to be zero.
  *
- * @param  [out]  n1  SP integer.
- * @param  [out]  n2  SP integer.
- * @param  [out]  n3  SP integer.
- * @param  [out]  n4  SP integer.
- * @param  [out]  n5  SP integer.
- * @param  [out]  n6  SP integer.
+ * @param [out] n1  SP integer.
+ * @param [out] n2  SP integer.
+ * @param [out] n3  SP integer.
+ * @param [out] n4  SP integer.
+ * @param [out] n5  SP integer.
+ * @param [out] n6  SP integer.
  *
  * @return  MP_OKAY on success.
  */
@@ -4950,7 +5194,7 @@ int sp_init_multi(sp_int* n1, sp_int* n2, sp_int* n3, sp_int* n4, sp_int* n5,
 
 /* Free the memory allocated in the multi-precision number.
  *
- * @param  [in]  a  SP integer.
+ * @param [in] a  SP integer.
  */
 void sp_free(sp_int* a)
 {
@@ -4966,11 +5210,11 @@ void sp_free(sp_int* a)
 /* Grow multi-precision number to be able to hold l digits.
  * This function does nothing as the number of digits is fixed.
  *
- * @param  [in,out]  a  SP integer.
- * @param  [in]      l  Number of digits to grow to.
+ * @param [in, out] a  SP integer.
+ * @param [in]      l  Number of digits to grow to.
  *
- * @return  MP_OKAY on success
- * @return  MP_MEM if the number of digits requested is more than available.
+ * @return  MP_OKAY on success.
+ * @return  MP_MEM when the number of digits requested is more than available.
  */
 int sp_grow(sp_int* a, int l)
 {
@@ -4998,10 +5242,10 @@ int sp_grow(sp_int* a, int l)
 #endif /* (!NO_RSA && !WOLFSSL_RSA_VERIFY_ONLY) || !NO_DH || HAVE_ECC */
 
 #if (!defined(NO_RSA) && !defined(WOLFSSL_RSA_VERIFY_ONLY)) || \
-    defined(HAVE_ECC)
+    defined(HAVE_ECC) || defined(WOLFSSL_PUBLIC_MP)
 /* Set the multi-precision number to zero.
  *
- * @param  [out]  a  SP integer to set to zero.
+ * @param [out] a  SP integer to set to zero.
  */
 void sp_zero(sp_int* a)
 {
@@ -5014,10 +5258,13 @@ void sp_zero(sp_int* a)
 
 /* Clear the data from the multi-precision number, set to zero and free.
  *
- * @param  [out]  a  SP integer.
+ * @param [out] a  SP integer.
  */
 void sp_clear(sp_int* a)
 {
+#ifdef HAVE_FIPS
+    sp_forcezero(a);
+#else
     /* Clear when valid pointer passed in. */
     if (a != NULL) {
         unsigned int i;
@@ -5030,6 +5277,7 @@ void sp_clear(sp_int* a)
         _sp_zero(a);
         sp_free(a);
     }
+#endif
 }
 
 #if !defined(NO_RSA) || !defined(NO_DH) || defined(HAVE_ECC) || \
@@ -5038,14 +5286,14 @@ void sp_clear(sp_int* a)
  *
  * Use when security sensitive data needs to be wiped.
  *
- * @param  [in]  a  SP integer.
+ * @param [in] a  SP integer.
  */
 void sp_forcezero(sp_int* a)
 {
-    /* Zeroize when a vald pointer passed in. */
+    /* Zeroize when a valid pointer passed in. */
     if (a != NULL) {
         /* Ensure all data zeroized - data not zeroed when used decreases. */
-        ForceZero(a->dp, a->size * SP_WORD_SIZEOF);
+        ForceZero(a->dp, a->size * (word32)SP_WORD_SIZEOF);
         /* Set back to zero. */
     #ifdef HAVE_WOLF_BIGINT
         /* Zeroize the raw data as well. */
@@ -5062,8 +5310,8 @@ void sp_forcezero(sp_int* a)
     !defined(NO_RSA) || defined(WOLFSSL_KEY_GEN) || defined(HAVE_COMP_KEY)
 /* Copy value of multi-precision number a into r.
  *
- * @param  [in]   a  SP integer - source.
- * @param  [out]  r  SP integer - destination.
+ * @param [in]  a  SP integer - source.
+ * @param [out] r  SP integer - destination.
  */
 static void _sp_copy(const sp_int* a, sp_int* r)
 {
@@ -5072,20 +5320,20 @@ static void _sp_copy(const sp_int* a, sp_int* r)
         r->dp[0] = 0;
     }
     else {
-        XMEMCPY(r->dp, a->dp, a->used * SP_WORD_SIZEOF);
+        XMEMCPY(r->dp, a->dp, a->used * (word32)SP_WORD_SIZEOF);
     }
     /* Set number of used words in result. */
-    r->used = a->used;
+    r->used = a->used;/* // NOLINT(clang-analyzer-core.uninitialized.Assign) */
 #ifdef WOLFSSL_SP_INT_NEGATIVE
     /* Set sign of result. */
-    r->sign = a->sign;
+    r->sign = a->sign;/* // NOLINT(clang-analyzer-core.uninitialized.Assign) */
 #endif
 }
 
 /* Copy value of multi-precision number a into r.
  *
- * @param  [in]   a  SP integer - source.
- * @param  [out]  r  SP integer - destination.
+ * @param [in]  a  SP integer - source.
+ * @param [out] r  SP integer - destination.
  *
  * @return  MP_OKAY on success.
  */
@@ -5160,8 +5408,8 @@ static void _sp_copy_2_ct(const sp_int* a1, const sp_int* a2, sp_int* r1,
 #if defined(WOLFSSL_SP_MATH_ALL) || (defined(HAVE_ECC) && defined(FP_ECC))
 /* Initializes r and copies in value from a.
  *
- * @param  [out]  r  SP integer - destination.
- * @param  [in]   a  SP integer - source.
+ * @param [out] r  SP integer - destination.
+ * @param [in]  a  SP integer - source.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a or r is NULL.
@@ -5186,8 +5434,8 @@ int sp_init_copy(sp_int* r, const sp_int* a)
  *
  * Avoid using this API as three copy operations are performed.
  *
- * @param  [in,out]  a  SP integer to swap.
- * @param  [in,out]  b  SP integer to swap.
+ * @param [in, out] a  SP integer to swap.
+ * @param [in, out] b  SP integer to swap.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a or b is NULL.
@@ -5214,8 +5462,8 @@ int sp_exch(sp_int* a, sp_int* b)
         ALLOC_SP_INT(t, a->used, err, NULL);
         if (err == MP_OKAY) {
             /* Cache allocated size of a and b. */
-            unsigned int asize = a->size;
-            unsigned int bsize = b->size;
+            sp_size_t asize = a->size;
+            sp_size_t bsize = b->size;
             /* Copy all of SP int: t <- a, a <- b, b <- t. */
             XMEMCPY(t, a, MP_INT_SIZEOF(a->used));
             XMEMCPY(a, b, MP_INT_SIZEOF(b->used));
@@ -5237,23 +5485,23 @@ int sp_exch(sp_int* a, sp_int* b)
     !defined(WC_NO_CACHE_RESISTANT)
 /* Conditional swap of SP int values in constant time.
  *
- * @param [in]  a     First SP int to conditionally swap.
- * @param [in]  b     Second SP int to conditionally swap.
- * @param [in]  cnt   Count of words to copy.
- * @param [in]  swap  When value is 1 then swap.
- * @param [in]  t     Temporary SP int to use in swap.
+ * @param [in] a     First SP int to conditionally swap.
+ * @param [in] b     Second SP int to conditionally swap.
+ * @param [in] cnt   Count of words to copy.
+ * @param [in] swap  When value is 1 then swap.
+ * @param [in] t     Temporary SP int to use in swap.
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
  */
 int sp_cond_swap_ct_ex(sp_int* a, sp_int* b, int cnt, int swap, sp_int* t)
 {
     unsigned int i;
-    sp_int_digit mask = (sp_int_digit)0 - (sp_int_digit)swap;
+    volatile sp_int_digit mask = (sp_int_digit)0 - (sp_int_digit)swap;
 
     /* XOR other fields in sp_int into temp - mask set when swapping. */
-    t->used = (a->used ^ b->used) & (unsigned int)mask;
+    t->used = (a->used ^ b->used) & (sp_size_t)mask;
 #ifdef WOLFSSL_SP_INT_NEGATIVE
-    t->sign = (a->sign ^ b->sign) & (unsigned int)mask;
+    t->sign = (a->sign ^ b->sign) & (sp_uint8)mask;
 #endif
 
     /* XOR requested words into temp - mask set when swapping. */
@@ -5284,10 +5532,10 @@ int sp_cond_swap_ct_ex(sp_int* a, sp_int* b, int cnt, int swap, sp_int* t)
 
 /* Conditional swap of SP int values in constant time.
  *
- * @param [in]  a     First SP int to conditionally swap.
- * @param [in]  b     Second SP int to conditionally swap.
- * @param [in]  cnt   Count of words to copy.
- * @param [in]  swap  When value is 1 then swap.
+ * @param [in] a     First SP int to conditionally swap.
+ * @param [in] b     Second SP int to conditionally swap.
+ * @param [in] cnt   Count of words to copy.
+ * @param [in] swap  When value is 1 then swap.
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
  */
@@ -5311,8 +5559,8 @@ int sp_cond_swap_ct(sp_int* a, sp_int* b, int cnt, int swap)
 #ifdef WOLFSSL_SP_INT_NEGATIVE
 /* Calculate the absolute value of the multi-precision number.
  *
- * @param  [in]   a  SP integer to calculate absolute value of.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  a  SP integer to calculate absolute value of.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a or r is NULL.
@@ -5332,7 +5580,7 @@ int sp_abs(const sp_int* a, sp_int* r)
 #endif /* WOLFSSL_SP_INT_NEGATIVE */
 
 #if defined(WOLFSSL_SP_MATH_ALL) || !defined(NO_DH) || defined(HAVE_ECC) || \
-    (!defined(NO_RSA) && !defined(WOLFSSL_RSA_VERIFY_ONLY))
+    !defined(NO_RSA)
 /* Compare absolute value of two multi-precision numbers.
  *
  * @param [in] a  SP integer.
@@ -5340,7 +5588,7 @@ int sp_abs(const sp_int* a, sp_int* r)
  *
  * @return  MP_GT when a is greater than b.
  * @return  MP_LT when a is less than b.
- * @return  MP_EQ when a is equals b.
+ * @return  MP_EQ when a is equal to b.
  */
 static int _sp_cmp_abs(const sp_int* a, const sp_int* b)
 {
@@ -5379,14 +5627,14 @@ static int _sp_cmp_abs(const sp_int* a, const sp_int* b)
 #if defined(WOLFSSL_SP_MATH_ALL) && !defined(WOLFSSL_RSA_PUBLIC_ONLY)
 /* Compare absolute value of two multi-precision numbers.
  *
- * Pointers are compared such that NULL is less than not NULL.
+ * Pointers are compared such that NULL is less than non-NULL.
  *
  * @param [in] a  SP integer.
  * @param [in] b  SP integer.
  *
  * @return  MP_GT when a is greater than b.
  * @return  MP_LT when a is less than b.
- * @return  MP_EQ when a equals b.
+ * @return  MP_EQ when a is equal to b.
  */
 int sp_cmp_mag(const sp_int* a, const sp_int* b)
 {
@@ -5415,9 +5663,7 @@ int sp_cmp_mag(const sp_int* a, const sp_int* b)
 #endif
 
 #if defined(WOLFSSL_SP_MATH_ALL) || defined(HAVE_ECC) || !defined(NO_DSA) || \
-    defined(OPENSSL_EXTRA) || !defined(NO_DH) || \
-    (!defined(NO_RSA) && (!defined(WOLFSSL_RSA_VERIFY_ONLY) || \
-     defined(WOLFSSL_KEY_GEN)))
+    defined(OPENSSL_EXTRA) || !defined(NO_DH) || !defined(NO_RSA)
 /* Compare two multi-precision numbers.
  *
  * Assumes a and b are not NULL.
@@ -5427,7 +5673,7 @@ int sp_cmp_mag(const sp_int* a, const sp_int* b)
  *
  * @return  MP_GT when a is greater than b.
  * @return  MP_LT when a is less than b.
- * @return  MP_EQ when a is equals b.
+ * @return  MP_EQ when a is equal to b.
  */
 static int _sp_cmp(const sp_int* a, const sp_int* b)
 {
@@ -5459,19 +5705,18 @@ static int _sp_cmp(const sp_int* a, const sp_int* b)
 }
 #endif
 
-#if (!defined(NO_RSA) && !defined(WOLFSSL_RSA_VERIFY_ONLY)) || \
-    !defined(NO_DSA) || defined(HAVE_ECC) || !defined(NO_DH) || \
-    defined(WOLFSSL_SP_MATH_ALL)
+#if !defined(NO_RSA) || !defined(NO_DSA) || defined(HAVE_ECC) || \
+    !defined(NO_DH) || defined(WOLFSSL_SP_MATH_ALL)
 /* Compare two multi-precision numbers.
  *
- * Pointers are compared such that NULL is less than not NULL.
+ * Pointers are compared such that NULL is less than non-NULL.
  *
  * @param [in] a  SP integer.
  * @param [in] b  SP integer.
  *
  * @return  MP_GT when a is greater than b.
  * @return  MP_LT when a is less than b.
- * @return  MP_EQ when a is equals b.
+ * @return  MP_EQ when a is equal to b.
  */
 int sp_cmp(const sp_int* a, const sp_int* b)
 {
@@ -5512,13 +5757,13 @@ int sp_cmp(const sp_int* a, const sp_int* b)
  *
  * @return  MP_GT when a is greater than b.
  * @return  MP_LT when a is less than b.
- * @return  MP_EQ when a is equals b.
+ * @return  MP_EQ when a is equal to b.
  */
 static int _sp_cmp_ct(const sp_int* a, const sp_int* b, unsigned int n)
 {
     int ret = MP_EQ;
     int i;
-    int mask = -1;
+    volatile int mask = -1;
 
     for (i = n - 1; i >= 0; i--) {
         sp_int_digit ad = a->dp[i] & ((sp_int_digit)0 - (i < (int)a->used));
@@ -5535,9 +5780,9 @@ static int _sp_cmp_ct(const sp_int* a, const sp_int* b, unsigned int n)
 
 /* Compare two multi-precision numbers in constant time.
  *
- * Pointers are compared such that NULL is less than not NULL.
+ * Pointers are compared such that NULL is less than non-NULL.
  * Assumes a and b are positive.
- * Assumes a and b have n digits set at sometime.
+ * Assumes a and b have had n digits set at some point.
  *
  * @param [in] a  SP integer.
  * @param [in] b  SP integer.
@@ -5545,7 +5790,7 @@ static int _sp_cmp_ct(const sp_int* a, const sp_int* b, unsigned int n)
  *
  * @return  MP_GT when a is greater than b.
  * @return  MP_LT when a is less than b.
- * @return  MP_EQ when a is equals b.
+ * @return  MP_EQ when a is equal to b.
  */
 int sp_cmp_ct(const sp_int* a, const sp_int* b, unsigned int n)
 {
@@ -5579,13 +5824,13 @@ int sp_cmp_ct(const sp_int* a, const sp_int* b, unsigned int n)
 
 #if (!defined(NO_RSA) && !defined(WOLFSSL_RSA_VERIFY_ONLY)) || \
     ((defined(WOLFSSL_SP_MATH_ALL) || defined(WOLFSSL_SP_SM2)) && \
-     defined(HAVE_ECC)) || defined(OPENSSL_EXTRA)
+     defined(HAVE_ECC)) || defined(OPENSSL_EXTRA) || defined(WOLFSSL_PUBLIC_MP)
 /* Check if a bit is set
  *
  * When a is NULL, result is 0.
  *
- * @param  [in]  a  SP integer.
- * @param  [in]  b  Bit position to check.
+ * @param [in] a  SP integer.
+ * @param [in] b  Bit position to check.
  *
  * @return  0 when bit is not set.
  * @return  1 when bit is set.
@@ -5614,7 +5859,7 @@ int sp_is_bit_set(const sp_int* a, unsigned int b)
  *
  * When a is NULL, result is 0.
  *
- * @param  [in]  a  SP integer.
+ * @param [in] a  SP integer.
  *
  * @return  Number of bits in the SP integer value.
  */
@@ -5702,7 +5947,7 @@ static const int sp_lnz[SP_LNZ_CNT] = {
  *
  * When a is not NULL, result is 0.
  *
- * @param  [in]   a  SP integer to use.
+ * @param [in] a  SP integer to use.
  *
  * @return  Number of least significant zero bits.
  */
@@ -5719,12 +5964,12 @@ int sp_cnt_lsb(const sp_int* a)
         unsigned int j;
 
         /* Count least significant words that are zero. */
-        for (i = 0; i < a->used && a->dp[i] == 0; i++, bc += SP_WORD_SIZE) {
+        for (i = 0; (i < a->used) && (a->dp[i] == 0); i++, bc += SP_WORD_SIZE) {
         }
 
         /* Use 4-bit table to get count. */
         for (j = 0; j < SP_WORD_SIZE; j += SP_LNZ_BITS) {
-            /* Get number of lesat significant 0 bits in nibble. */
+            /* Get number of least significant 0 bits in nibble. */
             int cnt = sp_lnz[(a->dp[i] >> j) & SP_LNZ_MASK];
             /* Done if not all 4 bits are zero. */
             if (cnt != 4) {
@@ -5746,7 +5991,7 @@ int sp_cnt_lsb(const sp_int* a)
  *
  * When a is NULL, result is 0.
  *
- * @param  [in]  a  SP integer.
+ * @param [in] a  SP integer.
  *
  * @return  1 when the top bit of top byte is set.
  * @return  0 when the top bit of top byte is not set.
@@ -5780,8 +6025,8 @@ int sp_leading_bit(const sp_int* a)
 /* Set one bit of a: a |= 1 << i
  * The field 'used' is updated in a.
  *
- * @param  [in,out]  a  SP integer to set bit into.
- * @param  [in]      i  Index of bit to set.
+ * @param [in, out] a  SP integer to set bit into.
+ * @param [in]      i  Index of bit to set.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a is NULL, index is negative or index is too large.
@@ -5790,9 +6035,9 @@ int sp_set_bit(sp_int* a, int i)
 {
     int err = MP_OKAY;
     /* Get index of word to set. */
-    unsigned int w = (unsigned int)(i >> SP_WORD_SHIFT);
+    sp_size_t w = (sp_size_t)(i >> SP_WORD_SHIFT);
 
-    /* Check for valid number and and space for bit. */
+    /* Check for valid number and space for bit. */
     if ((a == NULL) || (i < 0) || (w >= a->size)) {
         err = MP_VAL;
     }
@@ -5811,7 +6056,7 @@ int sp_set_bit(sp_int* a, int i)
         a->dp[w] |= (sp_int_digit)1 << s;
         /* Update used if necessary */
         if (a->used <= w) {
-            a->used = w + 1;
+            a->used = (sp_size_t)(w + 1U);
         }
     }
 
@@ -5825,11 +6070,11 @@ int sp_set_bit(sp_int* a, int i)
 /* Exponentiate 2 to the power of e: a = 2^e
  * This is done by setting the 'e'th bit.
  *
- * @param  [out]  a  SP integer to hold result.
- * @param  [in]   e  Exponent.
+ * @param [out] a  SP integer to hold result.
+ * @param [in]  e  Exponent.
  *
  * @return  MP_OKAY on success.
- * @return  MP_VAL when a is NULL, e is negative or 2^exponent is too large.
+ * @return  MP_VAL when a is NULL, e is negative or 2^e is too large.
  */
 int sp_2expt(sp_int* a, int e)
 {
@@ -5858,8 +6103,8 @@ int sp_2expt(sp_int* a, int e)
     defined(HAVE_ECC)
 /* Set the multi-precision number to be the value of the digit.
  *
- * @param  [out]  a  SP integer to become number.
- * @param  [in]   d  Digit to be set.
+ * @param [out] a  SP integer to become number.
+ * @param [in]  d  Digit to be set.
  */
 static void _sp_set(sp_int* a, sp_int_digit d)
 {
@@ -5876,8 +6121,8 @@ static void _sp_set(sp_int* a, sp_int_digit d)
 
 /* Set the multi-precision number to be the value of the digit.
  *
- * @param  [out]  a  SP integer to become number.
- * @param  [in]   d  Digit to be set.
+ * @param [out] a  SP integer to become number.
+ * @param [in]  d  Digit to be set.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a is NULL.
@@ -5903,8 +6148,8 @@ int sp_set(sp_int* a, sp_int_digit d)
  *
  * Number may be larger than the size of a digit.
  *
- * @param  [out]  a  SP integer to set.
- * @param  [in]   n  Long value to set.
+ * @param [out] a  SP integer to set.
+ * @param [in]  n  Long value to set.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a is NULL.
@@ -5950,19 +6195,18 @@ int sp_set_int(sp_int* a, unsigned long n)
 }
 #endif /* WOLFSSL_SP_MATH_ALL || !NO_RSA  */
 
-#if defined(WOLFSSL_SP_MATH_ALL) || \
-    (!defined(NO_RSA) && !defined(WOLFSSL_RSA_VERIFY_ONLY)) || \
-    !defined(NO_DH) || defined(HAVE_ECC)
+#if defined(WOLFSSL_SP_MATH_ALL) || !defined(NO_RSA) || !defined(NO_DH) || \
+    defined(HAVE_ECC)
 /* Compare a one digit number with a multi-precision number.
  *
  * When a is NULL, MP_LT is returned.
  *
- * @param  [in]  a  SP integer to compare.
- * @param  [in]  d  Digit to compare with.
+ * @param [in] a  SP integer to compare.
+ * @param [in] d  Digit to compare with.
  *
  * @return  MP_GT when a is greater than d.
  * @return  MP_LT when a is less than d.
- * @return  MP_EQ when a is equals d.
+ * @return  MP_EQ when a is equal to d.
  */
 int sp_cmp_d(const sp_int* a, sp_int_digit d)
 {
@@ -6012,9 +6256,9 @@ int sp_cmp_d(const sp_int* a, sp_int_digit d)
     defined(WOLFSSL_SP_SUB_D)) || defined(WOLFSSL_SP_READ_RADIX_10)
 /* Add a one digit number to the multi-precision number.
  *
- * @param  [in]   a  SP integer be added to.
- * @param  [in]   d  Digit to add.
- * @param  [out]  r  SP integer to store result in.
+ * @param [in]  a  SP integer to be added to.
+ * @param [in]  d  Digit to add.
+ * @param [out] r  SP integer to store result in.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when result is too large for fixed size dp array.
@@ -6078,9 +6322,9 @@ static int _sp_add_d(const sp_int* a, sp_int_digit d, sp_int* r)
     !defined(WC_NO_RNG))
 /* Sub a one digit number from the multi-precision number.
  *
- * @param  [in]   a  SP integer be subtracted from.
- * @param  [in]   d  Digit to subtract.
- * @param  [out]  r  SP integer to store result in.
+ * @param [in]  a  SP integer to be subtracted from.
+ * @param [in]  d  Digit to subtract.
+ * @param [out] r  SP integer to store result in.
  */
 static void _sp_sub_d(const sp_int* a, sp_int_digit d, sp_int* r)
 {
@@ -6124,9 +6368,9 @@ static void _sp_sub_d(const sp_int* a, sp_int_digit d, sp_int* r)
 #ifdef WOLFSSL_SP_ADD_D
 /* Add a one digit number to the multi-precision number.
  *
- * @param  [in]   a  SP integer be added to.
- * @param  [in]   d  Digit to add.
- * @param  [out]  r  SP integer to store result in.
+ * @param [in]  a  SP integer to be added to.
+ * @param [in]  d  Digit to add.
+ * @param [out] r  SP integer to store result in.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when result is too large for fixed size dp array.
@@ -6187,9 +6431,9 @@ int sp_add_d(const sp_int* a, sp_int_digit d, sp_int* r)
 #ifdef WOLFSSL_SP_SUB_D
 /* Sub a one digit number from the multi-precision number.
  *
- * @param  [in]   a  SP integer be subtracted from.
- * @param  [in]   d  Digit to subtract.
- * @param  [out]  r  SP integer to store result in.
+ * @param [in]  a  SP integer to be subtracted from.
+ * @param [in]  d  Digit to subtract.
+ * @param [out] r  SP integer to store result in.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a or r is NULL.
@@ -6252,14 +6496,15 @@ int sp_sub_d(const sp_int* a, sp_int_digit d, sp_int* r)
     !defined(NO_DH) || defined(HAVE_ECC) || \
     (!defined(NO_RSA) && !defined(WOLFSSL_RSA_VERIFY_ONLY) && \
      !defined(WOLFSSL_RSA_PUBLIC_ONLY))) || \
-    (defined(WOLFSSL_KEY_GEN) && !defined(NO_RSA))
+    (defined(WOLFSSL_KEY_GEN) && !defined(NO_RSA)) || \
+    defined(WOLFSSL_SP_MUL_D)
 /* Multiply a by digit n and put result into r shifting up o digits.
  *   r = (a * n) << (o * SP_WORD_SIZE)
  *
- * @param  [in]   a  SP integer to be multiplied.
- * @param  [in]   d  SP digit to multiply by.
- * @param  [out]  r  SP integer result.
- * @param  [in]   o  Number of digits to move result up by.
+ * @param [in]  a  SP integer to be multiplied.
+ * @param [in]  d  SP digit to multiply by.
+ * @param [out] r  SP integer result.
+ * @param [in]  o  Number of digits to move result up by.
  * @return  MP_OKAY on success.
  * @return  MP_VAL when result is too large for sp_int.
  */
@@ -6326,7 +6571,7 @@ static int _sp_mul_d(const sp_int* a, sp_int_digit d, sp_int* r, unsigned int o)
         }
     }
     /* Update number of words in result. */
-    r->used = o;
+    r->used = (sp_size_t)o;
     /* In case n is zero. */
     sp_clamp(r);
 
@@ -6335,16 +6580,16 @@ static int _sp_mul_d(const sp_int* a, sp_int_digit d, sp_int* r, unsigned int o)
 #endif /* (WOLFSSL_SP_MATH_ALL && !WOLFSSL_RSA_VERIFY_ONLY) ||
         *  WOLFSSL_SP_SMALL || (WOLFSSL_KEY_GEN && !NO_RSA) */
 
-#if (defined(WOLFSSL_SP_MATH_ALL) && !defined(WOLFSSL_RSA_VERIFY_ONLY)) || \
-    (defined(WOLFSSL_KEY_GEN) && !defined(NO_RSA))
-/* Multiply a by digit n and put result into r. r = a * n
+#ifdef WOLFSSL_SP_MUL_D
+/* Multiply a by digit d and put result into r. r = a * d
  *
- * @param  [in]   a  SP integer to multiply.
- * @param  [in]   n  Digit to multiply by.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  d  Digit to multiply by.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
- * @return  MP_VAL when a or b is NULL, or a has maximum number of digits used.
+ * @return  MP_VAL when a or r is NULL, or a has the maximum number of digits
+ *          used.
  */
 int sp_mul_d(const sp_int* a, sp_int_digit d, sp_int* r)
 {
@@ -6374,8 +6619,7 @@ int sp_mul_d(const sp_int* a, sp_int_digit d, sp_int* r)
 
     return err;
 }
-#endif /* (WOLFSSL_SP_MATH_ALL && !WOLFSSL_RSA_VERIFY_ONLY) ||
-        * (WOLFSSL_KEY_GEN && !NO_RSA) */
+#endif /* WOLFSSL_SP_MUL_D */
 
 /* Predefine complicated rules of when to compile in sp_div_d and sp_mod_d. */
 #if (defined(WOLFSSL_SP_MATH_ALL) && !defined(WOLFSSL_RSA_VERIFY_ONLY)) || \
@@ -6397,9 +6641,9 @@ int sp_mul_d(const sp_int* a, sp_int_digit d, sp_int* r)
 #ifndef SP_ASM_DIV_WORD
 /* Divide a two digit number by a digit number and return. (hi | lo) / d
  *
- * @param  [in]  hi  SP integer digit. High digit of the dividend.
- * @param  [in]  lo  SP integer digit. Lower digit of the dividend.
- * @param  [in]  d   SP integer digit. Number to divide by.
+ * @param [in] hi  SP integer digit. High digit of the dividend.
+ * @param [in] lo  SP integer digit. Low digit of the dividend.
+ * @param [in] d   SP integer digit. Number to divide by.
  * @return  The division result.
  */
 static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
@@ -6509,9 +6753,9 @@ static WC_INLINE sp_int_digit sp_div_word(sp_int_digit hi, sp_int_digit lo,
  *
  * Used in checking prime: (a % 3) == 0?.
  *
- * @param  [in]   a    SP integer to be divided.
- * @param  [out]  r    SP integer that is the quotient. May be NULL.
- * @param  [out]  rem  SP integer that is the remainder. May be NULL.
+ * @param [in]  a    SP integer to be divided.
+ * @param [out] r    SP integer that is the quotient. May be NULL.
+ * @param [out] rem  SP integer that is the remainder. May be NULL.
  */
 static void _sp_div_3(const sp_int* a, sp_int* r, sp_int_digit* rem)
 {
@@ -6618,9 +6862,9 @@ static void _sp_div_3(const sp_int* a, sp_int* r, sp_int_digit* rem)
  *
  * Used when writing with a radix of 10 - decimal number.
  *
- * @param  [in]   a    SP integer to be divided.
- * @param  [out]  r    SP integer that is the quotient. May be NULL.
- * @param  [out]  rem  SP integer that is the remainder. May be NULL.
+ * @param [in]  a    SP integer to be divided.
+ * @param [out] r    SP integer that is the quotient. May be NULL.
+ * @param [out] rem  SP integer that is the remainder. May be NULL.
  */
 static void _sp_div_10(const sp_int* a, sp_int* r, sp_int_digit* rem)
 {
@@ -6705,10 +6949,10 @@ static void _sp_div_10(const sp_int* a, sp_int* r, sp_int_digit* rem)
 #if defined(WOLFSSL_SP_DIV_D) || defined(WOLFSSL_SP_MOD_D)
 /* Divide by small number: r = a / d and rem = a % d
  *
- * @param  [in]   a    SP integer to be divided.
- * @param  [in]   d    Digit to divide by.
- * @param  [out]  r    SP integer that is the quotient. May be NULL.
- * @param  [out]  rem  SP integer that is the remainder. May be NULL.
+ * @param [in]  a    SP integer to be divided.
+ * @param [in]  d    Digit to divide by.
+ * @param [out] r    SP integer that is the quotient. May be NULL.
+ * @param [out] rem  SP integer that is the remainder. May be NULL.
  */
 static void _sp_div_small(const sp_int* a, sp_int_digit d, sp_int* r,
     sp_int_digit* rem)
@@ -6809,10 +7053,10 @@ static void _sp_div_small(const sp_int* a, sp_int_digit d, sp_int* r,
  *
  * Use trial division algorithm.
  *
- * @param  [in]   a    SP integer to be divided.
- * @param  [in]   d    Digit to divide by.
- * @param  [out]  r    SP integer that is the quotient. May be NULL.
- * @param  [out]  rem  Digit that is the remainder. May be NULL.
+ * @param [in]  a    SP integer to be divided.
+ * @param [in]  d    Digit to divide by.
+ * @param [out] r    SP integer that is the quotient. May be NULL.
+ * @param [out] rem  Digit that is the remainder. May be NULL.
  */
 static void _sp_div_d(const sp_int* a, sp_int_digit d, sp_int* r,
     sp_int_digit* rem)
@@ -6869,10 +7113,10 @@ static void _sp_div_d(const sp_int* a, sp_int_digit d, sp_int* r,
  * remainder.
  *   r = a / d; rem = a % d
  *
- * @param  [in]   a    SP integer to be divided.
- * @param  [in]   d    Digit to divide by.
- * @param  [out]  r    SP integer that is the quotient. May be NULL.
- * @param  [out]  rem  Digit that is the remainder. May be NULL.
+ * @param [in]  a    SP integer to be divided.
+ * @param [in]  d    Digit to divide by.
+ * @param [out] r    SP integer that is the quotient. May be NULL.
+ * @param [out] rem  Digit that is the remainder. May be NULL.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a is NULL or d is 0.
@@ -6928,9 +7172,9 @@ int sp_div_d(const sp_int* a, sp_int_digit d, sp_int* r, sp_int_digit* rem)
 #ifdef WOLFSSL_SP_MOD_D
 /* Calculate a modulo the digit d into r: r = a mod d
  *
- * @param  [in]   a  SP integer to reduce.
- * @param  [in]   d  Digit to that is the modulus.
- * @param  [out]  r  Digit that is the result.
+ * @param [in]  a  SP integer to reduce.
+ * @param [in]  d  Digit that is the modulus.
+ * @param [out] r  Digit that is the result.
  */
 static void _sp_mod_d(const sp_int* a, const sp_int_digit d, sp_int_digit* r)
 {
@@ -6968,9 +7212,9 @@ static void _sp_mod_d(const sp_int* a, const sp_int_digit d, sp_int_digit* r)
 
 /* Calculate a modulo the digit d into r: r = a mod d
  *
- * @param  [in]   a  SP integer to reduce.
- * @param  [in]   d  Digit to that is the modulus.
- * @param  [out]  r  Digit that is the result.
+ * @param [in]  a  SP integer to reduce.
+ * @param [in]  d  Digit that is the modulus.
+ * @param [out] r  Digit that is the result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a is NULL or d is 0.
@@ -7043,8 +7287,8 @@ int sp_mod_d(const sp_int* a, sp_int_digit d, sp_int_digit* r)
      !defined(WOLFSSL_RSA_PUBLIC_ONLY)) || defined(WOLFSSL_SP_INVMOD)
 /* Divides a by 2 and stores in r: r = a >> 1
  *
- * @param  [in]   a  SP integer to divide.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  a  SP integer to divide.
+ * @param [out] r  SP integer to hold result.
  */
 static void _sp_div_2(const sp_int* a, sp_int* r)
 {
@@ -7052,12 +7296,13 @@ static void _sp_div_2(const sp_int* a, sp_int* r)
 
     /* Shift down each word by 1 and include bottom bit of next at top. */
     for (i = 0; i < (int)a->used - 1; i++) {
-        r->dp[i] = (a->dp[i] >> 1) | (a->dp[i+1] << (SP_WORD_SIZE - 1));
+        r->dp[i]  = a->dp[i] >> 1;
+        r->dp[i] |= a->dp[i+1] << (SP_WORD_SIZE - 1);
     }
     /* Last word only needs to be shifted down. */
     r->dp[i] = a->dp[i] >> 1;
     /* Set used to be all words seen. */
-    r->used = (unsigned int)i + 1;
+    r->used = (sp_size_t)(i + 1);
     /* Remove leading zeros. */
     sp_clamp(r);
 #ifdef WOLFSSL_SP_INT_NEGATIVE
@@ -7069,8 +7314,8 @@ static void _sp_div_2(const sp_int* a, sp_int* r)
 #if defined(WOLFSSL_SP_MATH_ALL) && defined(HAVE_ECC)
 /* Divides a by 2 and stores in r: r = a >> 1
  *
- * @param  [in]   a  SP integer to divide.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  a  SP integer to divide.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a or r is NULL.
@@ -7103,9 +7348,9 @@ int sp_div_2(const sp_int* a, sp_int* r)
  *
  * r = a / 2 (mod m) - constant time (a < m and positive)
  *
- * @param  [in]   a  SP integer to divide.
- * @param  [in]   m  SP integer that is modulus.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  a  SP integer to divide.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a, m or r is NULL.
@@ -7132,8 +7377,8 @@ int sp_div_2_mod_ct(const sp_int* a, const sp_int* m, sp_int* r)
         sp_int_digit t;
     #endif
         /* Mask to apply to modulus. */
-        sp_int_digit mask = (sp_int_digit)0 - (a->dp[0] & 1);
-        unsigned int i;
+        volatile sp_int_digit mask = (sp_int_digit)0 - (a->dp[0] & 1);
+        sp_size_t i;
 
     #if 0
         sp_print(a, "a");
@@ -7143,7 +7388,7 @@ int sp_div_2_mod_ct(const sp_int* a, const sp_int* m, sp_int* r)
         /* Add a to m, if a is odd, into r in constant time. */
         for (i = 0; i < m->used; i++) {
             /* Mask to apply to a - set when used value at index. */
-            sp_int_digit mask_a = (sp_int_digit)0 - (i < a->used);
+            volatile sp_int_digit mask_a = (sp_int_digit)0 - (i < a->used);
 
         #ifndef SQR_MUL_ASM
             /* Conditionally add modulus. */
@@ -7178,7 +7423,7 @@ int sp_div_2_mod_ct(const sp_int* a, const sp_int* m, sp_int* r)
         r->dp[i] = l;
     #endif
         /* Used includes carry - set or not. */
-        r->used = i + 1;
+        r->used = (sp_size_t)(i + 1);
     #ifdef WOLFSSL_SP_INT_NEGATIVE
         r->sign = MP_ZPOS;
     #endif
@@ -7201,14 +7446,14 @@ int sp_div_2_mod_ct(const sp_int* a, const sp_int* m, sp_int* r)
 #if !defined(WOLFSSL_RSA_VERIFY_ONLY) || defined(WOLFSSL_SP_INVMOD)
 /* Add offset b to a into r: r = a + (b << (o * SP_WORD_SIZEOF))
  *
- * @param  [in]   a  SP integer to add to.
- * @param  [in]   b  SP integer to add.
- * @param  [out]  r  SP integer to store result in.
- * @param  [in]   o  Number of digits to offset b.
+ * @param [in]  a  SP integer to add to.
+ * @param [in]  b  SP integer to add.
+ * @param [out] r  SP integer to store result in.
+ * @param [in]  o  Number of digits to offset b.
  */
 static void _sp_add_off(const sp_int* a, const sp_int* b, sp_int* r, int o)
 {
-    unsigned int i = 0;
+    sp_size_t i = 0;
 #ifndef SQR_MUL_ASM
     sp_int_word t = 0;
 #else
@@ -7224,7 +7469,7 @@ static void _sp_add_off(const sp_int* a, const sp_int* b, sp_int* r, int o)
     for (; (i < o) && (i < a->used); i++) {
         r->dp[i] = a->dp[i];
     }
-    /* Set result to 0 for digits beyonf those in a. */
+    /* Set result to 0 for digits beyond those in a. */
     for (; i < o; i++) {
         r->dp[i] = 0;
     }
@@ -7329,10 +7574,10 @@ static void _sp_add_off(const sp_int* a, const sp_int* b, sp_int* r, int o)
     /* Put in carry. */
 #ifndef SQR_MUL_ASM
     r->dp[i] = (sp_int_digit)t;
-    r->used += (t != 0);
+    r->used = (sp_size_t)(r->used + (sp_size_t)(t != 0));
 #else
     r->dp[i] = l;
-    r->used += (l != 0);
+    r->used = (sp_size_t)(r->used + (sp_size_t)(l != 0));
 #endif
 
     /* Remove leading zeros. */
@@ -7348,16 +7593,16 @@ static void _sp_add_off(const sp_int* a, const sp_int* b, sp_int* r, int o)
  *
  * When using offset, r == a is faster.
  *
- * @param  [in]   a  SP integer to subtract from.
- * @param  [in]   b  SP integer to subtract.
- * @param  [out]  r  SP integer to store result in.
- * @param  [in]   o  Number of digits to offset b.
+ * @param [in]  a  SP integer to subtract from.
+ * @param [in]  b  SP integer to subtract.
+ * @param [out] r  SP integer to store result in.
+ * @param [in]  o  Number of digits to offset b.
  */
 static void _sp_sub_off(const sp_int* a, const sp_int* b, sp_int* r,
-    unsigned int o)
+    sp_size_t o)
 {
-    unsigned int i = 0;
-    unsigned int j;
+    sp_size_t i = 0;
+    sp_size_t j;
 #ifndef SQR_MUL_ASM
     sp_int_sword t = 0;
 #else
@@ -7428,9 +7673,9 @@ static void _sp_sub_off(const sp_int* a, const sp_int* b, sp_int* r,
 #if !defined(WOLFSSL_RSA_VERIFY_ONLY) || defined(WOLFSSL_SP_INVMOD)
 /* Add b to a into r: r = a + b
  *
- * @param  [in]   a  SP integer to add to.
- * @param  [in]   b  SP integer to add.
- * @param  [out]  r  SP integer to store result in.
+ * @param [in]  a  SP integer to add to.
+ * @param [in]  b  SP integer to add.
+ * @param [out] r  SP integer to store result in.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a, b, or r is NULL.
@@ -7443,7 +7688,7 @@ int sp_add(const sp_int* a, const sp_int* b, sp_int* r)
     if ((a == NULL) || (b == NULL) || (r == NULL)) {
         err = MP_VAL;
     }
-    /* Check that r as big as a and b plus one word. */
+    /* Check that r is as big as a and b plus one word. */
     if ((err == MP_OKAY) && ((a->used >= r->size) || (b->used >= r->size))) {
         err = MP_VAL;
     }
@@ -7488,9 +7733,9 @@ int sp_add(const sp_int* a, const sp_int* b, sp_int* r)
  *
  * a must be greater than b unless WOLFSSL_SP_INT_NEGATIVE is defined.
  *
- * @param  [in]   a  SP integer to subtract from.
- * @param  [in]   b  SP integer to subtract.
- * @param  [out]  r  SP integer to store result in.
+ * @param [in]  a  SP integer to subtract from.
+ * @param [in]  b  SP integer to subtract.
+ * @param [out] r  SP integer to store result in.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a, b, or r is NULL.
@@ -7503,7 +7748,7 @@ int sp_sub(const sp_int* a, const sp_int* b, sp_int* r)
     if ((a == NULL) || (b == NULL) || (r == NULL)) {
         err = MP_VAL;
     }
-    /* Check that r as big as a and b plus one word. */
+    /* Check that r is as big as a and b plus one word. */
     if ((err == MP_OKAY) && ((a->used >= r->size) || (b->used >= r->size))) {
         err = MP_VAL;
     }
@@ -7551,12 +7796,12 @@ int sp_sub(const sp_int* a, const sp_int* b, sp_int* r)
 #if (defined(WOLFSSL_SP_MATH_ALL) && !defined(WOLFSSL_RSA_VERIFY_ONLY)) || \
     (!defined(WOLFSSL_SP_MATH) && defined(WOLFSSL_CUSTOM_CURVES)) || \
     defined(WOLFCRYPT_HAVE_ECCSI) || defined(WOLFCRYPT_HAVE_SAKKE)
-/* Add two value and reduce: r = (a + b) % m
+/* Add two values and reduce: r = (a + b) % m
  *
- * @param  [in]   a  SP integer to add.
- * @param  [in]   b  SP integer to add with.
- * @param  [in]   m  SP integer that is the modulus.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  a  SP integer to add.
+ * @param [in]  b  SP integer to add with.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -7566,7 +7811,8 @@ static int _sp_addmod(const sp_int* a, const sp_int* b, const sp_int* m,
 {
     int err = MP_OKAY;
     /* Calculate used based on digits used in a and b. */
-    unsigned int used = ((a->used >= b->used) ? a->used + 1 : b->used + 1);
+    sp_size_t used = (sp_size_t)(((a->used >= b->used) ? a->used + 1U :
+                                                         b->used + 1U));
     DECL_SP_INT(t, used);
 
     /* Allocate a temporary SP int to hold sum. */
@@ -7585,12 +7831,12 @@ static int _sp_addmod(const sp_int* a, const sp_int* b, const sp_int* m,
     return err;
 }
 
-/* Add two value and reduce: r = (a + b) % m
+/* Add two values and reduce: r = (a + b) % m
  *
- * @param  [in]   a  SP integer to add.
- * @param  [in]   b  SP integer to add with.
- * @param  [in]   m  SP integer that is the modulus.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  a  SP integer to add.
+ * @param [in]  b  SP integer to add with.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a, b, m or r is NULL.
@@ -7640,10 +7886,10 @@ int sp_addmod(const sp_int* a, const sp_int* b, const sp_int* m, sp_int* r)
 /* Sub b from a and reduce: r = (a - b) % m
  * Result is always positive.
  *
- * @param  [in]   a  SP integer to subtract from
- * @param  [in]   b  SP integer to subtract.
- * @param  [in]   m  SP integer that is the modulus.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  a  SP integer to subtract from.
+ * @param [in]  b  SP integer to subtract.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -7654,30 +7900,32 @@ static int _sp_submod(const sp_int* a, const sp_int* b, const sp_int* m,
     int err = MP_OKAY;
 #ifndef WOLFSSL_SP_INT_NEGATIVE
     unsigned int used = ((a->used >= m->used) ?
-        ((a->used >= b->used) ? (a->used + 1) : (b->used + 1)) :
-        ((b->used >= m->used)) ? (b->used + 1) : (m->used + 1));
-    DECL_SP_INT_ARRAY(t, used, 2);
+        ((a->used >= b->used) ? (a->used + 1U) : (b->used + 1U)) :
+        ((b->used >= m->used)) ? (b->used + 1U) : (m->used + 1U));
+    DECL_SP_INT(t0, used);
+    DECL_SP_INT(t1, used);
 
-    ALLOC_SP_INT_ARRAY(t, used, 2, err, NULL);
+    ALLOC_SP_INT_SIZE(t0, used, err, NULL);
+    ALLOC_SP_INT_SIZE(t1, used, err, NULL);
     if (err == MP_OKAY) {
         /* Reduce a to less than m. */
         if (_sp_cmp(a, m) != MP_LT) {
-            err = sp_mod(a, m, t[0]);
-            a = t[0];
+            err = sp_mod(a, m, t0);
+            a = t0;
         }
     }
     if (err == MP_OKAY) {
         /* Reduce b to less than m. */
         if (_sp_cmp(b, m) != MP_LT) {
-            err = sp_mod(b, m, t[1]);
-            b = t[1];
+            err = sp_mod(b, m, t1);
+            b = t1;
         }
     }
     if (err == MP_OKAY) {
         /* Add m to a if a smaller than b. */
         if (_sp_cmp(a, b) == MP_LT) {
-            err = sp_add(a, m, t[0]);
-            a = t[0];
+            err = sp_add(a, m, t0);
+            a = t0;
         }
     }
     if (err == MP_OKAY) {
@@ -7685,9 +7933,10 @@ static int _sp_submod(const sp_int* a, const sp_int* b, const sp_int* m,
         err = sp_sub(a, b, r);
     }
 
-    FREE_SP_INT_ARRAY(t, NULL);
+    FREE_SP_INT(t0, NULL);
+    FREE_SP_INT(t1, NULL);
 #else /* WOLFSSL_SP_INT_NEGATIVE */
-    unsigned int used = ((a->used >= b->used) ? a->used + 1 : b->used + 1);
+    sp_size_t used = ((a->used >= b->used) ? a->used + 1 : b->used + 1);
     DECL_SP_INT(t, used);
 
     ALLOC_SP_INT_SIZE(t, used, err, NULL);
@@ -7696,7 +7945,7 @@ static int _sp_submod(const sp_int* a, const sp_int* b, const sp_int* m,
         err = sp_sub(a, b, t);
     }
     if (err == MP_OKAY) {
-        /* Reduce result mod m into result. */
+        /* Reduce result mod m into r. */
         err = sp_mod(t, m, r);
     }
     FREE_SP_INT(t, NULL);
@@ -7708,10 +7957,10 @@ static int _sp_submod(const sp_int* a, const sp_int* b, const sp_int* m,
 /* Sub b from a and reduce: r = (a - b) % m
  * Result is always positive.
  *
- * @param  [in]   a  SP integer to subtract from
- * @param  [in]   b  SP integer to subtract.
- * @param  [in]   m  SP integer that is the modulus.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  a  SP integer to subtract from.
+ * @param [in]  b  SP integer to subtract.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a, b, m or r is NULL.
@@ -7756,35 +8005,47 @@ int sp_submod(const sp_int* a, const sp_int* b, const sp_int* m, sp_int* r)
 }
 #endif /* WOLFSSL_SP_MATH_ALL */
 
-/* Constant time clamping/
+/* Constant time clamping.
  *
  * @param [in, out] a  SP integer to clamp.
  */
 static void sp_clamp_ct(sp_int* a)
 {
     int i;
-    unsigned int used = a->used;
-    unsigned int mask = (unsigned int)-1;
+    sp_size_t used = a->used;
+    volatile sp_size_t mask = (sp_size_t)-1;
 
     for (i = (int)a->used - 1; i >= 0; i--) {
-        used -= ((unsigned int)(a->dp[i] == 0)) & mask;
-        mask &= (unsigned int)0 - (a->dp[i] == 0);
+#if ((SP_WORD_SIZE == 64) && \
+     (defined(_WIN64) || !defined(WOLFSSL_UINT128_T_DEFINED))) || \
+    ((SP_WORD_SIZE == 32) && defined(NO_64BIT))
+        sp_int_digit negVal = ~a->dp[i];
+        sp_int_digit minusOne = a->dp[i] - 1;
+        sp_int_digit zeroMask =
+            (sp_int_digit)((sp_int_sdigit)(negVal & minusOne) >>
+                           (SP_WORD_SIZE - 1));
+#else
+        sp_size_t zeroMask =
+            (sp_size_t)((((sp_int_sword)a->dp[i]) - 1) >> SP_WORD_SIZE);
+#endif
+        mask &= (sp_size_t)zeroMask;
+        used = (sp_size_t)(used + mask);
     }
     a->used = used;
 }
 
 #if defined(WOLFSSL_SP_MATH_ALL) && defined(HAVE_ECC)
-/* Add two value and reduce: r = (a + b) % m
+/* Add two values and reduce: r = (a + b) % m
  *
  * r = a + b (mod m) - constant time (a < m and b < m, a, b and m are positive)
  *
  * Assumes a, b, m and r are not NULL.
  * m and r must not be the same pointer.
  *
- * @param  [in]   a  SP integer to add.
- * @param  [in]   b  SP integer to add with.
- * @param  [in]   m  SP integer that is the modulus.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  a  SP integer to add.
+ * @param [in]  b  SP integer to add with.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  */
@@ -7801,10 +8062,10 @@ int sp_addmod_ct(const sp_int* a, const sp_int* b, const sp_int* m, sp_int* r)
     sp_int_digit sh;
     sp_int_digit t;
 #endif
-    sp_int_digit mask;
-    sp_int_digit mask_a = (sp_int_digit)-1;
-    sp_int_digit mask_b = (sp_int_digit)-1;
-    unsigned int i;
+    volatile sp_int_digit mask;
+    volatile sp_int_digit mask_a = (sp_int_digit)-1;
+    volatile sp_int_digit mask_b = (sp_int_digit)-1;
+    sp_size_t i;
 
     /* Check result is as big as modulus. */
     if (m->used > r->size) {
@@ -7948,15 +8209,15 @@ int sp_addmod_ct(const sp_int* a, const sp_int* b, const sp_int* m, sp_int* r)
  * Assumes a, b, m and r are not NULL.
  * m and r must not be the same pointer.
  *
- * @param  [in]   a  SP integer to subtract from
- * @param  [in]   b  SP integer to subtract.
- * @param  [in]   m  SP integer that is the modulus.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  a  SP integer to subtract from.
+ * @param [in]  b  SP integer to subtract.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  */
 static void _sp_submod_ct(const sp_int* a, const sp_int* b, const sp_int* m,
-    unsigned int max, sp_int* r)
+    unsigned int max_size, sp_int* r)
 {
 #ifndef SQR_MUL_ASM
     sp_int_sword w;
@@ -7965,9 +8226,9 @@ static void _sp_submod_ct(const sp_int* a, const sp_int* b, const sp_int* m,
     sp_int_digit h;
     sp_int_digit t;
 #endif
-    sp_int_digit mask;
-    sp_int_digit mask_a = (sp_int_digit)-1;
-    sp_int_digit mask_b = (sp_int_digit)-1;
+    volatile sp_int_digit mask;
+    volatile sp_int_digit mask_a = (sp_int_digit)-1;
+    volatile sp_int_digit mask_b = (sp_int_digit)-1;
     unsigned int i;
 
     /* In constant time, subtract b from a putting result in r. */
@@ -7977,7 +8238,7 @@ static void _sp_submod_ct(const sp_int* a, const sp_int* b, const sp_int* m,
     l = 0;
     h = 0;
 #endif
-    for (i = 0; i < max; i++) {
+    for (i = 0; i < max_size; i++) {
         /* Values past 'used' are not initialized. */
         mask_a += (i == a->used);
         mask_b += (i == b->used);
@@ -8041,7 +8302,7 @@ static void _sp_submod_ct(const sp_int* a, const sp_int* b, const sp_int* m,
     }
     /* Result will always have digits equal to or less than those in
      * modulus. */
-    r->used = i;
+    r->used = (sp_size_t)i;
 #ifdef WOLFSSL_SP_INT_NEGATIVE
     r->sign = MP_ZPOS;
 #endif /* WOLFSSL_SP_INT_NEGATIVE */
@@ -8059,10 +8320,10 @@ static void _sp_submod_ct(const sp_int* a, const sp_int* b, const sp_int* m,
  * Assumes a, b, m and r are not NULL.
  * m and r must not be the same pointer.
  *
- * @param  [in]   a  SP integer to subtract from
- * @param  [in]   b  SP integer to subtract.
- * @param  [in]   m  SP integer that is the modulus.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  a  SP integer to subtract from.
+ * @param [in]  b  SP integer to subtract.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  */
@@ -8119,15 +8380,15 @@ void sp_xor_ct(const sp_int* a, const sp_int* b, int len, sp_int* r)
 #endif
 
 /********************
- * Shifting functoins
+ * Shifting functions
  ********************/
 
 #if !defined(NO_DH) || defined(HAVE_ECC) || (!defined(NO_RSA) && \
     defined(WC_RSA_BLINDING) && !defined(WOLFSSL_RSA_VERIFY_ONLY))
 /* Left shift the multi-precision number by a number of digits.
  *
- * @param  [in,out]  a  SP integer to shift.
- * @param  [in]      s  Number of digits to shift.
+ * @param [in, out] a  SP integer to shift.
+ * @param [in]      s  Number of digits to shift.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a is NULL, s is negative or the result is too big.
@@ -8146,11 +8407,11 @@ int sp_lshd(sp_int* a, int s)
     }
     if (err == MP_OKAY) {
         /* Move up digits. */
-        XMEMMOVE(a->dp + s, a->dp, a->used * SP_WORD_SIZEOF);
+        XMEMMOVE(a->dp + s, a->dp, a->used * (word32)SP_WORD_SIZEOF);
         /* Back fill with zeros. */
         XMEMSET(a->dp, 0, (size_t)s * SP_WORD_SIZEOF);
         /* Update used. */
-        a->used += (unsigned int)s;
+        a->used = (sp_size_t)(a->used + s);
         /* Remove leading zeros. */
         sp_clamp(a);
     }
@@ -8167,8 +8428,8 @@ int sp_lshd(sp_int* a, int s)
  *
  * Used by sp_mul_2d() and other internal functions.
  *
- * @param  [in,out]  a  SP integer to shift.
- * @param  [in]      n  Number of bits to shift left.
+ * @param [in, out] a  SP integer to shift.
+ * @param [in]      n  Number of bits to shift left.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when the result is too big.
@@ -8179,7 +8440,7 @@ static int sp_lshb(sp_int* a, int n)
 
     if (a->used != 0) {
         /* Calculate number of digits to shift. */
-        unsigned int s = (unsigned int)n >> SP_WORD_SHIFT;
+        sp_size_t s = (sp_size_t)n >> SP_WORD_SHIFT;
 
         /* Ensure number has enough digits for result. */
         if (a->used + s >= a->size) {
@@ -8187,7 +8448,7 @@ static int sp_lshb(sp_int* a, int n)
         }
         if (err == MP_OKAY) {
             /* Get count of bits to move in digit. */
-            n &= SP_WORD_MASK;
+            n &= (int)SP_WORD_MASK;
             /* Check whether this is a complicated case. */
             if (n != 0) {
                 unsigned int i;
@@ -8196,7 +8457,7 @@ static int sp_lshb(sp_int* a, int n)
                 /* Get new most significant digit. */
                 sp_int_digit v = a->dp[a->used - 1] >> (SP_WORD_SIZE - n);
                 /* Shift up each digit. */
-                for (i = a->used - 1; i >= 1; i--) {
+                for (i = a->used - 1U; i >= 1U; i--) {
                     a->dp[i + s] = (a->dp[i] << n) |
                                    (a->dp[i - 1] >> (SP_WORD_SIZE - n));
                 }
@@ -8211,13 +8472,13 @@ static int sp_lshb(sp_int* a, int n)
             /* Only digits to move and ensure not zero. */
             else if (s > 0) {
                 /* Move up digits. */
-                XMEMMOVE(a->dp + s, a->dp, a->used * SP_WORD_SIZEOF);
+                XMEMMOVE(a->dp + s, a->dp, a->used * (word32)SP_WORD_SIZEOF);
             }
 
             /* Update used digit count. */
-            a->used += s;
+            a->used = (sp_size_t)(a->used + s);
             /* Back fill with zeros. */
-            XMEMSET(a->dp, 0, SP_WORD_SIZEOF * s);
+            XMEMSET(a->dp, 0, (word32)SP_WORD_SIZEOF * s);
         }
     }
 
@@ -8229,22 +8490,22 @@ static int sp_lshb(sp_int* a, int n)
 #ifdef WOLFSSL_SP_MATH_ALL
 /* Shift a right by c digits: a = a >> (n * SP_WORD_SIZE)
  *
- * @param  [in, out] a  SP integer to shift.
- * @param  [in]      c  Number of digits to shift.
+ * @param [in, out] a  SP integer to shift.
+ * @param [in]      c  Number of digits to shift.
  */
 void sp_rshd(sp_int* a, int c)
 {
     /* Do shift if we have an SP int. */
     if ((a != NULL) && (c > 0)) {
         /* Make zero if shift removes all digits. */
-        if ((unsigned int)c >= a->used) {
+        if ((sp_size_t)c >= a->used) {
             _sp_zero(a);
         }
         else {
-            unsigned int i;
+            sp_size_t i;
 
             /* Update used digits count. */
-            a->used -= (unsigned int)c;
+            a->used = (sp_size_t)(a->used - c);
             /* Move digits down. */
             for (i = 0; i < a->used; i++, c++) {
                 a->dp[i] = a->dp[c];
@@ -8259,21 +8520,21 @@ void sp_rshd(sp_int* a, int c)
     defined(WOLFSSL_HAVE_SP_DH)
 /* Shift a right by n bits into r: r = a >> n
  *
- * @param  [in]   a  SP integer to shift.
- * @param  [in]   n  Number of bits to shift.
- * @param  [out]  r  SP integer to store result in.
+ * @param [in]  a  SP integer to shift.
+ * @param [in]  n  Number of bits to shift.
+ * @param [out] r  SP integer to store result in.
  */
 int sp_rshb(const sp_int* a, int n, sp_int* r)
 {
     int err = MP_OKAY;
     /* Number of digits to shift down. */
-    unsigned int i = (unsigned int)(n >> SP_WORD_SHIFT);
+    sp_size_t i;
 
     if ((a == NULL) || (n < 0)) {
         err = MP_VAL;
     }
     /* Handle case where shifting out all digits. */
-    if ((err == MP_OKAY) && (i >= a->used)) {
+    else if ((i = (sp_size_t)(n >> SP_WORD_SHIFT)) >= a->used) {
         _sp_zero(r);
     }
     /* Change callers when more error cases returned. */
@@ -8281,30 +8542,31 @@ int sp_rshb(const sp_int* a, int n, sp_int* r)
         err = MP_VAL;
     }
     else if (err == MP_OKAY) {
-        unsigned int j;
+        sp_size_t j;
 
         /* Number of bits to shift in digits. */
         n &= SP_WORD_SIZE - 1;
         /* Handle simple case. */
         if (n == 0) {
             /* Set the count of used digits. */
-            r->used = a->used - i;
+            r->used = (sp_size_t)(a->used - i);
             /* Move digits down. */
             if (r == a) {
-                XMEMMOVE(r->dp, r->dp + i, SP_WORD_SIZEOF * r->used);
+                XMEMMOVE(r->dp, r->dp + i, (word32)SP_WORD_SIZEOF * r->used);
             }
             else {
-                XMEMCPY(r->dp, a->dp + i, SP_WORD_SIZEOF * r->used);
+                XMEMCPY(r->dp, a->dp + i, (word32)SP_WORD_SIZEOF * r->used);
             }
         }
         else {
             /* Move the bits down starting at least significant digit. */
-            for (j = 0; i < a->used-1; i++, j++)
-                r->dp[j] = (a->dp[i] >> n) | (a->dp[i+1] << (SP_WORD_SIZE - n));
+            for (j = 0; j < (sp_size_t)(a->used - 1 - i); j++)
+                r->dp[j] = (a->dp[j+i] >> n) |
+                    (a->dp[j+i+1] << (SP_WORD_SIZE - n));
             /* Most significant digit has no higher digit to pull from. */
-            r->dp[j] = a->dp[i] >> n;
+            r->dp[j] = a->dp[j+i] >> n;
             /* Set the count of used digits. */
-            r->used = j + (r->dp[j] > 0);
+            r->used = (sp_size_t)(j + (r->dp[j] > 0));
         }
 #ifdef WOLFSSL_SP_INT_NEGATIVE
         if (sp_iszero(r)) {
@@ -8328,10 +8590,10 @@ int sp_rshb(const sp_int* a, int n, sp_int* r)
      !defined(WOLFSSL_RSA_PUBLIC_ONLY))
 static void _sp_div_same_size(sp_int* a, const sp_int* d, sp_int* r)
 {
-    unsigned int i;
+    sp_size_t i;
 
     /* Compare top digits of dividend with those of divisor up to last. */
-    for (i = d->used - 1; i > 0; i--) {
+    for (i = (sp_size_t)(d->used - 1U); i > 0; i--) {
         /* Break if top divisor is not equal to dividend. */
         if (a->dp[a->used - d->used + i] != d->dp[i]) {
             break;
@@ -8344,7 +8606,7 @@ static void _sp_div_same_size(sp_int* a, const sp_int* d, sp_int* r)
         /* Get 'used' to restore - ensure zeros put into quotient. */
         i = a->used;
         /* Subtract d from top of a. */
-        _sp_sub_off(a, d, a, a->used - d->used);
+        _sp_sub_off(a, d, a, (sp_size_t)(a->used - d->used));
         /* Restore 'used' on remainder. */
         a->used = i;
     }
@@ -8355,10 +8617,10 @@ static void _sp_div_same_size(sp_int* a, const sp_int* d, sp_int* r)
  *
  * Note: a is constantly having multiplies of d subtracted.
  *
- * @param  [in, out] a      SP integer to be divided and remainder on out.
- * @param  [in]      d      SP integer to divide by.
- * @param  [out]     r      SP integer that is the quotient.
- * @param  [out]     trial  SP integer that is product in trial division.
+ * @param [in, out] a      SP integer to be divided and remainder on out.
+ * @param [in]      d      SP integer to divide by.
+ * @param [out]     r      SP integer that is the quotient.
+ * @param [out]     trial  SP integer that is product in trial division.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when operation fails - only when compiling small code.
@@ -8366,12 +8628,12 @@ static void _sp_div_same_size(sp_int* a, const sp_int* d, sp_int* r)
 static int _sp_div_impl(sp_int* a, const sp_int* d, sp_int* r, sp_int* trial)
 {
     int err = MP_OKAY;
-    unsigned int i;
+    sp_size_t i;
 #ifdef WOLFSSL_SP_SMALL
     int c;
 #else
-    unsigned int j;
-    unsigned int o;
+    sp_size_t j;
+    sp_size_t o;
     #ifndef SQR_MUL_ASM
     sp_int_sword sw;
     #else
@@ -8384,7 +8646,7 @@ static int _sp_div_impl(sp_int* a, const sp_int* d, sp_int* r, sp_int* trial)
     sp_int_digit dt;
 
     /* Set result size to clear. */
-    r->used = a->used - d->used + 1;
+    r->used = (sp_size_t)(a->used - d->used + 1);
     /* Set all potentially used digits to zero. */
     for (i = 0; i < r->used; i++) {
         r->dp[i] = 0;
@@ -8401,7 +8663,7 @@ static int _sp_div_impl(sp_int* a, const sp_int* d, sp_int* r, sp_int* trial)
     /* Keep subtracting multiples of d as long as the digit count of a is
      * greater than equal to d.
      */
-    for (i = a->used - 1; i >= d->used; i--) {
+    for (i = (sp_size_t)(a->used - 1U); i >= d->used; i--) {
         /* When top digits equal, guestimate maximum multiplier.
          * Worst case, multiplier is actually SP_DIGIT_MAX - 1.
          * That is, for w (word size in bits) > 1, n > 1, let:
@@ -8446,7 +8708,7 @@ static int _sp_div_impl(sp_int* a, const sp_int* d, sp_int* r, sp_int* trial)
             break;
         }
 
-        /* Subtract the trial and add qoutient to result. */
+        /* Subtract the trial and add quotient to result. */
         _sp_sub_off(a, trial, a, 0);
         r->dp[i - d->used] += t;
         /* Handle overflow of digit. */
@@ -8455,7 +8717,7 @@ static int _sp_div_impl(sp_int* a, const sp_int* d, sp_int* r, sp_int* trial)
         }
 #else
         /* Index of lowest digit trial is subtracted from. */
-        o = i - d->used;
+        o = (sp_size_t)(i - d->used);
         do {
         #ifndef SQR_MUL_ASM
             sp_int_word tw = 0;
@@ -8524,7 +8786,7 @@ static int _sp_div_impl(sp_int* a, const sp_int* d, sp_int* r, sp_int* trial)
 #endif /* WOLFSSL_SP_SMALL */
     }
     /* Update used. */
-    a->used = i + 1;
+    a->used = (sp_size_t)(i + 1U);
     if (a->used == d->used) {
         /* Finish div now that length of dividend is same as divisor. */
         _sp_div_same_size(a, d, r);
@@ -8536,11 +8798,11 @@ static int _sp_div_impl(sp_int* a, const sp_int* d, sp_int* r, sp_int* trial)
 /* Divide a by d and return the quotient in r and the remainder in rem.
  *   r = a / d; rem = a % d
  *
- * @param  [in]   a     SP integer to be divided.
- * @param  [in]   d     SP integer to divide by.
- * @param  [out]  r     SP integer that is the quotient.
- * @param  [out]  rem   SP integer that is the remainder.
- * @param  [in]   used  Number of digits in temporaries to use.
+ * @param [in]  a     SP integer to be divided.
+ * @param [in]  d     SP integer to divide by.
+ * @param [out] r     SP integer that is the quotient.
+ * @param [out] rem   SP integer that is the remainder.
+ * @param [in]  used  Number of digits in temporaries to use.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -8557,8 +8819,8 @@ static int _sp_div(const sp_int* a, const sp_int* d, sp_int* r, sp_int* rem,
     sp_int* tr = NULL;
     sp_int* trial = NULL;
 #ifdef WOLFSSL_SP_INT_NEGATIVE
-    unsigned int signA = MP_ZPOS;
-    unsigned int signD = MP_ZPOS;
+    sp_uint8 signA = MP_ZPOS;
+    sp_uint8 signD = MP_ZPOS;
 #endif /* WOLFSSL_SP_INT_NEGATIVE */
     /* Intermediates will always be less than or equal to dividend. */
     DECL_SP_INT_ARRAY(td, used, 4);
@@ -8616,7 +8878,7 @@ static int _sp_div(const sp_int* a, const sp_int* d, sp_int* r, sp_int* rem,
     if ((!done) && (err == MP_OKAY)) {
     #if (defined(WOLFSSL_SMALL_STACK) || defined(SP_ALLOC)) && \
         !defined(WOLFSSL_SP_NO_MALLOC)
-        int cnt = 4;
+        unsigned int cnt = 4;
         /* Reuse remainder sp_int where possible. */
         if ((rem != NULL) && (rem != d) && (rem->size > a->used)) {
             sa = rem;
@@ -8645,25 +8907,25 @@ static int _sp_div(const sp_int* a, const sp_int* d, sp_int* r, sp_int* rem,
         }
         if (tr == NULL) {
             tr = td[i];
-            _sp_init_size(tr, a->used - d->used + 2);
+            _sp_init_size(tr, (unsigned int)(a->used - d->used + 2));
         }
     #else
         sa    = td[2];
         tr    = td[3];
 
         _sp_init_size(sa, used);
-        _sp_init_size(tr, a->used - d->used + 2);
+        _sp_init_size(tr, (unsigned int)(a->used - d->used + 2));
     #endif
         sd    = td[0];
         trial = td[1];
 
         /* Initialize sizes to minimal values. */
-        _sp_init_size(sd, d->used + 1);
+        _sp_init_size(sd, (sp_size_t)(d->used + 1U));
         _sp_init_size(trial, used);
 
         /* Move divisor to top of word. Adjust dividend as well. */
         s = sp_count_bits(d);
-        s = SP_WORD_SIZE - (s & SP_WORD_MASK);
+        s = SP_WORD_SIZE - (s & (int)SP_WORD_MASK);
         _sp_copy(a, sa);
         /* Only shift if top bit of divisor no set. */
         if (s != SP_WORD_SIZE) {
@@ -8712,10 +8974,10 @@ static int _sp_div(const sp_int* a, const sp_int* d, sp_int* r, sp_int* rem,
 /* Divide a by d and return the quotient in r and the remainder in rem.
  *   r = a / d; rem = a % d
  *
- * @param  [in]   a    SP integer to be divided.
- * @param  [in]   d    SP integer to divide by.
- * @param  [out]  r    SP integer that is the quotient.
- * @param  [out]  rem  SP integer that is the remainder.
+ * @param [in]  a    SP integer to be divided.
+ * @param [in]  d    SP integer to divide by.
+ * @param [out] r    SP integer that is the quotient.
+ * @param [out] rem  SP integer that is the remainder.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a or d is NULL, r and rem are NULL, or d is 0.
@@ -8751,8 +9013,8 @@ int sp_div(const sp_int* a, const sp_int* d, sp_int* r, sp_int* rem)
         if (a->used == SP_INT_DIGITS) {
             /* May need to shift number being divided left into a new word. */
             int bits = SP_WORD_SIZE - (sp_count_bits(d) % SP_WORD_SIZE);
-            if ((bits != SP_WORD_SIZE) &&
-                    (sp_count_bits(a) + bits > SP_INT_DIGITS * SP_WORD_SIZE)) {
+            if ((bits != SP_WORD_SIZE) && (sp_count_bits(a) + bits >
+                    (int)(SP_INT_DIGITS * SP_WORD_SIZE))) {
                 err = MP_VAL;
             }
             else {
@@ -8760,7 +9022,7 @@ int sp_div(const sp_int* a, const sp_int* d, sp_int* r, sp_int* rem)
             }
         }
         else {
-            used = a->used + 1;
+            used = (sp_size_t)(a->used + 1U);
         }
     }
 
@@ -8793,11 +9055,13 @@ int sp_div(const sp_int* a, const sp_int* d, sp_int* r, sp_int* rem)
      !defined(WOLFSSL_RSA_PUBLIC_ONLY))
 #ifndef FREESCALE_LTC_TFM
 #ifdef WOLFSSL_SP_INT_NEGATIVE
-/* Calculate the remainder of dividing a by m: r = a mod m. r is m.
+/* Calculate the remainder of dividing a by m: r = a mod m.
  *
- * @param  [in]   a  SP integer to reduce.
- * @param  [in]   m  SP integer that is the modulus.
- * @param  [out]  r  SP integer to store result in.
+ * Parameter r can be the same pointer as parameter m.
+ *
+ * @param [in]  a  SP integer to reduce.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer to store result in.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -8832,9 +9096,9 @@ static int _sp_mod(const sp_int* a, const sp_int* m, sp_int* r)
 
 /* Calculate the remainder of dividing a by m: r = a mod m.
  *
- * @param  [in]   a  SP integer to reduce.
- * @param  [in]   m  SP integer that is the modulus.
- * @param  [out]  r  SP integer to store result in.
+ * @param [in]  a  SP integer to reduce.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer to store result in.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a, m or r is NULL or m is 0.
@@ -8888,13 +9152,13 @@ int sp_mod(const sp_int* a, const sp_int* m, sp_int* r)
  */
 
 #ifdef SQR_MUL_ASM
-/* Multiply a by b into r where a and b have same no. digits. r = a * b
+/* Multiply a by b into r where a and b have same number of digits. r = a * b
  *
- * Optimised code for when number of digits in a and b are the same.
+ * Optimized code for when number of digits in a and b are the same.
  *
- * @param  [in]   a    SP integer to multiply.
- * @param  [in]   b    SP integer to multiply by.
- * @param  [out]  r    SP integer to hold result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  b  SP integer to multiply by.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY otherwise.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -8907,8 +9171,7 @@ static int _sp_mul_nxn(const sp_int* a, const sp_int* b, sp_int* r)
     unsigned int k;
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
     sp_int_digit* t = NULL;
-#elif defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) && \
-    !defined(WOLFSSL_SP_NO_DYN_STACK)
+#elif defined(WOLFSSL_SP_DYN_STACK)
     sp_int_digit t[a->used];
 #else
     sp_int_digit t[SP_INT_DIGITS / 2];
@@ -8933,7 +9196,7 @@ static int _sp_mul_nxn(const sp_int* a, const sp_int* b, sp_int* r)
         t[0] = h;
         h = 0;
         o = 0;
-        for (k = 1; k <= a->used - 1; k++) {
+        for (k = 1; k <= (unsigned int)a->used - 1; k++) {
             j = (int)k;
             dp = a->dp;
             for (; j >= 0; dp++, j--) {
@@ -8944,8 +9207,8 @@ static int _sp_mul_nxn(const sp_int* a, const sp_int* b, sp_int* r)
             h = o;
             o = 0;
         }
-        for (; k <= (a->used - 1) * 2; k++) {
-            i = k - (b->used - 1);
+        for (; k <= ((unsigned int)a->used - 1) * 2; k++) {
+            i = k - (sp_size_t)(b->used - 1);
             dp = &b->dp[b->used - 1];
             for (; i < a->used; i++, dp--) {
                 SP_ASM_MUL_ADD(l, h, o, a->dp[i], dp[0]);
@@ -8957,23 +9220,21 @@ static int _sp_mul_nxn(const sp_int* a, const sp_int* b, sp_int* r)
         }
         r->dp[k] = l;
         XMEMCPY(r->dp, t, a->used * sizeof(sp_int_digit));
-        r->used = k + 1;
+        r->used = (sp_size_t)(k + 1);
         sp_clamp(r);
     }
 
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
-    if (t != NULL) {
-        XFREE(t, NULL, DYNAMIC_TYPE_BIGINT);
-    }
+    XFREE(t, NULL, DYNAMIC_TYPE_BIGINT);
 #endif
     return err;
 }
 
 /* Multiply a by b into r. r = a * b
  *
- * @param  [in]   a    SP integer to multiply.
- * @param  [in]   b    SP integer to multiply by.
- * @param  [out]  r    SP integer to hold result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  b  SP integer to multiply by.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY otherwise.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -8981,21 +9242,20 @@ static int _sp_mul_nxn(const sp_int* a, const sp_int* b, sp_int* r)
 static int _sp_mul(const sp_int* a, const sp_int* b, sp_int* r)
 {
     int err = MP_OKAY;
-    unsigned int i;
+    sp_size_t i;
     int j;
-    unsigned int k;
+    sp_size_t k;
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
     sp_int_digit* t = NULL;
-#elif defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) && \
-    !defined(WOLFSSL_SP_NO_DYN_STACK)
+#elif defined(WOLFSSL_SP_DYN_STACK)
     sp_int_digit t[a->used + b->used];
 #else
     sp_int_digit t[SP_INT_DIGITS];
 #endif
 
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
-    t = (sp_int_digit*)XMALLOC(sizeof(sp_int_digit) * (a->used + b->used), NULL,
-        DYNAMIC_TYPE_BIGINT);
+    t = (sp_int_digit*)XMALLOC(sizeof(sp_int_digit) *
+        (size_t)(a->used + b->used), NULL, DYNAMIC_TYPE_BIGINT);
     if (t == NULL) {
         err = MP_MEM;
     }
@@ -9011,7 +9271,7 @@ static int _sp_mul(const sp_int* a, const sp_int* b, sp_int* r)
         t[0] = h;
         h = 0;
         o = 0;
-        for (k = 1; k <= b->used - 1; k++) {
+        for (k = 1; k <= (sp_size_t)(b->used - 1); k++) {
             i = 0;
             j = (int)k;
             for (; (i < a->used) && (j >= 0); i++, j--) {
@@ -9022,9 +9282,9 @@ static int _sp_mul(const sp_int* a, const sp_int* b, sp_int* r)
             h = o;
             o = 0;
         }
-        for (; k <= (a->used - 1) + (b->used - 1); k++) {
+        for (; k <= (sp_size_t)((a->used - 1) + (b->used - 1)); k++) {
             j = (int)(b->used - 1);
-            i = k - (unsigned int)j;
+            i = (sp_size_t)(k - (sp_size_t)j);
             for (; (i < a->used) && (j >= 0); i++, j--) {
                 SP_ASM_MUL_ADD(l, h, o, a->dp[i], b->dp[j]);
             }
@@ -9034,24 +9294,22 @@ static int _sp_mul(const sp_int* a, const sp_int* b, sp_int* r)
             o = 0;
         }
         t[k] = l;
-        r->used = k + 1;
+        r->used = (sp_size_t)(k + 1);
         XMEMCPY(r->dp, t, r->used * sizeof(sp_int_digit));
         sp_clamp(r);
     }
 
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
-    if (t != NULL) {
-        XFREE(t, NULL, DYNAMIC_TYPE_BIGINT);
-    }
+    XFREE(t, NULL, DYNAMIC_TYPE_BIGINT);
 #endif
     return err;
 }
 #else
 /* Multiply a by b into r. r = a * b
  *
- * @param  [in]   a    SP integer to multiply.
- * @param  [in]   b    SP integer to multiply by.
- * @param  [out]  r    SP integer to hold result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  b  SP integer to multiply by.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY otherwise.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -9059,21 +9317,20 @@ static int _sp_mul(const sp_int* a, const sp_int* b, sp_int* r)
 static int _sp_mul(const sp_int* a, const sp_int* b, sp_int* r)
 {
     int err = MP_OKAY;
-    unsigned int i;
+    sp_size_t i;
     int j;
-    unsigned int k;
+    sp_size_t k;
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
     sp_int_digit* t = NULL;
-#elif defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) && \
-    !defined(WOLFSSL_SP_NO_DYN_STACK)
+#elif defined(WOLFSSL_SP_DYN_STACK)
     sp_int_digit t[a->used + b->used];
 #else
     sp_int_digit t[SP_INT_DIGITS];
 #endif
 
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
-    t = (sp_int_digit*)XMALLOC(sizeof(sp_int_digit) * (a->used + b->used), NULL,
-        DYNAMIC_TYPE_BIGINT);
+    t = (sp_int_digit*)XMALLOC(sizeof(sp_int_digit) *
+        (size_t)(a->used + b->used), NULL, DYNAMIC_TYPE_BIGINT);
     if (t == NULL) {
         err = MP_MEM;
     }
@@ -9093,9 +9350,9 @@ static int _sp_mul(const sp_int* a, const sp_int* b, sp_int* r)
     #ifdef SP_WORD_OVERFLOW
         o = 0;
     #endif
-        for (k = 1; k <= (a->used - 1) + (b->used - 1); k++) {
-            i = k - (b->used - 1);
-            i &= (((unsigned int)i >> (sizeof(i) * 8 - 1)) - 1U);
+        for (k = 1; (int)k <= ((int)a->used - 1) + ((int)b->used - 1); k++) {
+            i = (sp_size_t)(k - (b->used - 1));
+            i &= (sp_size_t)(((unsigned int)i >> (sizeof(i) * 8 - 1)) - 1U);
             j = (int)(k - i);
             for (; (i < a->used) && (j >= 0); i++, j--) {
                 w = (sp_int_word)a->dp[i] * b->dp[j];
@@ -9118,15 +9375,13 @@ static int _sp_mul(const sp_int* a, const sp_int* b, sp_int* r)
         #endif
         }
         t[k] = (sp_int_digit)l;
-        r->used = k + 1;
+        r->used = (sp_size_t)(k + 1);
         XMEMCPY(r->dp, t, r->used * sizeof(sp_int_digit));
         sp_clamp(r);
     }
 
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
-    if (t != NULL) {
-        XFREE(t, NULL, DYNAMIC_TYPE_BIGINT);
-    }
+    XFREE(t, NULL, DYNAMIC_TYPE_BIGINT);
 #endif
     return err;
 }
@@ -9140,9 +9395,9 @@ static int _sp_mul(const sp_int* a, const sp_int* b, sp_int* r)
  *
  * Long-hand implementation.
  *
- * @param  [in]   a  SP integer to multiply.
- * @param  [in]   b  SP integer to multiply.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  b  SP integer to multiply.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -9250,9 +9505,7 @@ static int _sp_mul_4(const sp_int* a, const sp_int* b, sp_int* r)
     }
 
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
-    if (w != NULL) {
-        XFREE(w, NULL, DYNAMIC_TYPE_BIGINT);
-    }
+    XFREE(w, NULL, DYNAMIC_TYPE_BIGINT);
 #endif
     return err;
 }
@@ -9261,9 +9514,9 @@ static int _sp_mul_4(const sp_int* a, const sp_int* b, sp_int* r)
  *
  * Comba implementation.
  *
- * @param  [in]   a  SP integer to multiply.
- * @param  [in]   b  SP integer to multiply.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  b  SP integer to multiply.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -9328,9 +9581,9 @@ static int _sp_mul_4(const sp_int* a, const sp_int* b, sp_int* r)
  *
  * Comba implementation.
  *
- * @param  [in]   a  SP integer to multiply.
- * @param  [in]   b  SP integer to multiply.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  b  SP integer to multiply.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -9431,9 +9684,9 @@ static int _sp_mul_6(const sp_int* a, const sp_int* b, sp_int* r)
  *
  * Comba implementation.
  *
- * @param  [in]   a  SP integer to multiply.
- * @param  [in]   b  SP integer to multiply.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  b  SP integer to multiply.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -9578,9 +9831,9 @@ static int _sp_mul_8(const sp_int* a, const sp_int* b, sp_int* r)
  *
  * Comba implementation.
  *
- * @param  [in]   a  SP integer to multiply.
- * @param  [in]   b  SP integer to multiply.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  b  SP integer to multiply.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -9841,9 +10094,9 @@ static int _sp_mul_12(const sp_int* a, const sp_int* b, sp_int* r)
  *
  * Comba implementation.
  *
- * @param  [in]   a  SP integer to multiply.
- * @param  [in]   b  SP integer to multiply.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  b  SP integer to multiply.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -10249,9 +10502,7 @@ static int _sp_mul_16(const sp_int* a, const sp_int* b, sp_int* r)
     }
 
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
-    if (t != NULL) {
-        XFREE(t, NULL, DYNAMIC_TYPE_BIGINT);
-    }
+    XFREE(t, NULL, DYNAMIC_TYPE_BIGINT);
 #endif
     return err;
 }
@@ -10265,9 +10516,9 @@ static int _sp_mul_16(const sp_int* a, const sp_int* b, sp_int* r)
  *
  * Comba implementation.
  *
- * @param  [in]   a  SP integer to multiply.
- * @param  [in]   b  SP integer to multiply.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  b  SP integer to multiply.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -11057,9 +11308,7 @@ static int _sp_mul_24(const sp_int* a, const sp_int* b, sp_int* r)
     }
 
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
-    if (t != NULL) {
-        XFREE(t, NULL, DYNAMIC_TYPE_BIGINT);
-    }
+    XFREE(t, NULL, DYNAMIC_TYPE_BIGINT);
 #endif
     return err;
 }
@@ -11070,9 +11319,9 @@ static int _sp_mul_24(const sp_int* a, const sp_int* b, sp_int* r)
  *
  * Karatsuba implementation.
  *
- * @param  [in]   a  SP integer to multiply.
- * @param  [in]   b  SP integer to multiply.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  b  SP integer to multiply.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -11177,7 +11426,7 @@ static int _sp_mul_32(const sp_int* a, const sp_int* b, sp_int* r)
             }
         }
         z1->dp[32] += l;
-        /* z1 = z1 - z0 - z1 */
+        /* z1 = z1 - z0 - z2 */
         l = 0;
         h = 0;
         for (i = 0; i < 32; i++) {
@@ -11236,9 +11485,9 @@ static int _sp_mul_32(const sp_int* a, const sp_int* b, sp_int* r)
  *
  * Karatsuba implementation.
  *
- * @param  [in]   a  SP integer to multiply.
- * @param  [in]   b  SP integer to multiply.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  b  SP integer to multiply.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -11343,7 +11592,7 @@ static int _sp_mul_48(const sp_int* a, const sp_int* b, sp_int* r)
             }
         }
         z1->dp[48] += l;
-        /* z1 = z1 - z0 - z1 */
+        /* z1 = z1 - z0 - z2 */
         l = 0;
         h = 0;
         for (i = 0; i < 48; i++) {
@@ -11355,7 +11604,7 @@ static int _sp_mul_48(const sp_int* a, const sp_int* b, sp_int* r)
             h = 0;
         }
         z1->dp[i] += l;
-        /* r += z1 << 16 */
+        /* r += z1 << 24 */
         l = 0;
         h = 0;
         for (i = 0; i < 24; i++) {
@@ -11402,9 +11651,9 @@ static int _sp_mul_48(const sp_int* a, const sp_int* b, sp_int* r)
  *
  * Karatsuba implementation.
  *
- * @param  [in]   a  SP integer to multiply.
- * @param  [in]   b  SP integer to multiply.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  b  SP integer to multiply.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -11509,7 +11758,7 @@ static int _sp_mul_64(const sp_int* a, const sp_int* b, sp_int* r)
             }
         }
         z1->dp[64] += l;
-        /* z1 = z1 - z0 - z1 */
+        /* z1 = z1 - z0 - z2 */
         l = 0;
         h = 0;
         for (i = 0; i < 64; i++) {
@@ -11521,7 +11770,7 @@ static int _sp_mul_64(const sp_int* a, const sp_int* b, sp_int* r)
             h = 0;
         }
         z1->dp[i] += l;
-        /* r += z1 << 16 */
+        /* r += z1 << 32 */
         l = 0;
         h = 0;
         for (i = 0; i < 32; i++) {
@@ -11568,9 +11817,9 @@ static int _sp_mul_64(const sp_int* a, const sp_int* b, sp_int* r)
  *
  * Karatsuba implementation.
  *
- * @param  [in]   a  SP integer to multiply.
- * @param  [in]   b  SP integer to multiply.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  b  SP integer to multiply.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -11675,7 +11924,7 @@ static int _sp_mul_96(const sp_int* a, const sp_int* b, sp_int* r)
             }
         }
         z1->dp[96] += l;
-        /* z1 = z1 - z0 - z1 */
+        /* z1 = z1 - z0 - z2 */
         l = 0;
         h = 0;
         for (i = 0; i < 96; i++) {
@@ -11687,7 +11936,7 @@ static int _sp_mul_96(const sp_int* a, const sp_int* b, sp_int* r)
             h = 0;
         }
         z1->dp[i] += l;
-        /* r += z1 << 16 */
+        /* r += z1 << 48 */
         l = 0;
         h = 0;
         for (i = 0; i < 48; i++) {
@@ -11734,20 +11983,20 @@ static int _sp_mul_96(const sp_int* a, const sp_int* b, sp_int* r)
 
 /* Multiply a by b and store in r: r = a * b
  *
- * @param  [in]   a  SP integer to multiply.
- * @param  [in]   b  SP integer to multiply.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  b  SP integer to multiply.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
- * @return  MP_VAL when a, b or is NULL; or the result will be too big for fixed
- *          data length.
+ * @return  MP_VAL when a, b or r is NULL; or the result will be too big for
+ *          fixed data length.
  * @return  MP_MEM when dynamic memory allocation fails.
  */
 int sp_mul(const sp_int* a, const sp_int* b, sp_int* r)
 {
     int err = MP_OKAY;
 #ifdef WOLFSSL_SP_INT_NEGATIVE
-    unsigned int sign = MP_ZPOS;
+    sp_uint8 sign = MP_ZPOS;
 #endif
 
     if ((a == NULL) || (b == NULL) || (r == NULL)) {
@@ -11755,9 +12004,14 @@ int sp_mul(const sp_int* a, const sp_int* b, sp_int* r)
     }
 
     /* Need extra digit during calculation. */
+    /* NOLINTBEGIN(clang-analyzer-core.UndefinedBinaryOperatorResult) */
+    /* clang-tidy falsely believes that r->size was corrupted by the _sp_copy()
+     * to "Copy base into working variable" in _sp_exptmod_ex().
+     */
     if ((err == MP_OKAY) && (a->used + b->used > r->size)) {
         err = MP_VAL;
     }
+    /* NOLINTEND(clang-analyzer-core.UndefinedBinaryOperatorResult) */
 
 #if 0
     if (err == MP_OKAY) {
@@ -11887,10 +12141,10 @@ int sp_mul(const sp_int* a, const sp_int* b, sp_int* r)
     (!defined(NO_RSA) && defined(WOLFSSL_KEY_GEN)) || defined(OPENSSL_ALL)
 /* Multiply a by b mod m and store in r: r = (a * b) mod m
  *
- * @param  [in]   a  SP integer to multiply.
- * @param  [in]   b  SP integer to multiply.
- * @param  [in]   m  SP integer that is the modulus.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  b  SP integer to multiply.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -11904,7 +12158,7 @@ static int _sp_mulmod_tmp(const sp_int* a, const sp_int* b, const sp_int* m,
 
     ALLOC_SP_INT(t, a->used + b->used, err, NULL);
     if (err == MP_OKAY) {
-        err = sp_init_size(t, a->used + b->used);
+        err = sp_init_size(t, (sp_size_t)(a->used + b->used));
     }
 
     /* Multiply and reduce. */
@@ -11923,10 +12177,10 @@ static int _sp_mulmod_tmp(const sp_int* a, const sp_int* b, const sp_int* m,
 
 /* Multiply a by b mod m and store in r: r = (a * b) mod m
  *
- * @param  [in]   a  SP integer to multiply.
- * @param  [in]   b  SP integer to multiply.
- * @param  [in]   m  SP integer that is the modulus.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  b  SP integer to multiply.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -11956,10 +12210,10 @@ static int _sp_mulmod(const sp_int* a, const sp_int* b, const sp_int* m,
 
 /* Multiply a by b mod m and store in r: r = (a * b) mod m
  *
- * @param  [in]   a  SP integer to multiply.
- * @param  [in]   b  SP integer to multiply.
- * @param  [in]   m  SP integer that is the modulus.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  b  SP integer to multiply.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a, b, m or r is NULL; m is 0; or a * b is too big for
@@ -12022,12 +12276,12 @@ int sp_mulmod(const sp_int* a, const sp_int* b, const sp_int* m, sp_int* r)
  *       2.4.2. c = (b - c) mod m
  *  3. NO_INVERSE if u == 0
  *
- * @param  [in]   a  SP integer to find inverse of.
- * @param  [in]   m  SP integer this is the modulus.
- * @param  [in]   u  SP integer to use in calculation.
- * @param  [in]   v  SP integer to use in calculation.
- * @param  [in]   b  SP integer to use in calculation
- * @param  [out]  c  SP integer that is the inverse.
+ * @param [in]  a  SP integer to find inverse of.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [in]  u  SP integer to use in calculation.
+ * @param [in]  v  SP integer to use in calculation.
+ * @param [in]  b  SP integer to use in calculation.
+ * @param [out] c  SP integer that is the inverse.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when no inverse.
@@ -12061,7 +12315,7 @@ static int _sp_invmod_bin(const sp_int* a, const sp_int* m, sp_int* u,
         else if ((v->dp[0] & 1) == 0) {
             /* 2.2.1. v /= 2 */
             _sp_div_2(v, v);
-            /* 2.1.2. c = (c / 2) mod m */
+            /* 2.2.2. c = (c / 2) mod m */
             if (sp_isodd(c)) {
                 _sp_add_off(c, m, c, 0);
             }
@@ -12114,13 +12368,13 @@ static int _sp_invmod_bin(const sp_int* a, const sp_int* m, sp_int* u,
  *  4. If c < 0 then c += m
  *  5. inv = c
  *
- * @param  [in]   a    SP integer to find inverse of.
- * @param  [in]   m    SP integer this is the modulus.
- * @param  [in]   u    SP integer to use in calculation.
- * @param  [in]   v    SP integer to use in calculation.
- * @param  [in]   b    SP integer to use in calculation
- * @param  [in]   c    SP integer to use in calculation
- * @param  [out]  inv  SP integer that is the inverse.
+ * @param [in]  a    SP integer to find inverse of.
+ * @param [in]  m    SP integer that is the modulus.
+ * @param [in]  u    SP integer to use in calculation.
+ * @param [in]  v    SP integer to use in calculation.
+ * @param [in]  b    SP integer to use in calculation.
+ * @param [in]  c    SP integer to use in calculation.
+ * @param [out] inv  SP integer that is the inverse.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when no inverse.
@@ -12140,8 +12394,10 @@ static int _sp_invmod_div(const sp_int* a, const sp_int* m, sp_int* x,
 
     ALLOC_SP_INT(d, m->used + 1, err, NULL);
     if (err == MP_OKAY) {
-        mp_init(d);
+        err = sp_init_size(d, (sp_size_t)(m->used + 1U));
+    }
 
+    if (err == MP_OKAY) {
         /* 1. x = m, y = a, b = 1, c = 0 */
         if (a != y) {
             _sp_copy(a, y);
@@ -12261,9 +12517,9 @@ static int _sp_invmod_div(const sp_int* a, const sp_int* m, sp_int* x,
  *
  * r*a = x*m + 1
  *
- * @param  [in]   a  SP integer to find inverse of.
- * @param  [in]   m  SP integer this is the modulus.
- * @param  [out]  r  SP integer to hold result. r cannot be m.
+ * @param [in]  a  SP integer to find inverse of.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer to hold result. r cannot be m.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when m is even and a divides m evenly.
@@ -12282,7 +12538,7 @@ static int _sp_invmod(const sp_int* a, const sp_int* m, sp_int* r)
      *  - x3 one word larger than modulus
      *  - x1 one word longer than twice modulus used
      */
-    ALLOC_SP_INT_ARRAY(t, m->used + 1, 3, err, NULL);
+    ALLOC_SP_INT_ARRAY(t, m->used + 1U, 3, err, NULL);
     ALLOC_SP_INT(c, 2 * m->used + 1, err, NULL);
     if (err == MP_OKAY) {
         u = t[0];
@@ -12293,16 +12549,16 @@ static int _sp_invmod(const sp_int* a, const sp_int* m, sp_int* r)
 
     /* Initialize intermediate values with minimal sizes. */
     if (err == MP_OKAY) {
-        err = sp_init_size(u, m->used + 1);
+        err = sp_init_size(u, (sp_size_t)(m->used + 1U));
     }
     if (err == MP_OKAY) {
-        err = sp_init_size(v, m->used + 1);
+        err = sp_init_size(v, (sp_size_t)(m->used + 1U));
     }
     if (err == MP_OKAY) {
-        err = sp_init_size(b, m->used + 1);
+        err = sp_init_size(b, (sp_size_t)(m->used + 1U));
     }
     if (err == MP_OKAY) {
-        err = sp_init_size(c, 2 * m->used + 1);
+        err = sp_init_size(c, (sp_size_t)(2U * m->used + 1U));
     }
 
     if (err == MP_OKAY) {
@@ -12367,9 +12623,9 @@ static int _sp_invmod(const sp_int* a, const sp_int* m, sp_int* r)
  *
  * r*a = x*m + 1
  *
- * @param  [in]   a  SP integer to find inverse of.
- * @param  [in]   m  SP integer this is the modulus.
- * @param  [out]  r  SP integer to hold result. r cannot be m.
+ * @param [in]  a  SP integer to find inverse of.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer to hold result. r cannot be m.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a, m or r is NULL; a or m is zero; a and m are even or
@@ -12473,10 +12729,10 @@ int sp_invmod(const sp_int* a, const sp_int* m, sp_int* r)
  *   8. If j > 0 then r = (t * pre[j-1]) mod m
  *   9. Else r = t
  *
- * @param  [in]   a   SP integer, Montgomery form, to find inverse of.
- * @param  [in]   m   SP integer this is the modulus.
- * @param  [out]  r   SP integer to hold result.
- * @param  [in]   mp  SP integer digit that is the bottom digit of inv(-m).
+ * @param [in]  a   SP integer, Montgomery form, to find inverse of.
+ * @param [in]  m   SP integer that is the modulus.
+ * @param [out] r   SP integer to hold result.
+ * @param [in]  mp  SP integer digit that is the bottom digit of inv(-m).
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -12497,21 +12753,22 @@ static int _sp_invmod_mont_ct(const sp_int* a, const sp_int* m, sp_int* r,
 #endif
 
 #ifndef WOLFSSL_SP_NO_MALLOC
-    ALLOC_DYN_SP_INT_ARRAY(pre, m->used * 2 + 1, CT_INV_MOD_PRE_CNT + 2, err,
+    ALLOC_DYN_SP_INT_ARRAY(pre, m->used * 2U + 1U, CT_INV_MOD_PRE_CNT + 2, err,
         NULL);
 #else
-    ALLOC_SP_INT_ARRAY(pre, m->used * 2 + 1, CT_INV_MOD_PRE_CNT + 2, err, NULL);
+    ALLOC_SP_INT_ARRAY(pre, m->used * 2U + 1U, CT_INV_MOD_PRE_CNT + 2, err,
+        NULL);
 #endif
     if (err == MP_OKAY) {
         t = pre[CT_INV_MOD_PRE_CNT + 0];
         e = pre[CT_INV_MOD_PRE_CNT + 1];
         /* Space for sqr and mul result. */
-        _sp_init_size(t, m->used * 2 + 1);
+        _sp_init_size(t, (sp_size_t)(m->used * 2 + 1));
         /* e = mod - 2 */
-        _sp_init_size(e, m->used + 1);
+        _sp_init_size(e, (sp_size_t)(m->used + 1));
 
         /* Create pre-computation results: ((2^(1..8))-1).a. */
-        _sp_init_size(pre[0], m->used * 2 + 1);
+        _sp_init_size(pre[0], (sp_size_t)(m->used * 2 + 1));
         /* 1. pre[0] = 2^0 * a mod m
          *    Start with 1.a = a.
          */
@@ -12522,7 +12779,7 @@ static int _sp_invmod_mont_ct(const sp_int* a, const sp_int* m, sp_int* r,
         for (i = 1; (err == MP_OKAY) && (i < CT_INV_MOD_PRE_CNT); i++) {
             /* 2.1 pre[i-1] = ((pre[i-1] ^ 2) * a) mod m */
             /* Previous value ..1 -> ..10 */
-            _sp_init_size(pre[i], m->used * 2 + 1);
+            _sp_init_size(pre[i], (sp_size_t)(m->used * 2 + 1));
             err = sp_sqr(pre[i-1], pre[i]);
             if (err == MP_OKAY) {
                 err = _sp_mont_red(pre[i], m, mp, 0);
@@ -12644,10 +12901,10 @@ static int _sp_invmod_mont_ct(const sp_int* a, const sp_int* m, sp_int* r,
  * Modulus (m) must be a prime and greater than 2.
  * For prime m, inv = a ^ (m-2) mod m as 1 = a ^ (m-1) mod m.
  *
- * @param  [in]   a   SP integer, Montgomery form, to find inverse of.
- * @param  [in]   m   SP integer this is the modulus.
- * @param  [out]  r   SP integer to hold result.
- * @param  [in]   mp  SP integer digit that is the bottom digit of inv(-m).
+ * @param [in]  a   SP integer, Montgomery form, to find inverse of.
+ * @param [in]  m   SP integer that is the modulus.
+ * @param [out] r   SP integer to hold result.
+ * @param [in]  mp  SP integer digit that is the bottom digit of inv(-m).
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a, m or r is NULL; a is 0 or m is less than 3.
@@ -12699,8 +12956,9 @@ int sp_invmod_mont_ct(const sp_int* a, const sp_int* m, sp_int* r,
 #ifndef WC_PROTECT_ENCRYPTED_MEM
 
 /* Internal. Exponentiates b to the power of e modulo m into r: r = b ^ e mod m
- * Process the exponent one bit at a time.
- * Is constant time and can be cache attack resistant.
+ *
+ * Processes the exponent one bit at a time.
+ * Implementation is constant time and can be cache attack resistant.
  *
  * Algorithm:
  *  b: base, e: exponent, m: modulus, r: result, bits: #bits to use
@@ -12715,12 +12973,12 @@ int sp_invmod_mont_ct(const sp_int* a, const sp_int* m, sp_int* r,
  *   4.5. t[j] = t[j] * b
  *  5. r = t[1]
  *
- * @param  [in]   b     SP integer that is the base.
- * @param  [in]   e     SP integer that is the exponent.
- * @param  [in]   bits  Number of bits in exponent to use. May be greater than
- *                      count of bits in e.
- * @param  [in]   m     SP integer that is the modulus.
- * @param  [out]  r     SP integer to hold result.
+ * @param [in] b     SP integer that is the base.
+ * @param [in] e     SP integer that is the exponent.
+ * @param [in] bits  Number of bits in exponent to use. May be greater than
+ *                   count of bits in e.
+ * @param [in]  m    SP integer that is the modulus.
+ * @param [out] r    SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -12744,14 +13002,14 @@ static int _sp_exptmod_ex(const sp_int* b, const sp_int* e, int bits,
     ALLOC_SP_INT_ARRAY(t, 2 * m->used + 1, 2, err, NULL);
 #else
     /* Working SP int needed when cache resistant. */
-    ALLOC_SP_INT_ARRAY(t, 2 * m->used + 1, 3, err, NULL);
+    ALLOC_SP_INT_ARRAY(t, 2U * m->used + 1U, 3, err, NULL);
 #endif
     if (err == MP_OKAY) {
         /* Initialize temporaries. */
-        _sp_init_size(t[0], 2 * m->used + 1);
-        _sp_init_size(t[1], 2 * m->used + 1);
+        _sp_init_size(t[0], (sp_size_t)(m->used * 2 + 1));
+        _sp_init_size(t[1], (sp_size_t)(m->used * 2 + 1));
     #ifndef WC_NO_CACHE_RESISTANT
-        _sp_init_size(t[2], 2 * m->used + 1);
+        _sp_init_size(t[2], (sp_size_t)(m->used * 2 + 1));
     #endif
 
         /* 2. t[0] = b mod m
@@ -12804,7 +13062,8 @@ static int _sp_exptmod_ex(const sp_int* b, const sp_int* e, int bits,
 
             if (err == MP_OKAY) {
                 /* 4.2. y = e[i] */
-                int y = (int)((e->dp[i >> SP_WORD_SHIFT] >> (i & SP_WORD_MASK)) & 1);
+                int y = (int)((e->dp[i >> SP_WORD_SHIFT] >>
+                               (i & (int)SP_WORD_MASK)) & 1);
                 /* 4.3. j = y & s */
                 int j = y & s;
                 /* 4.4  s = s | y */
@@ -12850,12 +13109,12 @@ static int _sp_exptmod_ex(const sp_int* b, const sp_int* e, int bits,
  *   3.4. t[y] = t[3], t[y^1] = t[2]
  *  4. r = t[0]
  *
- * @param  [in]   b     SP integer that is the base.
- * @param  [in]   e     SP integer that is the exponent.
- * @param  [in]   bits  Number of bits in exponent to use. May be greater than
- *                      count of bits in e.
- * @param  [in]   m     SP integer that is the modulus.
- * @param  [out]  r     SP integer to hold result.
+ * @param [in] b     SP integer that is the base.
+ * @param [in] e     SP integer that is the exponent.
+ * @param [in] bits  Number of bits in exponent to use. May be greater than
+ *                   count of bits in e.
+ * @param [in]  m    SP integer that is the modulus.
+ * @param [out] r    SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -12958,12 +13217,12 @@ static int _sp_exptmod_ex(const sp_int* b, const sp_int* e, int bits,
  *  7. t[1] = FromMont(t[1])
  *  8. r = t[1]
  *
- * @param  [in]   b     SP integer that is the base.
- * @param  [in]   e     SP integer that is the exponent.
- * @param  [in]   bits  Number of bits in exponent to use. May be greater than
- *                      count of bits in e.
- * @param  [in]   m     SP integer that is the modulus.
- * @param  [out]  r     SP integer to hold result.
+ * @param [in] b     SP integer that is the base.
+ * @param [in] e     SP integer that is the exponent.
+ * @param [in] bits  Number of bits in exponent to use. May be greater than
+ *                   count of bits in e.
+ * @param [in]  m    SP integer that is the modulus.
+ * @param [out] r    SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -12976,13 +13235,13 @@ static int _sp_exptmod_mont_ex(const sp_int* b, const sp_int* e, int bits,
     DECL_SP_INT_ARRAY(t, m->used * 2 + 1, 4);
 
     /* Allocate temporaries. */
-    ALLOC_SP_INT_ARRAY(t, m->used * 2 + 1, 4, err, NULL);
+    ALLOC_SP_INT_ARRAY(t, m->used * 2U + 1U, 4, err, NULL);
     if (err == MP_OKAY) {
         /* Initialize temporaries. */
-        _sp_init_size(t[0], m->used * 2 + 1);
-        _sp_init_size(t[1], m->used * 2 + 1);
-        _sp_init_size(t[2], m->used * 2 + 1);
-        _sp_init_size(t[3], m->used * 2 + 1);
+        _sp_init_size(t[0], (sp_size_t)(m->used * 2 + 1));
+        _sp_init_size(t[1], (sp_size_t)(m->used * 2 + 1));
+        _sp_init_size(t[2], (sp_size_t)(m->used * 2 + 1));
+        _sp_init_size(t[3], (sp_size_t)(m->used * 2 + 1));
 
         /* 1. Ensure base is less than modulus. */
         if (_sp_cmp_abs(b, m) != MP_LT) {
@@ -13016,7 +13275,7 @@ static int _sp_exptmod_mont_ex(const sp_int* b, const sp_int* e, int bits,
         }
         if (err == MP_OKAY) {
             /* t[0] = t[0] mod m, temporary size has to be bigger than t[0]. */
-            err = _sp_div(t[0], m, NULL, t[0], t[0]->used + 1);
+            err = _sp_div(t[0], m, NULL, t[0], t[0]->used + 1U);
         }
         if (err == MP_OKAY) {
             /* 4. t[1] = t[0]
@@ -13043,7 +13302,8 @@ static int _sp_exptmod_mont_ex(const sp_int* b, const sp_int* e, int bits,
 
             if (err == MP_OKAY) {
                 /* 6.2. y = e[i] */
-                int y = (int)((e->dp[i >> SP_WORD_SHIFT] >> (i & SP_WORD_MASK)) & 1);
+                int y = (int)((e->dp[i >> SP_WORD_SHIFT] >>
+                               (i & (int)SP_WORD_MASK)) & 1);
                 /* 6.3  j = y & s */
                 int j = y & s;
                 /* 6.4  s = s | y */
@@ -13099,12 +13359,12 @@ static int _sp_exptmod_mont_ex(const sp_int* b, const sp_int* e, int bits,
  *  5. t[0] = FromMont(t[0])
  *  6. r = t[0]
  *
- * @param  [in]   b     SP integer that is the base.
- * @param  [in]   e     SP integer that is the exponent.
- * @param  [in]   bits  Number of bits in exponent to use. May be greater than
- *                      count of bits in e.
- * @param  [in]   m     SP integer that is the modulus.
- * @param  [out]  r     SP integer to hold result.
+ * @param [in] b     SP integer that is the base.
+ * @param [in] e     SP integer that is the exponent.
+ * @param [in] bits  Number of bits in exponent to use. May be greater than
+ *                   count of bits in e.
+ * @param [in]  m    SP integer that is the modulus.
+ * @param [out] r    SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -13230,12 +13490,12 @@ static int _sp_exptmod_mont_ex(const sp_int* b, const sp_int* e, int bits,
  *  7. tr = FromMont(tr)
  *  8. r = tr
  *
- * @param  [in]   b     SP integer that is the base.
- * @param  [in]   e     SP integer that is the exponent.
- * @param  [in]   bits  Number of bits in exponent to use. May be greater than
- *                      count of bits in e.
- * @param  [in]   m     SP integer that is the modulus.
- * @param  [out]  r     SP integer to hold result.
+ * @param [in] b     SP integer that is the base.
+ * @param [in] e     SP integer that is the exponent.
+ * @param [in] bits  Number of bits in exponent to use. May be greater than
+ *                   count of bits in e.
+ * @param [in]  m    SP integer that is the modulus.
+ * @param [out] r    SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -13453,8 +13713,8 @@ static int _sp_exptmod_mont_ex(const sp_int* b, const sp_int* e, int bits,
 /* Internal. Exponentiates 2 to the power of e modulo m into r: r = 2 ^ e mod m
  * Is constant time and cache attack resistant.
  *
- * Calculates value to make mod operations constant time expect when
- * WC_NO_HARDERN defined or modulus fits in one word.
+ * Calculates value to make mod operations constant time except when
+ * WC_NO_HARDEN defined or modulus fits in one word.
  *
  * Algorithm:
  *  b: base, e: exponent, m: modulus, r: result, bits: #bits to use
@@ -13473,11 +13733,11 @@ static int _sp_exptmod_mont_ex(const sp_int* b, const sp_int* e, int bits,
  *  7. if Words(m) > 1 then tr = FromMont(tr)
  *  8. r = tr
  *
- * @param  [in]   e       SP integer that is the exponent.
- * @param  [in]   digits  Number of digits in base to use. May be greater than
- *                        count of bits in b.
- * @param  [in]   m       SP integer that is the modulus.
- * @param  [out]  r       SP integer to hold result.
+ * @param [in] e       SP integer that is the exponent.
+ * @param [in] digits  Number of digits in exponent to use. May be greater than
+ *                     count of digits in e.
+ * @param [in]  m      SP integer that is the modulus.
+ * @param [out] r      SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -13511,19 +13771,19 @@ static int _sp_exptmod_base_2(const sp_int* e, int digits, const sp_int* m,
      *  - constant time add value for mod operation
      *  - temporary result
      */
-    ALLOC_SP_INT_ARRAY(d, m->used * 2 + 1, 2, err, NULL);
+    ALLOC_SP_INT_ARRAY(d, m->used * 2U + 1U, 2, err, NULL);
 #else
     /* Allocate sp_int for temporary result. */
-    ALLOC_SP_INT(tr, m->used * 2 + 1, err, NULL);
+    ALLOC_SP_INT(tr, m->used * 2U + 1U, err, NULL);
 #endif
     if (err == MP_OKAY) {
     #ifndef WC_NO_HARDEN
         a  = d[0];
         tr = d[1];
 
-        _sp_init_size(a, m->used * 2 + 1);
+        _sp_init_size(a, (sp_size_t)(m->used * 2 + 1));
     #endif
-        _sp_init_size(tr, m->used * 2 + 1);
+        _sp_init_size(tr, (sp_size_t)(m->used * 2 + 1));
 
     }
 
@@ -13664,7 +13924,7 @@ static int _sp_exptmod_base_2(const sp_int* e, int digits, const sp_int* m,
 #ifndef WC_NO_HARDEN
     FREE_SP_INT_ARRAY(d, NULL);
 #else
-    FREE_SP_INT(tr, m->used * 2 + 1);
+    FREE_SP_INT(tr, NULL);
 #endif
     return err;
 }
@@ -13677,12 +13937,12 @@ static int _sp_exptmod_base_2(const sp_int* e, int digits, const sp_int* m,
  *
  * Error returned when parameters r == e or r == m and base >= modulus.
  *
- * @param  [in]   b       SP integer that is the base.
- * @param  [in]   e       SP integer that is the exponent.
- * @param  [in]   digits  Number of digits in exponent to use. May be greater
- *                        than count of digits in e.
- * @param  [in]   m       SP integer that is the modulus.
- * @param  [out]  r       SP integer to hold result.
+ * @param [in] b       SP integer that is the base.
+ * @param [in] e       SP integer that is the exponent.
+ * @param [in] digits  Number of digits in exponent to use. May be greater
+ *                     than count of digits in e.
+ * @param [in]  m      SP integer that is the modulus.
+ * @param [out] r      SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when b, e, m or r is NULL, digits is negative, or m <= 0 or
@@ -13762,7 +14022,8 @@ int sp_exptmod_ex(const sp_int* b, const sp_int* e, int digits, const sp_int* m,
     if ((!done) && (err == MP_OKAY)) {
         /* Use code optimized for specific sizes if possible */
 #if (defined(WOLFSSL_SP_MATH) || defined(WOLFSSL_SP_MATH_ALL)) && \
-    (defined(WOLFSSL_HAVE_SP_RSA) || defined(WOLFSSL_HAVE_SP_DH))
+    ((defined(WOLFSSL_HAVE_SP_RSA) && !defined(WOLFSSL_RSA_PUBLIC_ONLY)) || \
+        defined(WOLFSSL_HAVE_SP_DH))
     #ifndef WOLFSSL_SP_NO_2048
         if ((mBits == 1024) && sp_isodd(m) && (bBits <= 1024) &&
                 (eBits <= 1024)) {
@@ -13859,10 +14120,10 @@ int sp_exptmod_ex(const sp_int* b, const sp_int* e, int digits, const sp_int* m,
     defined(OPENSSL_ALL)
 /* Exponentiates b to the power of e modulo m into r: r = b ^ e mod m
  *
- * @param  [in]   b  SP integer that is the base.
- * @param  [in]   e  SP integer that is the exponent.
- * @param  [in]   m  SP integer that is the modulus.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  b  SP integer that is the base.
+ * @param [in]  e  SP integer that is the exponent.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when b, e, m or r is NULL; or m <= 0 or e is negative.
@@ -13898,27 +14159,27 @@ int sp_exptmod(const sp_int* b, const sp_int* e, const sp_int* m, sp_int* r)
  *   1. Ensure base is less than modulus.
  *   2. Convert base to Montgomery form
  *   3. Set result to table entry for top window bits, or
- *      if less than windows bits in exponent, 1 in Montgomery form.
+ *      if less than window bits in exponent, 1 in Montgomery form.
  *   4. While at least window bits left:
- *     4.1. Count number of and skip leading 0 bits unless less then window bits
- *          left.
+ *     4.1. Count number of bits and skip leading 0 bits unless less than window
+ *          bits left.
  *     4.2. Montgomery square result for each leading 0 and window bits if bits
  *          left.
  *     4.3. Break if less than window bits left.
- *     4.4. Get top window bits from expononent and drop.
+ *     4.4. Get top window bits from exponent and drop.
  *     4.5. Montgomery multiply result by table entry.
  *   5. While bits left:
- *     5.1. Montogmery square result
+ *     5.1. Montgomery square result
  *     5.2. If exponent bit set
  *       5.2.1. Montgomery multiply result by Montgomery form of base.
  *   6. Convert result back from Montgomery form.
  *
- * @param  [in]   b     SP integer that is the base.
- * @param  [in]   e     SP integer that is the exponent.
- * @param  [in]   bits  Number of bits in exponent to use. May be greater than
- *                      count of bits in e.
- * @param  [in]   m     SP integer that is the modulus.
- * @param  [out]  r     SP integer to hold result.
+ * @param [in] b     SP integer that is the base.
+ * @param [in] e     SP integer that is the exponent.
+ * @param [in] bits  Number of bits in exponent to use. May be greater than
+ *                   count of bits in e.
+ * @param [in]  m    SP integer that is the modulus.
+ * @param [out] r    SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -13952,7 +14213,7 @@ static int _sp_exptmod_nct(const sp_int* b, const sp_int* e, const sp_int* m,
         winBits = 6;
     }
     else if (bits <= 21) {
-        winBits = 1;
+        winBits = 2;
     }
     else if (bits <= 36) {
         winBits = 3;
@@ -13972,9 +14233,9 @@ static int _sp_exptmod_nct(const sp_int* b, const sp_int* e, const sp_int* m,
      *  - Montgomery form of base
      */
 #ifndef WOLFSSL_SP_NO_MALLOC
-    ALLOC_DYN_SP_INT_ARRAY(t, m->used * 2 + 1, (size_t)preCnt + 2, err, NULL);
+    ALLOC_DYN_SP_INT_ARRAY(t, m->used * 2U + 1U, (size_t)preCnt + 2, err, NULL);
 #else
-    ALLOC_SP_INT_ARRAY(t, m->used * 2 + 1, (size_t)preCnt + 2, err, NULL);
+    ALLOC_SP_INT_ARRAY(t, m->used * 2U + 1U, (size_t)preCnt + 2, err, NULL);
 #endif
     if (err == MP_OKAY) {
         /* Set variables to use allocate memory. */
@@ -13983,10 +14244,10 @@ static int _sp_exptmod_nct(const sp_int* b, const sp_int* e, const sp_int* m,
 
         /* Initialize all allocated  */
         for (i = 0; i < preCnt; i++) {
-            _sp_init_size(t[i], m->used * 2 + 1);
+            _sp_init_size(t[i], (sp_size_t)(m->used * 2 + 1));
         }
-        _sp_init_size(tr, m->used * 2 + 1);
-        _sp_init_size(bm, m->used * 2 + 1);
+        _sp_init_size(tr, (sp_size_t)(m->used * 2 + 1));
+        _sp_init_size(bm, (sp_size_t)(m->used * 2 + 1));
 
         /* 1. Ensure base is less than modulus. */
         if (_sp_cmp_abs(b, m) != MP_LT) {
@@ -13998,7 +14259,7 @@ static int _sp_exptmod_nct(const sp_int* b, const sp_int* e, const sp_int* m,
             }
         }
         else {
-            /* Copy base into Montogmery base variable. */
+            /* Copy base into Montgomery base variable. */
             _sp_copy(b, bm);
         }
     }
@@ -14018,7 +14279,7 @@ static int _sp_exptmod_nct(const sp_int* b, const sp_int* e, const sp_int* m,
         }
         if (err == MP_OKAY) {
             /* bm = bm mod m, temporary size has to be bigger than bm->used. */
-            err = _sp_div(bm, m, NULL, bm, bm->used + 1);
+            err = _sp_div(bm, m, NULL, bm, bm->used + 1U);
         }
         if (err == MP_OKAY) {
             /* Copy Montgomery form of base into first element of table. */
@@ -14041,7 +14302,7 @@ static int _sp_exptmod_nct(const sp_int* b, const sp_int* e, const sp_int* m,
         }
 
         /* 3. Set result to table entry for top window bits, or
-         *    if less than windows bits in exponent, 1 in Montgomery form.
+         *    if less than window bits in exponent, 1 in Montgomery form.
          */
         if (err == MP_OKAY) {
             sp_int_digit n;
@@ -14087,7 +14348,7 @@ static int _sp_exptmod_nct(const sp_int* b, const sp_int* e, const sp_int* m,
                 /* Number of squares to before due to top bits being 0. */
                 int sqrs = 0;
 
-                /* 4.1. Count number of and skip leading 0 bits unless less
+                /* 4.1. Count number of bits and skip leading 0 bits unless less
                  *      than window bits.
                  */
                 do {
@@ -14172,7 +14433,7 @@ static int _sp_exptmod_nct(const sp_int* b, const sp_int* e, const sp_int* m,
                 n = e->dp[0];
                 /*  5. While bits left: */
                 for (--c; (err == MP_OKAY) && (c >= 0); c--) {
-                    /* 5.1. Montogmery square result */
+                    /* 5.1. Montgomery square result */
                     err = sp_sqr(tr, tr);
                     if (err == MP_OKAY) {
                         err = _sp_mont_red(tr, m, mp, 0);
@@ -14218,15 +14479,15 @@ static int _sp_exptmod_nct(const sp_int* b, const sp_int* e, const sp_int* m,
  *   1. Convert base to Montgomery form
  *   2. Set result to base (assumes exponent is not zero)
  *   3. For each bit in exponent starting at second highest
- *     3.1. Montogmery square result
+ *     3.1. Montgomery square result
  *     3.2. If exponent bit set
  *       3.2.1. Montgomery multiply result by Montgomery form of base.
  *   4. Convert result back from Montgomery form.
  *
- * @param  [in]   b  SP integer that is the base.
- * @param  [in]   e  SP integer that is the exponent.
- * @param  [in]   m  SP integer that is the modulus.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  b  SP integer that is the base.
+ * @param [in]  e  SP integer that is the exponent.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when b, e, m or r is NULL; or m <= 0 or e is negative.
@@ -14323,10 +14584,10 @@ static int _sp_exptmod_nct(const sp_int* b, const sp_int* e, const sp_int* m,
 /* Exponentiates b to the power of e modulo m into r: r = b ^ e mod m
  * Non-constant time implementation.
  *
- * @param  [in]   b  SP integer that is the base.
- * @param  [in]   e  SP integer that is the exponent.
- * @param  [in]   m  SP integer that is the modulus.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  b  SP integer that is the base.
+ * @param [in]  e  SP integer that is the exponent.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when b, e, m or r is NULL; or m <= 0 or e is negative.
@@ -14402,11 +14663,11 @@ int sp_exptmod_nct(const sp_int* b, const sp_int* e, const sp_int* m, sp_int* r)
 #if defined(WOLFSSL_SP_MATH_ALL) && !defined(WOLFSSL_RSA_VERIFY_ONLY)
 /* Divide by 2^e: r = a >> e and rem = bits shifted out
  *
- * @param  [in]   a    SP integer to divide.
- * @param  [in]   e    Exponent bits (dividing by 2^e).
- * @param  [in]   m    SP integer that is the modulus.
- * @param  [out]  r    SP integer to hold result.
- * @param  [out]  rem  SP integer to hold remainder.
+ * @param [in]  a    SP integer to divide.
+ * @param [in]  e    Exponent bits (dividing by 2^e).
+ * @param [in]  m    SP integer that is the modulus.
+ * @param [out] r    SP integer to hold result.
+ * @param [out] rem  SP integer to hold remainder.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a is NULL or e is negative.
@@ -14432,7 +14693,7 @@ int sp_div_2d(const sp_int* a, int e, sp_int* r, sp_int* rem)
         }
         else {
             if (rem != NULL) {
-                /* Copy a in to remainder. */
+                /* Copy a into remainder. */
                 err = sp_copy(a, rem);
             }
             if (err == MP_OKAY) {
@@ -14441,8 +14702,8 @@ int sp_div_2d(const sp_int* a, int e, sp_int* r, sp_int* rem)
             }
             if ((err == MP_OKAY) && (rem != NULL)) {
                 /* Set used and mask off top digit of remainder. */
-                rem->used = ((unsigned int)e + SP_WORD_SIZE - 1) >>
-                    SP_WORD_SHIFT;
+                rem->used = (sp_size_t)((e + SP_WORD_SIZE - 1) >>
+                                        SP_WORD_SHIFT);
                 e &= SP_WORD_MASK;
                 if (e > 0) {
                     rem->dp[rem->used - 1] &= ((sp_int_digit)1 << e) - 1;
@@ -14465,9 +14726,9 @@ int sp_div_2d(const sp_int* a, int e, sp_int* r, sp_int* rem)
     defined(HAVE_ECC)
 /* The bottom e bits: r = a & ((1 << e) - 1)
  *
- * @param  [in]   a  SP integer to reduce.
- * @param  [in]   e  Modulus bits (modulus equals 2^e).
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  a  SP integer to reduce.
+ * @param [in]  e  Modulus bits (modulus equals 2^e).
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a or r is NULL, e is negative or e is too large for
@@ -14476,7 +14737,7 @@ int sp_div_2d(const sp_int* a, int e, sp_int* r, sp_int* rem)
 int sp_mod_2d(const sp_int* a, int e, sp_int* r)
 {
     int err = MP_OKAY;
-    unsigned int digits = ((unsigned int)e + SP_WORD_SIZE - 1) >> SP_WORD_SHIFT;
+    sp_size_t digits = (sp_size_t)((e + SP_WORD_SIZE - 1) >> SP_WORD_SHIFT);
 
     if ((a == NULL) || (r == NULL) || (e < 0)) {
         err = MP_VAL;
@@ -14488,7 +14749,7 @@ int sp_mod_2d(const sp_int* a, int e, sp_int* r)
     if (err == MP_OKAY) {
         /* Copy a into r if not same pointer. */
         if (a != r) {
-            XMEMCPY(r->dp, a->dp, digits * SP_WORD_SIZEOF);
+            XMEMCPY(r->dp, a->dp, digits * (word32)SP_WORD_SIZEOF);
             r->used = a->used;
         #ifdef WOLFSSL_SP_INT_NEGATIVE
             r->sign = a->sign;
@@ -14538,9 +14799,9 @@ int sp_mod_2d(const sp_int* a, int e, sp_int* r)
     !defined(NO_DH))) || defined(OPENSSL_ALL)
 /* Multiply by 2^e: r = a << e
  *
- * @param  [in]   a  SP integer to multiply.
- * @param  [in]   e  Multiplier bits (multiplier equals 2^e).
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  a  SP integer to multiply.
+ * @param [in]  e  Multiplier bits (multiplier equals 2^e).
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a or r is NULL, e is negative, or result is too big for
@@ -14555,9 +14816,10 @@ int sp_mul_2d(const sp_int* a, int e, sp_int* r)
         err = MP_VAL;
     }
 
-    /* Ensure result has enough allocated digits for result. */
+    /* Ensure r has enough allocated digits for result. */
     if ((err == MP_OKAY) &&
-            ((unsigned int)(sp_count_bits(a) + e) > r->size * SP_WORD_SIZE)) {
+            ((unsigned int)(sp_count_bits(a) + e) >
+             (unsigned int)r->size * SP_WORD_SIZE)) {
         err = MP_VAL;
     }
 
@@ -14598,8 +14860,8 @@ int sp_mul_2d(const sp_int* a, int e, sp_int* r)
 #ifdef SQR_MUL_ASM
 /* Square a and store in r. r = a * a
  *
- * @param  [in]   a  SP integer to square.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to square.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -14607,13 +14869,12 @@ int sp_mul_2d(const sp_int* a, int e, sp_int* r)
 static int _sp_sqr(const sp_int* a, sp_int* r)
 {
     int err = MP_OKAY;
-    unsigned int i;
+    sp_size_t i;
     int j;
-    unsigned int k;
+    sp_size_t k;
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
     sp_int_digit* t = NULL;
-#elif defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) && \
-    !defined(WOLFSSL_SP_NO_DYN_STACK)
+#elif defined(WOLFSSL_SP_DYN_STACK)
     sp_int_digit t[((a->used + 1) / 2) * 2 + 1];
 #else
     sp_int_digit t[(SP_INT_DIGITS + 1) / 2];
@@ -14621,7 +14882,7 @@ static int _sp_sqr(const sp_int* a, sp_int* r)
 
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
     t = (sp_int_digit*)XMALLOC(
-        sizeof(sp_int_digit) * (((a->used + 1) / 2) * 2 + 1), NULL,
+        sizeof(sp_int_digit) * (size_t)(((a->used + 1) / 2) * 2 + 1), NULL,
         DYNAMIC_TYPE_BIGINT);
     if (t == NULL) {
         err = MP_MEM;
@@ -14649,7 +14910,7 @@ static int _sp_sqr(const sp_int* a, sp_int* r)
         t[0] = h;
         h = 0;
         o = 0;
-        for (k = 1; k < (a->used + 1) / 2; k++) {
+        for (k = 1; k < (sp_size_t)((a->used + 1) / 2); k++) {
             i = k;
             j = (int)(k - 1);
             for (; (j >= 0); i++, j--) {
@@ -14661,7 +14922,7 @@ static int _sp_sqr(const sp_int* a, sp_int* r)
             o = 0;
 
             SP_ASM_SQR_ADD(l, h, o, a->dp[k]);
-            i = k + 1;
+            i = (sp_size_t)(k + 1);
             j = (int)(k - 1);
             for (; (j >= 0); i++, j--) {
                 SP_ASM_MUL_ADD2(l, h, o, a->dp[i], a->dp[j]);
@@ -14683,7 +14944,7 @@ static int _sp_sqr(const sp_int* a, sp_int* r)
             o = 0;
 
             SP_ASM_SQR_ADD(l, h, o, a->dp[k]);
-            i = k + 1;
+            i = (sp_size_t)(k + 1);
             j = (int)(k - 1);
             for (; (i < a->used); i++, j--) {
                 SP_ASM_MUL_ADD2(l, h, o, a->dp[i], a->dp[j]);
@@ -14696,26 +14957,25 @@ static int _sp_sqr(const sp_int* a, sp_int* r)
             p = r->dp;
         }
         r->dp[k * 2 - 1] = l;
-        XMEMCPY(r->dp, t, (((a->used + 1) / 2) * 2 + 1) * sizeof(sp_int_digit));
+        XMEMCPY(r->dp, t, (size_t)(((a->used + 1) / 2) * 2 + 1) *
+            sizeof(sp_int_digit));
     }
 
     if (err == MP_OKAY) {
-        r->used = a->used * 2;
+        r->used = (sp_size_t)(a->used * 2U);
         sp_clamp(r);
     }
 
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
-    if (t != NULL) {
-        XFREE(t, NULL, DYNAMIC_TYPE_BIGINT);
-    }
+    XFREE(t, NULL, DYNAMIC_TYPE_BIGINT);
 #endif
     return err;
 }
 #else /* !SQR_MUL_ASM */
 /* Square a and store in r. r = a * a
  *
- * @param  [in]   a  SP integer to square.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to square.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -14723,21 +14983,20 @@ static int _sp_sqr(const sp_int* a, sp_int* r)
 static int _sp_sqr(const sp_int* a, sp_int* r)
 {
     int err = MP_OKAY;
-    unsigned int i;
+    sp_size_t i;
     int j;
-    unsigned int k;
+    sp_size_t k;
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
     sp_int_digit* t = NULL;
-#elif defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) && \
-    !defined(WOLFSSL_SP_NO_DYN_STACK)
+#elif defined(WOLFSSL_SP_DYN_STACK)
     sp_int_digit t[a->used * 2];
 #else
     sp_int_digit t[SP_INT_DIGITS];
 #endif
 
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
-    t = (sp_int_digit*)XMALLOC(sizeof(sp_int_digit) * (a->used * 2), NULL,
-        DYNAMIC_TYPE_BIGINT);
+    t = (sp_int_digit*)XMALLOC(sizeof(sp_int_digit) * (size_t)(a->used * 2),
+        NULL, DYNAMIC_TYPE_BIGINT);
     if (t == NULL) {
         err = MP_MEM;
     }
@@ -14763,7 +15022,7 @@ static int _sp_sqr(const sp_int* a, sp_int* r)
     #ifdef SP_WORD_OVERFLOW
         o = 0;
     #endif
-        for (k = 1; k <= (a->used - 1) * 2; k++) {
+        for (k = 1; k <= (sp_size_t)((a->used - 1) * 2); k++) {
             i = k / 2;
             j = (int)(k - i);
             if (i == (unsigned int)j) {
@@ -14806,15 +15065,13 @@ static int _sp_sqr(const sp_int* a, sp_int* r)
         #endif
         }
         t[k] = (sp_int_digit)l;
-        r->used = k + 1;
+        r->used = (sp_size_t)(k + 1);
         XMEMCPY(r->dp, t, r->used * sizeof(sp_int_digit));
         sp_clamp(r);
     }
 
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
-    if (t != NULL) {
-        XFREE(t, NULL, DYNAMIC_TYPE_BIGINT);
-    }
+    XFREE(t, NULL, DYNAMIC_TYPE_BIGINT);
 #endif
     return err;
 }
@@ -14829,8 +15086,8 @@ static int _sp_sqr(const sp_int* a, sp_int* r)
  *
  * Long-hand implementation.
  *
- * @param  [in]   a  SP integer to square.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to square.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -14926,9 +15183,7 @@ static int _sp_sqr_4(const sp_int* a, sp_int* r)
     }
 
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
-    if (w != NULL) {
-        XFREE(w, NULL, DYNAMIC_TYPE_BIGINT);
-    }
+    XFREE(w, NULL, DYNAMIC_TYPE_BIGINT);
 #endif
     return err;
 }
@@ -14937,8 +15192,8 @@ static int _sp_sqr_4(const sp_int* a, sp_int* r)
  *
  * Comba implementation.
  *
- * @param  [in]   a  SP integer to square.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to square.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -14997,8 +15252,8 @@ static int _sp_sqr_4(const sp_int* a, sp_int* r)
  *
  * Comba implementation.
  *
- * @param  [in]   a  SP integer to square.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to square.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -15092,8 +15347,8 @@ static int _sp_sqr_6(const sp_int* a, sp_int* r)
  *
  * Comba implementation.
  *
- * @param  [in]   a  SP integer to square.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to square.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -15222,8 +15477,8 @@ static int _sp_sqr_8(const sp_int* a, sp_int* r)
  *
  * Comba implementation.
  *
- * @param  [in]   a  SP integer to square.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to square.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -15438,8 +15693,8 @@ static int _sp_sqr_12(const sp_int* a, sp_int* r)
  *
  * Comba implementation.
  *
- * @param  [in]   a  SP integer to square.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to square.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -15753,9 +16008,7 @@ static int _sp_sqr_16(const sp_int* a, sp_int* r)
     }
 
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
-    if (t != NULL) {
-        XFREE(t, NULL, DYNAMIC_TYPE_BIGINT);
-    }
+    XFREE(t, NULL, DYNAMIC_TYPE_BIGINT);
 #endif
     return err;
 }
@@ -15769,8 +16022,8 @@ static int _sp_sqr_16(const sp_int* a, sp_int* r)
  *
  * Comba implementation.
  *
- * @param  [in]   a  SP integer to square.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to square.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -16328,9 +16581,7 @@ static int _sp_sqr_24(const sp_int* a, sp_int* r)
     }
 
 #if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SP_NO_MALLOC)
-    if (t != NULL) {
-        XFREE(t, NULL, DYNAMIC_TYPE_BIGINT);
-    }
+    XFREE(t, NULL, DYNAMIC_TYPE_BIGINT);
 #endif
     return err;
 }
@@ -16341,8 +16592,8 @@ static int _sp_sqr_24(const sp_int* a, sp_int* r)
  *
  * Karatsuba implementation.
  *
- * @param  [in]   a  SP integer to square.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to square.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -16416,7 +16667,7 @@ static int _sp_sqr_32(const sp_int* a, sp_int* r)
             }
         }
         z1->dp[32] += l;
-        /* z1 = z1 - z0 - z1 */
+        /* z1 = z1 - z0 - z2 */
         l = z1->dp[0];
         h = 0;
         SP_ASM_SUBB(l, h, z0->dp[0]);
@@ -16480,8 +16731,8 @@ static int _sp_sqr_32(const sp_int* a, sp_int* r)
  *
  * Karatsuba implementation.
  *
- * @param  [in]   a  SP integer to square.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to square.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -16555,7 +16806,7 @@ static int _sp_sqr_48(const sp_int* a, sp_int* r)
             }
         }
         z1->dp[48] += l;
-        /* z1 = z1 - z0 - z1 */
+        /* z1 = z1 - z0 - z2 */
         l = z1->dp[0];
         h = 0;
         SP_ASM_SUBB(l, h, z0->dp[0]);
@@ -16572,7 +16823,7 @@ static int _sp_sqr_48(const sp_int* a, sp_int* r)
             h = 0;
         }
         z1->dp[i] += l;
-        /* r += z1 << 16 */
+        /* r += z1 << 24 */
         l = 0;
         h = 0;
         for (i = 0; i < 24; i++) {
@@ -16619,8 +16870,8 @@ static int _sp_sqr_48(const sp_int* a, sp_int* r)
  *
  * Karatsuba implementation.
  *
- * @param  [in]   a  SP integer to square.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to square.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -16694,7 +16945,7 @@ static int _sp_sqr_64(const sp_int* a, sp_int* r)
             }
         }
         z1->dp[64] += l;
-        /* z1 = z1 - z0 - z1 */
+        /* z1 = z1 - z0 - z2 */
         l = z1->dp[0];
         h = 0;
         SP_ASM_SUBB(l, h, z0->dp[0]);
@@ -16711,7 +16962,7 @@ static int _sp_sqr_64(const sp_int* a, sp_int* r)
             h = 0;
         }
         z1->dp[i] += l;
-        /* r += z1 << 16 */
+        /* r += z1 << 32 */
         l = 0;
         h = 0;
         for (i = 0; i < 32; i++) {
@@ -16758,8 +17009,8 @@ static int _sp_sqr_64(const sp_int* a, sp_int* r)
  *
  * Karatsuba implementation.
  *
- * @param  [in]   a  SP integer to square.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to square.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -16833,7 +17084,7 @@ static int _sp_sqr_96(const sp_int* a, sp_int* r)
             }
         }
         z1->dp[96] += l;
-        /* z1 = z1 - z0 - z1 */
+        /* z1 = z1 - z0 - z2 */
         l = z1->dp[0];
         h = 0;
         SP_ASM_SUBB(l, h, z0->dp[0]);
@@ -16850,7 +17101,7 @@ static int _sp_sqr_96(const sp_int* a, sp_int* r)
             h = 0;
         }
         z1->dp[i] += l;
-        /* r += z1 << 16 */
+        /* r += z1 << 48 */
         l = 0;
         h = 0;
         for (i = 0; i < 48; i++) {
@@ -16897,8 +17148,8 @@ static int _sp_sqr_96(const sp_int* a, sp_int* r)
 
 /* Square a and store in r. r = a * a
  *
- * @param  [in]   a  SP integer to square.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to square.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a or r is NULL, or the result will be too big for fixed
@@ -17038,9 +17289,9 @@ int sp_sqr(const sp_int* a, sp_int* r)
     !defined(WOLFSSL_RSA_PUBLIC_ONLY)) || !defined(NO_DH) || defined(HAVE_ECC)
 /* Square a mod m and store in r: r = (a * a) mod m
  *
- * @param  [in]   a  SP integer to square.
- * @param  [in]   m  SP integer that is the modulus.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to square.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -17053,7 +17304,7 @@ static int _sp_sqrmod(const sp_int* a, const sp_int* m, sp_int* r)
 
     ALLOC_SP_INT(t, a->used * 2, err, NULL);
     if (err == MP_OKAY) {
-        err = sp_init_size(t, a->used * 2);
+        err = sp_init_size(t, a->used * 2U);
     }
 
     /* Square and reduce. */
@@ -17071,9 +17322,9 @@ static int _sp_sqrmod(const sp_int* a, const sp_int* m, sp_int* r)
 
 /* Square a mod m and store in r: r = (a * a) mod m
  *
- * @param  [in]   a  SP integer to square.
- * @param  [in]   m  SP integer that is the modulus.
- * @param  [out]  r  SP integer result.
+ * @param [in]  a  SP integer to square.
+ * @param [in]  m  SP integer that is the modulus.
+ * @param [out] r  SP integer result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a, m or r is NULL; or m is 0; or a squared is too big
@@ -17141,10 +17392,10 @@ int sp_sqrmod(const sp_int* a, const sp_int* m, sp_int* r)
  * 3. a >>= NumBits(m)
  * 4. a = a % m
  *
- * @param  [in,out]  a   SP integer to Montgomery reduce.
- * @param  [in]      m   SP integer that is the modulus.
- * @param  [in]      mp  SP integer digit that is the bottom digit of inv(-m).
- * @param  [in]      ct  Indicates operation must be constant time.
+ * @param [in, out] a   SP integer to Montgomery reduce.
+ * @param [in]      m   SP integer that is the modulus.
+ * @param [in]      mp  SP integer digit that is the bottom digit of inv(-m).
+ * @param [in]      ct  Indicates operation must be constant time.
  *
  * @return  MP_OKAY on success.
  */
@@ -17167,7 +17418,7 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
     /* Adding numbers into m->used * 2 digits - zero out unused digits. */
 #ifndef WOLFSSL_NO_CT_OPS
     if (ct) {
-        for (i = 0; i < m->used * 2; i++) {
+        for (i = 0; i < (unsigned int)m->used * 2; i++) {
             a->dp[i] &=
                 (sp_int_digit)
                 (sp_int_sdigit)ctMaskIntGTE((int)(a->used-1), (int)i);
@@ -17176,7 +17427,7 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
     else
 #endif /* !WOLFSSL_NO_CT_OPS */
     {
-        for (i = a->used; i < m->used * 2; i++) {
+        for (i = a->used; i < (unsigned int)m->used * 2; i++) {
             a->dp[i] = 0;
         }
     }
@@ -17202,7 +17453,7 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
         /* 1. mask = (1 << (NumBits(m) % WORD_SIZE)) - 1
          *    Mask when last digit of modulus doesn't have highest bit set.
          */
-        sp_int_digit mask = (sp_int_digit)
+        volatile sp_int_digit mask = (sp_int_digit)
             (((sp_int_digit)1 << (bits & (SP_WORD_SIZE - 1))) - 1);
         /* Overflow. */
         sp_int_word o = 0;
@@ -17214,7 +17465,7 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
             /* 2.1. mu = (mp * DigitMask(a, i)) & WORD_MASK */
             mu = mp * a->dp[i];
             /* 2.2. If i == NumDigits(m)-1 and mask != 0 then mu & = mask */
-            if ((i == m->used - 1) && (mask != 0)) {
+            if ((i == (unsigned int)m->used - 1) && (mask != 0)) {
                 mu &= mask;
             }
 
@@ -17224,7 +17475,7 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
             a->dp[i] = (sp_int_digit)w;
             w >>= SP_WORD_SIZE;
             /* 2.4. For j = 1 up to NumDigits(m)-2 */
-            for (j = 1; j < m->used - 1; j++) {
+            for (j = 1; j < (unsigned int)m->used - 1; j++) {
                 /* 2.4.1 a += mu * DigitMask(m, j) */
                 w += a->dp[i + j];
                 w += (sp_int_word)mu * m->dp[j];
@@ -17246,7 +17497,7 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
         a->dp[m->used * 2 - 1] = (sp_int_digit)o;
         o >>= SP_WORD_SIZE;
         a->dp[m->used * 2] = (sp_int_digit)o;
-        a->used = m->used * 2 + 1;
+        a->used = (sp_size_t)(m->used * 2 + 1);
     }
 
     if (!ct) {
@@ -17268,7 +17519,7 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
         /* 4. a = a mod m
          * Always subtract but at a too high offset if a is less than m.
          */
-        _sp_submod_ct(a, m, m, m->used + 1, a);
+        _sp_submod_ct(a, m, m, m->used + 1U, a);
     }
 
 
@@ -17283,7 +17534,7 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
     int bits;
     sp_int_digit mu;
     sp_int_digit o;
-    sp_int_digit mask;
+    volatile sp_int_digit mask;
 
 #if 0
     sp_print(a, "a");
@@ -17295,7 +17546,7 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
 
 #ifndef WOLFSSL_NO_CT_OPS
     if (ct) {
-        for (i = 0; i < m->used * 2; i++) {
+        for (i = 0; i < (unsigned int)m->used * 2; i++) {
             a->dp[i] &=
                 (sp_int_digit)
                 (sp_int_sdigit)ctMaskIntGTE((int)(a->used-1), (int)i);
@@ -17304,7 +17555,7 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
     else
 #endif
     {
-        for (i = a->used; i < m->used * 2; i++) {
+        for (i = a->used; i < (unsigned int)m->used * 2; i++) {
             a->dp[i] = 0;
         }
     }
@@ -17325,7 +17576,7 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
         SP_ASM_ADDC(l, h, a->dp[1]);
         a->dp[1] = l;
         a->dp[2] = h;
-        a->used = m->used * 2 + 1;
+        a->used = (sp_size_t)(m->used * 2 + 1);
         /* mp is SP_WORD_SIZE */
         bits = SP_WORD_SIZE;
     }
@@ -17370,10 +17621,9 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
             h = 0;
         }
         /* Handle overflow. */
-        h = o2;
-        SP_ASM_ADDC(l, h, a->dp[7]);
+        SP_ASM_ADDC(l, o2, a->dp[7]);
         a->dp[3] = l;
-        a->dp[4] = h;
+        a->dp[4] = o2;
         a->used = 5;
 
         /* Remove leading zeros. */
@@ -17436,10 +17686,9 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
             h = 0;
         }
         /* Handle overflow. */
-        h = o2;
-        SP_ASM_ADDC(l, h, a->dp[11]);
+        SP_ASM_ADDC(l, o2, a->dp[11]);
         a->dp[5] = l;
-        a->dp[6] = h;
+        a->dp[6] = o2;
         a->used = 7;
 
         /* Remove leading zeros. */
@@ -17475,7 +17724,7 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
             h = 0;
             SP_ASM_MUL_ADD_NO(l, h, mu, *(md++));
             l = h;
-            for (j = 1; j + 1 < m->used - 1; j += 2) {
+            for (j = 1; j < (unsigned int)m->used - 2; j += 2) {
                 h = 0;
                 SP_ASM_ADDC(l, h, ad[j]);
                 SP_ASM_MUL_ADD_NO(l, h, mu, *(md++));
@@ -17485,7 +17734,7 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
                 SP_ASM_MUL_ADD_NO(h, l, mu, *(md++));
                 ad[j] = h;
             }
-            for (; j < m->used - 1; j++) {
+            for (; j < (unsigned int)m->used - 1; j++) {
                 h = 0;
                 SP_ASM_ADDC(l, h, ad[j]);
                 SP_ASM_MUL_ADD_NO(l, h, mu, *(md++));
@@ -17501,11 +17750,9 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
             o = h;
         }
         /* Handle overflow. */
-        l = o;
-        h = o2;
-        SP_ASM_ADDC(l, h, a->dp[m->used * 2 - 1]);
-        a->dp[m->used  - 1] = l;
-        a->dp[m->used] = h;
+        SP_ASM_ADDC(o, o2, a->dp[m->used * 2 - 1]);
+        a->dp[m->used  - 1] = o;
+        a->dp[m->used] = o2;
         a->used = m->used + 1;
 
         /* Remove leading zeros. */
@@ -17536,7 +17783,7 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
             /* 2.1. mu = (mp * DigitMask(a, i)) & WORD_MASK */
             mu = mp * ad[0];
             /* 2.2. If i == NumDigits(m)-1 and mask != 0 then mu & = mask */
-            if ((i == m->used - 1) && (mask != 0)) {
+            if ((i == (unsigned int)m->used - 1) && (mask != 0)) {
                 mu &= mask;
             }
 
@@ -17546,8 +17793,8 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
             SP_ASM_MUL_ADD_NO(l, h, mu, *(md++));
             ad[0] = l;
             l = h;
-            /* 2.4. If i == NumDigits(m)-1 and mask != 0 then mu & = mask */
-            for (j = 1; j + 1 < m->used - 1; j += 2) {
+            /* 2.4. For j = 1 up to NumDigits(m)-2 */
+            for (j = 1; j < (unsigned int)m->used - 2; j += 2) {
                 h = 0;
                 /* 2.4.1. a += mu * DigitMask(m, j) */
                 SP_ASM_ADDC(l, h, ad[j + 0]);
@@ -17559,7 +17806,7 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
                 SP_ASM_MUL_ADD_NO(h, l, mu, *(md++));
                 ad[j + 1] = h;
             }
-            for (; j < m->used - 1; j++) {
+            for (; j < (unsigned int)m->used - 1; j++) {
                 h = 0;
                 /* 2.4.1. a += mu * DigitMask(m, j) */
                 SP_ASM_ADDC(l, h, ad[j]);
@@ -17577,12 +17824,10 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
             o = h;
         }
         /* Handle overflow. */
-        l = o;
-        h = o2;
-        SP_ASM_ADDC(l, h, a->dp[m->used * 2 - 1]);
-        a->dp[m->used * 2 - 1] = l;
-        a->dp[m->used * 2] = h;
-        a->used = m->used * 2 + 1;
+        SP_ASM_ADDC(o, o2, a->dp[m->used * 2 - 1]);
+        a->dp[m->used * 2 - 1] = o;
+        a->dp[m->used * 2] = o2;
+        a->used = (sp_size_t)(m->used * 2 + 1);
     }
 
     if (!ct) {
@@ -17599,7 +17844,7 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
         /* Constant time clamping. */
         sp_clamp_ct(a);
 
-        _sp_submod_ct(a, m, m, m->used + 1, a);
+        _sp_submod_ct(a, m, m, m->used + 1U, a);
     }
 
 #if 0
@@ -17614,10 +17859,10 @@ static int _sp_mont_red(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
     (defined(WOLFSSL_SP_MATH_ALL) && defined(HAVE_ECC))
 /* Reduce a number in Montgomery form.
  *
- * @param  [in,out]  a   SP integer to Montgomery reduce.
- * @param  [in]      m   SP integer that is the modulus.
- * @param  [in]      mp  SP integer digit that is the bottom digit of inv(-m).
- * @param  [in]      ct  Indicates operation must be constant time.
+ * @param [in, out] a   SP integer to Montgomery reduce.
+ * @param [in]      m   SP integer that is the modulus.
+ * @param [in]      mp  SP integer digit that is the bottom digit of inv(-m).
+ * @param [in]      ct  Indicates operation must be constant time.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a or m is NULL or m is zero.
@@ -17640,7 +17885,7 @@ int sp_mont_red_ex(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
         err = MP_VAL;
     }
     else {
-        /* Perform Montogomery Reduction. */
+        /* Perform Montgomery Reduction. */
         err = _sp_mont_red(a, m, mp, ct);
     }
 
@@ -17653,11 +17898,11 @@ int sp_mont_red_ex(sp_int* a, const sp_int* m, sp_int_digit mp, int ct)
  *
  * Used when performing Montgomery Reduction.
  * m must be odd.
- * Jeffrey Hurchalla’s method.
+ * Jeffrey Hurchalla's method.
  *   https://arxiv.org/pdf/2204.04342.pdf
  *
- * @param  [in]   m   SP integer that is the modulus.
- * @param  [out]  mp  SP integer digit that is the bottom digit of inv(-m).
+ * @param [in]  m   SP integer that is the modulus.
+ * @param [out] mp  SP integer digit that is the bottom digit of inv(-m).
  */
 static void _sp_mont_setup(const sp_int* m, sp_int_digit* rho)
 {
@@ -17685,8 +17930,8 @@ static void _sp_mont_setup(const sp_int* m, sp_int_digit* rho)
  *
  * Used when performing Montgomery Reduction.
  *
- * @param  [in]   m   SP integer that is the modulus.
- * @param  [out]  mp  SP integer digit that is the bottom digit of inv(-m).
+ * @param [in]  m   SP integer that is the modulus.
+ * @param [out] mp  SP integer digit that is the bottom digit of inv(-m).
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when m or rho is NULL.
@@ -17715,12 +17960,11 @@ int sp_mont_setup(const sp_int* m, sp_int_digit* rho)
 /* Calculate the normalization value of m.
  *   norm = 2^k - m, where k is the number of bits in m
  *
- * @param  [out]  norm   SP integer that normalises numbers into Montgomery
- *                       form.
- * @param  [in]   m      SP integer that is the modulus.
+ * @param [out] norm  SP integer that normalizes numbers into Montgomery form.
+ * @param [in]  m     SP integer that is the modulus.
  *
  * @return  MP_OKAY on success.
- * @return  MP_VAL when norm or m is NULL, or number of bits in m is maximual.
+ * @return  MP_VAL when norm or m is NULL, or number of bits in m is maximal.
  */
 int sp_mont_norm(sp_int* norm, const sp_int* m)
 {
@@ -17734,9 +17978,14 @@ int sp_mont_norm(sp_int* norm, const sp_int* m)
     if (err == MP_OKAY) {
         /* Find top bit and ensure norm has enough space. */
         bits = (unsigned int)sp_count_bits(m);
-        if (bits >= norm->size * SP_WORD_SIZE) {
+        /* NOLINTBEGIN(clang-analyzer-core.UndefinedBinaryOperatorResult) */
+        /* clang-tidy falsely believes that norm->size was corrupted by the
+         * _sp_copy() to "Set real working value to base." in _sp_exptmod_ex().
+         */
+        if (bits >= (unsigned int)norm->size * SP_WORD_SIZE) {
             err = MP_VAL;
         }
+        /* NOLINTEND(clang-analyzer-core.UndefinedBinaryOperatorResult) */
     }
     if (err == MP_OKAY) {
         /* Round up for case when m is less than a word - no advantage in using
@@ -17776,7 +18025,7 @@ int sp_mont_norm(sp_int* norm, const sp_int* m)
  *
  * When a is NULL, return s 0.
  *
- * @param  [in]  a  SP integer.
+ * @param [in] a  SP integer.
  *
  * @return  The count of 8-bit values.
  * @return  0 when a is NULL.
@@ -17786,7 +18035,7 @@ int sp_unsigned_bin_size(const sp_int* a)
     int cnt = 0;
 
     if (a != NULL) {
-        cnt = (sp_count_bits(a) + 7) / 8;
+        cnt = (sp_count_bits(a) + 7) >> 3;
     }
 
     return cnt;
@@ -17795,12 +18044,12 @@ int sp_unsigned_bin_size(const sp_int* a)
 /* Convert a number as an array of bytes in big-endian format to a
  * multi-precision number.
  *
- * @param  [out]  a     SP integer.
- * @param  [in]   in    Array of bytes.
- * @param  [in]   inSz  Number of data bytes in array.
+ * @param [out] a     SP integer.
+ * @param [in]  in    Array of bytes.
+ * @param [in]  inSz  Number of data bytes in array.
  *
  * @return  MP_OKAY on success.
- * @return  MP_VAL when the number is too big to fit in an SP.
+ * @return  MP_VAL when the number is too big to fit in an SP integer.
  */
 int sp_read_unsigned_bin(sp_int* a, const byte* in, word32 inSz)
 {
@@ -17821,7 +18070,7 @@ int sp_read_unsigned_bin(sp_int* a, const byte* in, word32 inSz)
         int i;
         int j = 0;
 
-        a->used = (inSz + SP_WORD_SIZEOF - 1) / SP_WORD_SIZEOF;
+        a->used = (sp_size_t)((inSz + SP_WORD_SIZEOF - 1) / SP_WORD_SIZEOF);
 
     #if defined(BIG_ENDIAN_ORDER) && !defined(WOLFSSL_SP_INT_DIGIT_ALIGN)
         /* Data endian matches representation of number.
@@ -17897,8 +18146,8 @@ int sp_read_unsigned_bin(sp_int* a, const byte* in, word32 inSz)
  * The array must be large enough for encoded number - use mp_unsigned_bin_size
  * to calculate the number of bytes required.
  *
- * @param  [in]   a    SP integer.
- * @param  [out]  out  Array to put encoding into.
+ * @param [in]  a    SP integer.
+ * @param [out] out  Array to put encoding into.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a or out is NULL.
@@ -17915,9 +18164,9 @@ int sp_to_unsigned_bin(const sp_int* a, byte* out)
  * to calculate the number of bytes required.
  * Front-pads the output array with zeros to make number the size of the array.
  *
- * @param  [in]   a      SP integer.
- * @param  [out]  out    Array to put encoding into.
- * @param  [in]   outSz  Size of the array in bytes.
+ * @param [in]  a      SP integer.
+ * @param [out] out    Array to put encoding into.
+ * @param [in]  outSz  Size of the array in bytes.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a or out is NULL.
@@ -17949,7 +18198,7 @@ int sp_to_unsigned_bin_len(const sp_int* a, byte* out, int outSz)
                     d >>= 8;
                     /* Stop if the output buffer is filled. */
                     if (j < 0) {
-                        if ((i < a->used - 1) || (d > 0)) {
+                        if ((i < (unsigned int)a->used - 1) || (d > 0)) {
                             err = MP_VAL;
                         }
                         break;
@@ -17989,9 +18238,9 @@ int sp_to_unsigned_bin_len(const sp_int* a, byte* out, int outSz)
  * to calculate the number of bytes required.
  * Front-pads the output array with zeros to make number the size of the array.
  *
- * @param  [in]   a      SP integer.
- * @param  [out]  out    Array to put encoding into.
- * @param  [in]   outSz  Size of the array in bytes.
+ * @param [in]  a      SP integer.
+ * @param [out] out    Array to put encoding into.
+ * @param [in]  outSz  Size of the array in bytes.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a or out is NULL.
@@ -18010,20 +18259,22 @@ int sp_to_unsigned_bin_len_ct(const sp_int* a, byte* out, int outSz)
         /* Start at the end of the buffer - least significant byte. */
         int j;
         unsigned int i;
-        sp_int_digit mask = (sp_int_digit)-1;
+        byte mask = (byte)-1;
         sp_int_digit d;
 
         /* Put each digit in. */
         i = 0;
         for (j = outSz - 1; j >= 0; ) {
-            int b;
+            unsigned int b;
+            volatile byte notFull = ctMaskLT((int)i, (int)a->used - 1);
+
             d = a->dp[i];
             /* Place each byte of a digit into the buffer. */
             for (b = 0; (j >= 0) && (b < SP_WORD_SIZEOF); b++) {
                 out[j--] = (byte)(d & mask);
                 d >>= 8;
             }
-            mask &= (sp_int_digit)0 - (i < a->used - 1);
+            mask &= notFull;
             i += (unsigned int)(1 & mask);
         }
     }
@@ -18034,12 +18285,12 @@ int sp_to_unsigned_bin_len_ct(const sp_int* a, byte* out, int outSz)
     if (err == MP_OKAY) {
         unsigned int i;
         int j;
-        sp_int_digit mask = (sp_int_digit)-1;
+        volatile sp_int_digit mask = (sp_int_digit)-1;
 
         i = 0;
         for (j = outSz - 1; j >= 0; j--) {
             out[j] = a->dp[i] & mask;
-            mask &= (sp_int_digit)0 - (i < a->used - 1);
+            mask &= (sp_int_digit)0 - (i < (unsigned int)a->used - 1);
             i += (unsigned int)(1 & mask);
         }
     }
@@ -18054,9 +18305,9 @@ int sp_to_unsigned_bin_len_ct(const sp_int* a, byte* out, int outSz)
  * The array must be large enough for encoded number - use mp_unsigned_bin_size
  * to calculate the number of bytes required.
  *
- * @param  [in]   o    Offset into array o start encoding.
- * @param  [in]   a    SP integer.
- * @param  [out]  out  Array to put encoding into.
+ * @param [in]  o    Offset into array to start encoding.
+ * @param [in]  a    SP integer.
+ * @param [out] out  Array to put encoding into.
  *
  * @return  Index of next byte after data.
  * @return  MP_VAL when a or out is NULL.
@@ -18083,19 +18334,19 @@ int sp_to_unsigned_bin_at_pos(int o, const sp_int* a, unsigned char* out)
  *
  * Assumes negative sign and leading zeros have been stripped.
  *
- * @param  [out]  a   SP integer.
- * @param  [in]   in  NUL terminated string.
+ * @param [out] a   SP integer.
+ * @param [in]  in  NUL terminated string.
  *
  * @return  MP_OKAY on success.
- * @return  MP_VAL when radix not supported, value is negative, or a character
- *          is not valid.
+ * @return  MP_VAL when radix is not supported, value is negative, or a
+ *          character is not valid.
  */
 static int _sp_read_radix_16(sp_int* a, const char* in)
 {
     int err = MP_OKAY;
     int i;
     unsigned int s = 0;
-    unsigned int j = 0;
+    sp_size_t j = 0;
     sp_int_digit d;
     /* Skip whitespace at end of line */
     int eol_done = 0;
@@ -18105,11 +18356,12 @@ static int _sp_read_radix_16(sp_int* a, const char* in)
     /* Step through string a character at a time starting at end - least
      * significant byte. */
     for (i = (int)(XSTRLEN(in) - 1); i >= 0; i--) {
+        volatile char c = in[i];
         /* Convert character from hex. */
-        int ch = (int)HexCharToByte(in[i]);
+        int ch = (int)HexCharToByte(c);
         /* Check for invalid character. */
         if (ch < 0) {
-            if (!eol_done && CharIsWhiteSpace(in[i]))
+            if (!eol_done && CharIsWhiteSpace(c))
                 continue;
             err = MP_VAL;
             break;
@@ -18143,7 +18395,7 @@ static int _sp_read_radix_16(sp_int* a, const char* in)
             a->dp[j] = d;
         }
         /* Update used count. */
-        a->used = j + 1;
+        a->used = (sp_size_t)(j + 1U);
         /* Remove leading zeros. */
         sp_clamp(a);
     }
@@ -18158,18 +18410,17 @@ static int _sp_read_radix_16(sp_int* a, const char* in)
  *
  * Assumes negative sign and leading zeros have been stripped.
  *
- * @param  [out]  a   SP integer.
- * @param  [in]   in  NUL terminated string.
+ * @param [out] a   SP integer.
+ * @param [in]  in  NUL terminated string.
  *
  * @return  MP_OKAY on success.
- * @return  MP_VAL when radix not supported, value is negative, or a character
- *          is not valid.
+ * @return  MP_VAL when radix is not supported, value is negative, or a
+ *          character is not valid.
  */
 static int _sp_read_radix_10(sp_int* a, const char* in)
 {
     int  err = MP_OKAY;
     int  i;
-    char ch;
 
     /* Start with a being zero. */
     _sp_zero(a);
@@ -18177,11 +18428,11 @@ static int _sp_read_radix_10(sp_int* a, const char* in)
     /* Process all characters. */
     for (i = 0; in[i] != '\0'; i++) {
         /* Get character. */
-        ch = in[i];
+        volatile char ch = in[i];
         /* Check character is valid. */
         if ((ch >= '0') && (ch <= '9')) {
             /* Assume '0'..'9' are continuous values as characters. */
-            ch -= '0';
+            ch = (char)(ch - '0');
         }
         else {
             if (CharIsWhiteSpace(ch))
@@ -18213,19 +18464,19 @@ static int _sp_read_radix_10(sp_int* a, const char* in)
  *
  * Negative values supported when WOLFSSL_SP_INT_NEGATIVE is defined.
  *
- * @param  [out]  a      SP integer.
- * @param  [in]   in     NUL terminated string.
- * @param  [in]   radix  Number of values in a digit.
+ * @param [out] a      SP integer.
+ * @param [in]  in     NUL terminated string.
+ * @param [in]  radix  Number of values in a digit.
  *
  * @return  MP_OKAY on success.
- * @return  MP_VAL when a or in is NULL, radix not supported, value is negative,
- *          or a character is not valid.
+ * @return  MP_VAL when a or in is NULL, radix is not supported, value is
+ *          negative, or a character is not valid.
  */
 int sp_read_radix(sp_int* a, const char* in, int radix)
 {
     int err = MP_OKAY;
 #ifdef WOLFSSL_SP_INT_NEGATIVE
-    unsigned int sign = MP_ZPOS;
+    sp_uint8 sign = MP_ZPOS;
 #endif
 
     if ((a == NULL) || (in == NULL)) {
@@ -18289,8 +18540,8 @@ int sp_read_radix(sp_int* a, const char* in, int radix)
  * Assumes str is large enough for result.
  * Use sp_radix_size() to calculate required length.
  *
- * @param  [in]   a    SP integer to convert.
- * @param  [out]  str  String to hold hex string result.
+ * @param [in]  a    SP integer to convert.
+ * @param [out] str  String to hold hex string result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a or str is NULL.
@@ -18392,8 +18643,8 @@ int sp_tohex(const sp_int* a, char* str)
  * Assumes str is large enough for result.
  * Use sp_radix_size() to calculate required length.
  *
- * @param  [in]   a    SP integer to convert.
- * @param  [out]  str  String to hold hex string result.
+ * @param [in]  a    SP integer to convert.
+ * @param [out] str  String to hold hex string result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a or str is NULL.
@@ -18469,13 +18720,13 @@ int sp_todecimal(const sp_int* a, char* str)
     defined(WC_MP_TO_RADIX)
 /* Put the string version, big-endian, of a in str using the given radix.
  *
- * @param  [in]   a      SP integer to convert.
- * @param  [out]  str    String to hold hex string result.
- * @param  [in]   radix  Base of character.
- *                       Valid values: MP_RADIX_HEX, MP_RADIX_DEC.
+ * @param [in]  a      SP integer to convert.
+ * @param [out] str    String to hold hex string result.
+ * @param [in]  radix  Base of character.
+ *                     Valid values: MP_RADIX_HEX, MP_RADIX_DEC.
  *
  * @return  MP_OKAY on success.
- * @return  MP_VAL when a or str is NULL, or radix not supported.
+ * @return  MP_VAL when a or str is NULL, or radix is not supported.
  */
 int sp_toradix(const sp_int* a, char* str, int radix)
 {
@@ -18510,13 +18761,13 @@ int sp_toradix(const sp_int* a, char* str, int radix)
 /* Calculate the length of the string version, big-endian, of a using the given
  * radix.
  *
- * @param  [in]   a      SP integer to convert.
- * @param  [in]   radix  Base of character.
- *                       Valid values: MP_RADIX_HEX, MP_RADIX_DEC.
- * @param  [out]  size   The number of characters in encoding.
+ * @param [in]  a      SP integer to convert.
+ * @param [in]  radix  Base of character.
+ *                     Valid values: MP_RADIX_HEX, MP_RADIX_DEC.
+ * @param [out] size   The number of characters in encoding.
  *
  * @return  MP_OKAY on success.
- * @return  MP_VAL when a or size is NULL, or radix not supported.
+ * @return  MP_VAL when a or size is NULL, or radix is not supported.
  */
 int sp_radix_size(const sp_int* a, int radix, int* size)
 {
@@ -18539,7 +18790,7 @@ int sp_radix_size(const sp_int* a, int radix, int* size)
         }
         else {
             /* Count of nibbles. */
-            int cnt = (sp_count_bits(a) + 3) / 4;
+            int cnt = (sp_count_bits(a) + 3) >> 2;
         #ifndef WC_DISABLE_RADIX_ZERO_PAD
             /* Must have even number of nibbles to have complete bytes. */
             if (cnt & 1) {
@@ -18621,13 +18872,13 @@ int sp_radix_size(const sp_int* a, int radix, int* size)
 
 /* Generate a random prime for RSA only.
  *
- * @param  [out]  r     SP integer to hold result.
- * @param  [in]   len   Number of bytes in prime. Use -ve to indicate the two
- *                      lowest bits must be set.
- * @param  [in]   rng   Random number generator.
- * @param  [in]   heap  Heap hint. Unused.
+ * @param [out] r     SP integer to hold result.
+ * @param [in]  len   Number of bytes in prime. Use -ve to indicate the two
+ *                    lowest bits must be set.
+ * @param [in]  rng   Random number generator.
+ * @param [in]  heap  Heap hint. Unused.
  *
- * @return  MP_OKAY on success
+ * @return  MP_OKAY on success.
  * @return  MP_VAL when r or rng is NULL, length is not supported or random
  *          number generator fails.
  */
@@ -18702,7 +18953,7 @@ int sp_rand_prime(sp_int* r, int len, WC_RNG* rng, void* heap)
         r->sign = MP_ZPOS;
     #endif /* WOLFSSL_SP_INT_NEGATIVE */
         /* Set number of digits that will be used. */
-        r->used = digits;
+        r->used = (sp_size_t)digits;
     #if defined(WOLFSSL_SP_MATH_ALL) || defined(BIG_ENDIAN_ORDER)
         /* Calculate number of bits in last digit. */
         bits = (len * 8) & SP_WORD_MASK;
@@ -18769,17 +19020,16 @@ int sp_rand_prime(sp_int* r, int len, WC_RNG* rng, void* heap)
  * HAC pp. 139 Algorithm 4.24
  *
  * Sets result to 0 if definitely composite or 1 if probably prime.
- * Randomly the chance of error is no more than 1/4 and often
- * very much lower.
+ * The chance of a random error is no more than 1/4 and often very much lower.
  *
  * a is assumed to be odd.
  *
- * @param  [in]   a       SP integer to check.
- * @param  [in]   b       SP integer that is a small prime.
- * @param  [out]  result  MP_YES when number is likely prime.
- *                        MP_NO otherwise.
- * @param  [in]   n1      SP integer temporary.
- * @param  [in]   r       SP integer temporary.
+ * @param [in]  a       SP integer to check.
+ * @param [in]  b       SP integer that is a small prime.
+ * @param [out] result  MP_YES when number is likely prime.
+ *                      MP_NO otherwise.
+ * @param [in]  n1      SP integer temporary.
+ * @param [in]  r       SP integer temporary.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -19013,10 +19263,10 @@ static WC_INLINE int sp_div_primes(const sp_int* a, int* haveRes, int* result)
 
 /* Check whether a is prime by checking t iterations of Miller-Rabin.
  *
- * @param  [in]   a       SP integer to check.
- * @param  [in]   trials  Number of trials of Miller-Rabin test to perform.
- * @param  [out]  result  MP_YES when number is prime.
- *                        MP_NO otherwise.
+ * @param [in]  a       SP integer to check.
+ * @param [in]  trials  Number of trials of Miller-Rabin test to perform.
+ * @param [out] result  MP_YES when number is prime.
+ *                      MP_NO otherwise.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -19025,21 +19275,18 @@ static int _sp_prime_trials(const sp_int* a, int trials, int* result)
 {
     int err = MP_OKAY;
     int i;
-    sp_int* n1;
-    sp_int* r;
-    DECL_SP_INT_ARRAY(t, a->used + 1, 2);
+    DECL_SP_INT(n1, a->used + 1);
+    DECL_SP_INT(r, a->used + 1);
     DECL_SP_INT(b, a->used * 2 + 1);
 
-    ALLOC_SP_INT_ARRAY(t, a->used + 1, 2, err, NULL);
+    ALLOC_SP_INT(n1, a->used + 1, err, NULL);
+    ALLOC_SP_INT(r, a->used + 1, err, NULL);
     /* Allocate number that will hold modular exponentiation result. */
     ALLOC_SP_INT(b, a->used * 2 + 1, err, NULL);
     if (err == MP_OKAY) {
-        n1 = t[0];
-        r  = t[1];
-
-        _sp_init_size(n1, a->used + 1);
-        _sp_init_size(r, a->used + 1);
-        _sp_init_size(b, a->used * 2 + 1);
+        _sp_init_size(n1, a->used + 1U);
+        _sp_init_size(r, a->used + 1U);
+        _sp_init_size(b, (sp_size_t)(a->used * 2U + 1U));
 
         /* Do requested number of trials of Miller-Rabin test. */
         for (i = 0; i < trials; i++) {
@@ -19059,18 +19306,19 @@ static int _sp_prime_trials(const sp_int* a, int trials, int* result)
 
     /* Free allocated temporary. */
     FREE_SP_INT(b, NULL);
-    FREE_SP_INT_ARRAY(t, NULL);
+    FREE_SP_INT(r, NULL);
+    FREE_SP_INT(n1, NULL);
     return err;
 }
 
 /* Check whether a is prime.
- * Checks against a number of small primes and does t iterations of
+ * Checks against a number of small primes and does trials iterations of
  * Miller-Rabin.
  *
- * @param  [in]   a       SP integer to check.
- * @param  [in]   trials  Number of trials of Miller-Rabin test to perform.
- * @param  [out]  result  MP_YES when number is prime.
- *                        MP_NO otherwise.
+ * @param [in]  a       SP integer to check.
+ * @param [in]  trials  Number of trials of Miller-Rabin test to perform.
+ * @param [out] result  MP_YES when number is prime.
+ *                      MP_NO otherwise.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a or result is NULL, or trials is out of range.
@@ -19134,11 +19382,11 @@ int sp_prime_is_prime(const sp_int* a, int trials, int* result)
  *
  * t random numbers should give a (1/4)^t chance of a false prime.
  *
- * @param  [in]   a       SP integer to check.
- * @param  [in]   trials  Number of iterations of Miller-Rabin test to perform.
- * @param  [out]  result  MP_YES when number is prime.
- *                        MP_NO otherwise.
- * @param  [in]   rng     Random number generator for Miller-Rabin testing.
+ * @param [in]  a       SP integer to check.
+ * @param [in]  trials  Number of iterations of Miller-Rabin test to perform.
+ * @param [out] result  MP_YES when number is prime.
+ *                      MP_NO otherwise.
+ * @param [in]  rng     Random number generator for Miller-Rabin testing.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a, result or rng is NULL.
@@ -19149,7 +19397,7 @@ static int _sp_prime_random_trials(const sp_int* a, int trials, int* result,
 {
     int err = MP_OKAY;
     int bits = sp_count_bits(a);
-    word32 baseSz = ((word32)bits + 7) / 8;
+    word32 baseSz = ((word32)bits + 7) >> 3;
     DECL_SP_INT_ARRAY(ds, a->used + 1, 2);
     DECL_SP_INT_ARRAY(d, a->used * 2 + 1, 2);
 
@@ -19161,10 +19409,10 @@ static int _sp_prime_random_trials(const sp_int* a, int trials, int* result,
         sp_int* b  = d[0];
         sp_int* r  = d[1];
 
-        _sp_init_size(c , a->used + 1);
-        _sp_init_size(n1, a->used + 1);
-        _sp_init_size(b , a->used * 2 + 1);
-        _sp_init_size(r , a->used * 2 + 1);
+        _sp_init_size(c , a->used + 1U);
+        _sp_init_size(n1, a->used + 1U);
+        _sp_init_size(b , (sp_size_t)(a->used * 2U + 1U));
+        _sp_init_size(r , (sp_size_t)(a->used * 2U + 1U));
 
         _sp_sub_d(a, 2, c);
 
@@ -19221,14 +19469,14 @@ static int _sp_prime_random_trials(const sp_int* a, int trials, int* result,
 #endif /*!WC_NO_RNG */
 
 /* Check whether a is prime.
- * Checks against a number of small primes and does t iterations of
+ * Checks against a number of small primes and does trials iterations of
  * Miller-Rabin.
  *
- * @param  [in]   a       SP integer to check.
- * @param  [in]   trials  Number of iterations of Miller-Rabin test to perform.
- * @param  [out]  result  MP_YES when number is prime.
- *                        MP_NO otherwise.
- * @param  [in]   rng     Random number generator for Miller-Rabin testing.
+ * @param [in]  a       SP integer to check.
+ * @param [in]  trials  Number of iterations of Miller-Rabin test to perform.
+ * @param [out] result  MP_YES when number is prime.
+ *                      MP_NO otherwise.
+ * @param [in]  rng     Random number generator for Miller-Rabin testing.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a, result or rng is NULL.
@@ -19260,6 +19508,7 @@ int sp_prime_is_prime_ex(const sp_int* a, int trials, int* result, WC_RNG* rng)
         err = MP_VAL;
     }
 
+    /* A value of 1 is not prime. */
     if ((err == MP_OKAY) && sp_isone(a)) {
         ret = MP_NO;
         haveRes = 1;
@@ -19299,7 +19548,7 @@ int sp_prime_is_prime_ex(const sp_int* a, int trials, int* result, WC_RNG* rng)
 
 #if !defined(NO_RSA) && defined(WOLFSSL_KEY_GEN)
 
-/* Calculates the Greatest Common Denominator (GCD) of a and b into r.
+/* Calculates the Greatest Common Divisor (GCD) of a and b into r.
  *
  * Find the largest number that divides both a and b without remainder.
  * r <= a, r <= b, a % r == 0, b % r == 0
@@ -19315,9 +19564,9 @@ int sp_prime_is_prime_ex(const sp_int* a, int trials, int* result, WC_RNG* rng)
  *   4.2. u <= v, v <= t, t <= u
  *  5. r = u
  *
- * @param  [in]   a  SP integer of first operand.
- * @param  [in]   b  SP integer of second operand.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  a  SP integer of first operand.
+ * @param [in]  b  SP integer of second operand.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -19331,7 +19580,7 @@ static WC_INLINE int _sp_gcd(const sp_int* a, const sp_int* b, sp_int* r)
     /* Used for swapping sp_ints. */
     sp_int* s;
     /* Determine maximum digit length numbers will reach. */
-    unsigned int used = (a->used >= b->used) ? a->used + 1 : b->used + 1;
+    unsigned int used = (a->used >= b->used) ? a->used + 1U : b->used + 1U;
     DECL_SP_INT_ARRAY(d, used, 3);
 
     SAVE_VECTOR_REGISTERS(err = _svr_ret;);
@@ -19405,16 +19654,16 @@ static WC_INLINE int _sp_gcd(const sp_int* a, const sp_int* b, sp_int* r)
     return err;
 }
 
-/* Calculates the Greatest Common Denominator (GCD) of a and b into r.
+/* Calculates the Greatest Common Divisor (GCD) of a and b into r.
  *
  * Find the largest number that divides both a and b without remainder.
  * r <= a, r <= b, a % r == 0, b % r == 0
  *
  * a and b are positive integers.
  *
- * @param  [in]   a  SP integer of first operand.
- * @param  [in]   b  SP integer of second operand.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  a  SP integer of first operand.
+ * @param [in]  b  SP integer of second operand.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a, b or r is NULL or too large.
@@ -19476,7 +19725,7 @@ int sp_gcd(const sp_int* a, const sp_int* b, sp_int* r)
  * a and b are positive integers.
  *
  * lcm(a, b) = (a / gcd(a, b)) * b
- * Divide the common divisor from a and multiply by b.
+ * Divide the larger value by the common divisor and multiply by the other.
  *
  * Algorithm:
  *  1. t0 = gcd(a, b)
@@ -19487,9 +19736,9 @@ int sp_gcd(const sp_int* a, const sp_int* b, sp_int* r)
  *   3.1. t1 = b / t0
  *   3.2. r = a * t1
  *
- * @param  [in]   a  SP integer of first operand.
- * @param  [in]   b  SP integer of second operand.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  a  SP integer of first operand.
+ * @param [in]  b  SP integer of second operand.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_MEM when dynamic memory allocation fails.
@@ -19549,9 +19798,9 @@ static int _sp_lcm(const sp_int* a, const sp_int* b, sp_int* r)
  *
  * a and b are positive integers.
  *
- * @param  [in]   a  SP integer of first operand.
- * @param  [in]   b  SP integer of second operand.
- * @param  [out]  r  SP integer to hold result.
+ * @param [in]  a  SP integer of first operand.
+ * @param [in]  b  SP integer of second operand.
+ * @param [out] r  SP integer to hold result.
  *
  * @return  MP_OKAY on success.
  * @return  MP_VAL when a, b or r is NULL; or a or b is zero.
@@ -19571,7 +19820,7 @@ int sp_lcm(const sp_int* a, const sp_int* b, sp_int* r)
         err = MP_VAL;
     }
 #endif
-    /* Ensure r has space for maximumal result. */
+    /* Ensure r has space for maximal result. */
     else if (r->size < a->used + b->used) {
         err = MP_VAL;
     }
@@ -19613,7 +19862,7 @@ word32 CheckRunTimeFastMath(void)
 }
 
 #ifdef WOLFSSL_CHECK_MEM_ZERO
-/* Add an MP to check.
+/* Add an SP integer to the memory check list.
  *
  * @param [in] name  Name of address to check.
  * @param [in] sp    sp_int that needs to be checked.
@@ -19625,7 +19874,7 @@ void sp_memzero_add(const char* name, sp_int* sp)
 
 /* Check the memory in the data pointer for memory that must be zero.
  *
- * @param [in] sp    sp_int that needs to be checked.
+ * @param [in] sp  sp_int that needs to be checked.
  */
 void sp_memzero_check(sp_int* sp)
 {
@@ -19633,12 +19882,8 @@ void sp_memzero_check(sp_int* sp)
 }
 #endif /* WOLFSSL_CHECK_MEM_ZERO */
 
-#if (!defined(WOLFSSL_SMALL_STACK) && !defined(SP_ALLOC)) || \
-    defined(WOLFSSL_SP_NO_MALLOC)
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) && \
-    !defined(WOLFSSL_SP_NO_DYN_STACK)
-#pragma GCC diagnostic pop
-#endif
+#ifdef WOLFSSL_SP_DYN_STACK
+    PRAGMA_GCC_DIAG_POP
 #endif
 
 #endif /* WOLFSSL_SP_MATH || WOLFSSL_SP_MATH_ALL */

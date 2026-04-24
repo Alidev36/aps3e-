@@ -73,6 +73,7 @@ void GLGSRender::set_viewport()
 {
 	// NOTE: scale offset matrix already contains the viewport transformation
 	const auto [clip_width, clip_height] = rsx::apply_resolution_scale<true>(
+		resolution_scaling_config,
 		rsx::method_registers.surface_clip_width(), rsx::method_registers.surface_clip_height());
 
 	glViewport(0, 0, clip_width, clip_height);
@@ -133,16 +134,12 @@ void GLGSRender::on_init_thread()
 	gl::set_primary_context_thread();
 
 	zcull_ctrl.reset(static_cast<::rsx::reports::ZCULL_control*>(this));
-#ifdef USE_GLES
-    m_occlusion_type = GL_ANY_SAMPLES_PASSED;
-#else
 	m_occlusion_type = g_cfg.video.precise_zpass_count ? GL_SAMPLES_PASSED : GL_ANY_SAMPLES_PASSED;
-#endif
+
 	gl::init();
 	gl::set_command_context(gl_state);
 
-	// Enable adaptive vsync if vsync is requested
-	gl::set_swapinterval(g_cfg.video.vsync ? -1 : 0);
+	update_swap_interval();
 
 	if (g_cfg.video.debug_output)
 		gl::enable_debugging();
@@ -200,7 +197,7 @@ void GLGSRender::on_init_thread()
 		// NVIDIA's attribute interpolation requires some workarounds
 		backend_config.supports_normalized_barycentrics = false;
 	}
-	#ifndef USE_GLES
+
 	if (gl_caps.AMD_pinned_memory_supported && g_cfg.video.host_label_synchronization)
 	{
 		backend_config.supports_host_gpu_labels = true;
@@ -214,15 +211,13 @@ void GLGSRender::on_init_thread()
 		m_enqueued_host_write_buffer = std::make_unique<gl::scratch_ring_buffer>();
 		m_enqueued_host_write_buffer->create(gl::buffer::target::array, 64 * 0x100000, gl::buffer::usage::dynamic_update);
 	}
-	#endif
 
 	// Use industry standard resource alignment values as defaults
 	m_uniform_buffer_offset_align = 256;
 	m_min_texbuffer_alignment = 256;
 	m_max_texbuffer_size = 0;
-#ifndef USE_GLES
+
 	glEnable(GL_VERTEX_PROGRAM_POINT_SIZE);
-#endif
 	glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &m_uniform_buffer_offset_align);
 	glGetIntegerv(GL_TEXTURE_BUFFER_OFFSET_ALIGNMENT, &m_min_texbuffer_alignment);
 	glGetIntegerv(GL_MAX_TEXTURE_BUFFER_SIZE, &m_max_texbuffer_size);
@@ -254,40 +249,24 @@ void GLGSRender::on_init_thread()
 	// Fallback null texture instead of relying on texture0
 	{
 		std::array<u32, 8> pixeldata = { 0, 0, 0, 0, 0, 0, 0, 0 };
+		const rsx::io_buffer src_buf = std::span<u32>(pixeldata);
 
-		#ifdef USE_GLES
-		// 1D
-		auto tex1D = std::make_unique<gl::texture>(GL_TEXTURE_2D, 1, 1, 1, 1, 1, GL_RGBA8, RSX_FORMAT_CLASS_COLOR);
-		tex1D->copy_from(pixeldata.data(), gl::texture::format::rgba, gl::texture::type::ubyte, {});
-
-		// 2D
-		auto tex2D = std::make_unique<gl::texture>(GL_TEXTURE_2D, 1, 1, 1, 1, 1, GL_RGBA8, RSX_FORMAT_CLASS_COLOR);
-		tex2D->copy_from(pixeldata.data(), gl::texture::format::rgba, gl::texture::type::ubyte, {});
-
-		// 3D
-		auto tex3D = std::make_unique<gl::texture>(GL_TEXTURE_3D, 1, 1, 1, 1, 1, GL_RGBA8, RSX_FORMAT_CLASS_COLOR);
-		tex3D->copy_from(pixeldata.data(), gl::texture::format::rgba, gl::texture::type::ubyte, {});
-
-		// CUBE
-		auto texCUBE = std::make_unique<gl::texture>(GL_TEXTURE_CUBE_MAP, 1, 1, 1, 1, 1, GL_RGBA8, RSX_FORMAT_CLASS_COLOR);
-		texCUBE->copy_from(pixeldata.data(), gl::texture::format::rgba, gl::texture::type::ubyte, {});
-		#else
 		// 1D
 		auto tex1D = std::make_unique<gl::texture>(GL_TEXTURE_1D, 1, 1, 1, 1, 1, GL_RGBA8, RSX_FORMAT_CLASS_COLOR);
-		tex1D->copy_from(pixeldata.data(), gl::texture::format::rgba, gl::texture::type::uint_8_8_8_8, {});
+		tex1D->copy_from(src_buf, gl::texture::format::rgba, gl::texture::type::uint_8_8_8_8, {});
 
 		// 2D
 		auto tex2D = std::make_unique<gl::texture>(GL_TEXTURE_2D, 1, 1, 1, 1, 1, GL_RGBA8, RSX_FORMAT_CLASS_COLOR);
-		tex2D->copy_from(pixeldata.data(), gl::texture::format::rgba, gl::texture::type::uint_8_8_8_8, {});
+		tex2D->copy_from(src_buf, gl::texture::format::rgba, gl::texture::type::uint_8_8_8_8, {});
 
 		// 3D
 		auto tex3D = std::make_unique<gl::texture>(GL_TEXTURE_3D, 1, 1, 1, 1, 1, GL_RGBA8, RSX_FORMAT_CLASS_COLOR);
-		tex3D->copy_from(pixeldata.data(), gl::texture::format::rgba, gl::texture::type::uint_8_8_8_8, {});
+		tex3D->copy_from(src_buf, gl::texture::format::rgba, gl::texture::type::uint_8_8_8_8, {});
 
 		// CUBE
 		auto texCUBE = std::make_unique<gl::texture>(GL_TEXTURE_CUBE_MAP, 1, 1, 1, 1, 1, GL_RGBA8, RSX_FORMAT_CLASS_COLOR);
-		texCUBE->copy_from(pixeldata.data(), gl::texture::format::rgba, gl::texture::type::uint_8_8_8_8, {});
-		#endif
+		texCUBE->copy_from(src_buf, gl::texture::format::rgba, gl::texture::type::uint_8_8_8_8, {});
+
 		m_null_textures[GL_TEXTURE_1D] = std::move(tex1D);
 		m_null_textures[GL_TEXTURE_2D] = std::move(tex2D);
 		m_null_textures[GL_TEXTURE_3D] = std::move(tex3D);
@@ -300,9 +279,8 @@ void GLGSRender::on_init_thread()
 		// TODO: do not modify config options
 		g_cfg.video.renderdoc_compatiblity.from_string("true");
 	}
-#ifndef USE_GLES
+
 	if (g_cfg.video.renderdoc_compatiblity)
-#endif
 	{
 		rsx_log.warning("Using legacy openGL buffers.");
 		manually_flush_ring_buffers = true;
@@ -321,7 +299,6 @@ void GLGSRender::on_init_thread()
 		m_scratch_ring_buffer = std::make_unique<gl::legacy_ring_buffer>();
 		m_instancing_ring_buffer = std::make_unique<gl::legacy_ring_buffer>();
 	}
-#ifndef USE_GLES
 	else
 	{
 		m_attrib_ring_buffer = std::make_unique<gl::ring_buffer>();
@@ -338,7 +315,7 @@ void GLGSRender::on_init_thread()
 		m_scratch_ring_buffer = std::make_unique<gl::ring_buffer>();
 		m_instancing_ring_buffer = std::make_unique<gl::ring_buffer>();
 	}
-	#endif
+
 	m_attrib_ring_buffer->create(gl::buffer::target::texture, 256 * 0x100000);
 	m_index_ring_buffer->create(gl::buffer::target::element_array, 16 * 0x100000);
 	m_transform_constants_buffer->create(gl::buffer::target::uniform, 64 * 0x100000);
@@ -421,6 +398,7 @@ void GLGSRender::on_init_thread()
 	m_ui_renderer.create();
 	m_video_output_pass.create();
 
+	gl::init_global_texture_resources();
 	m_gl_texture_cache.initialize();
 
 	m_prog_buffer.initialize
@@ -600,6 +578,33 @@ void GLGSRender::on_exit()
 	zcull_ctrl.release();
 
 	gl::set_primary_context_thread(false);
+}
+
+void GLGSRender::update_swap_interval()
+{
+	const vsync_mode current_mode = g_cfg.video.vsync;
+	if (current_mode == m_vsync_mode)
+	{
+		return;
+	}
+
+	// Enable adaptive vsync if vsync is requested
+	int swap_interval = 0;
+	switch (current_mode)
+	{
+	default:
+	case vsync_mode::off:
+		break;
+	case vsync_mode::adaptive:
+		swap_interval = -1;
+		break;
+	case vsync_mode::full:
+		swap_interval = 1;
+		break;
+	}
+
+	gl::set_swapinterval(swap_interval);
+	m_vsync_mode = current_mode;
 }
 
 void GLGSRender::clear_surface(u32 arg)
@@ -927,16 +932,16 @@ void GLGSRender::load_program_env()
 	if (update_vertex_env)
 	{
 		// Vertex state
-		auto mapping = m_vertex_env_buffer->alloc_from_heap(144, m_uniform_buffer_offset_align);
+		auto mapping = m_vertex_env_buffer->alloc_from_heap(96, m_uniform_buffer_offset_align);
 		auto buf = static_cast<u8*>(mapping.first);
 		m_draw_processor.fill_scale_offset_data(buf, false);
 		m_draw_processor.fill_user_clip_data(buf + 64);
-		*(reinterpret_cast<u32*>(buf + 128)) = rsx::method_registers.transform_branch_bits();
-		*(reinterpret_cast<f32*>(buf + 132)) = rsx::method_registers.point_size() * rsx::get_resolution_scale();
-		*(reinterpret_cast<f32*>(buf + 136)) = rsx::method_registers.clip_min();
-		*(reinterpret_cast<f32*>(buf + 140)) = rsx::method_registers.clip_max();
+		*(reinterpret_cast<u32*>(buf + 68)) = rsx::method_registers.transform_branch_bits();
+		*(reinterpret_cast<f32*>(buf + 72)) = rsx::method_registers.point_size() * resolution_scaling_config.scale_factor();
+		*(reinterpret_cast<f32*>(buf + 76)) = rsx::method_registers.clip_min();
+		*(reinterpret_cast<f32*>(buf + 80)) = rsx::method_registers.clip_max();
 
-		m_vertex_env_buffer->bind_range(GL_VERTEX_PARAMS_BIND_SLOT, mapping.second, 144);
+		m_vertex_env_buffer->bind_range(GL_VERTEX_PARAMS_BIND_SLOT, mapping.second, 96);
 	}
 
 	if (update_instancing_data)
@@ -1264,7 +1269,7 @@ bool GLGSRender::on_access_violation(u32 address, bool is_writing)
 	return true;
 }
 
-void GLGSRender::on_invalidate_memory_range(const utils::address_range &range, rsx::invalidation_cause cause)
+void GLGSRender::on_invalidate_memory_range(const utils::address_range32 &range, rsx::invalidation_cause cause)
 {
 	gl::command_context cmd{ gl_state };
 	auto data = m_gl_texture_cache.invalidate_range(cmd, range, cause);
@@ -1375,7 +1380,7 @@ void GLGSRender::notify_tile_unbound(u32 tile)
 	}
 }
 
-bool GLGSRender::release_GCM_label(u32 address, u32 args)
+bool GLGSRender::release_GCM_label(u32 type, u32 address, u32 args)
 {
 	if (!backend_config.supports_host_gpu_labels)
 	{
@@ -1384,7 +1389,7 @@ bool GLGSRender::release_GCM_label(u32 address, u32 args)
 
 	auto host_ctx = ensure(m_host_dma_ctrl->host_ctx());
 
-	if (host_ctx->texture_loads_completed())
+	if (type == NV4097_TEXTURE_READ_SEMAPHORE_RELEASE && host_ctx->texture_loads_completed())
 	{
 		// We're about to poll waiting for GPU state, ensure the context is still valid.
 		gl::check_state();
@@ -1433,6 +1438,12 @@ void GLGSRender::on_guest_texture_read()
 	u64 event_id = m_host_dma_ctrl->host_ctx()->inc_counter();
 	m_host_dma_ctrl->host_ctx()->texture_load_request_event = event_id;
 	enqueue_host_context_write(::offset32(&rsx::host_gpu_context_t::texture_load_complete_event), 8, &event_id);
+}
+
+void GLGSRender::write_barrier(u32 address, u32 range)
+{
+	ensure(is_current_thread());
+	m_rtts.invalidate_range(utils::address_range32::start_length(address, range));
 }
 
 void GLGSRender::begin_occlusion_query(rsx::reports::occlusion_query_info* query)

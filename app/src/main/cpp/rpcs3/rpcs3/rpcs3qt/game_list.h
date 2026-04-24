@@ -7,7 +7,6 @@
 #include <QKeyEvent>
 
 #include "game_list_base.h"
-#include "util/atomic.hpp"
 
 #include <functional>
 
@@ -24,8 +23,8 @@ class game_list : public QTableWidget, public game_list_base
 public:
 	game_list();
 
-	void sync_header_actions(QList<QAction*>& actions, std::function<bool(int)> get_visibility);
-	void create_header_actions(QList<QAction*>& actions, std::function<bool(int)> get_visibility, std::function<void(int, bool)> set_visibility);
+	void sync_header_actions(std::map<int, QAction*>& actions, std::function<bool(int)> get_visibility);
+	void create_header_actions(std::map<int, QAction*>& actions, std::function<bool(int)> get_visibility, std::function<void(int, bool)> set_visibility);
 
 	void clear_list() override; // Use this instead of clearContents
 
@@ -37,7 +36,7 @@ public Q_SLOTS:
 
 Q_SIGNALS:
 	void FocusToSearchBar();
-	void IconReady(const game_info& game);
+	void IconReady(const game_info& game, const movie_item_base* item);
 
 protected:
 	movie_item* m_last_hover_item = nullptr;

@@ -1,5 +1,4 @@
 #include "stdafx.h"
-#include "util/logs.hpp"
 #include "util/vm.hpp"
 #include "util/asm.hpp"
 #ifdef _WIN32
@@ -254,7 +253,11 @@ namespace utils
 
 #ifdef __APPLE__
 #ifdef ARCH_ARM64
-		auto ptr = ::mmap(use_addr, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE | MAP_JIT | c_map_noreserve, -1, 0);
+		// Memory mapping regions will be replaced by file-backed MAP_FIXED mappings
+		// (via shm::map), which is incompatible with MAP_JIT. Only use MAP_JIT for
+		// non-mapping regions that need JIT executable support.
+		const int jit_flag = is_memory_mapping ? 0 : MAP_JIT;
+		auto ptr = ::mmap(use_addr, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE | jit_flag | c_map_noreserve, -1, 0);
 #else
 		auto ptr = ::mmap(use_addr, size, PROT_NONE, MAP_ANON | MAP_PRIVATE | MAP_JIT | c_map_noreserve, -1, 0);
 #endif
@@ -319,15 +322,15 @@ namespace utils
 		ensure(::VirtualAlloc(pointer, size, MEM_COMMIT, +prot));
 #else
 		const u64 ptr64 = reinterpret_cast<u64>(pointer);
-		ensure(::mprotect(reinterpret_cast<void*>(ptr64 & -c_page_size), size + (ptr64 & (c_page_size - 1)), +prot) != -1);
+		ensure(::mprotect(reinterpret_cast<void*>(ptr64 & -get_page_size()), size + (ptr64 & (get_page_size() - 1)), +prot) != -1);
 
 		if constexpr (c_madv_dump != 0)
 		{
-			ensure(::madvise(reinterpret_cast<void*>(ptr64 & -c_page_size), size + (ptr64 & (c_page_size - 1)), c_madv_dump) != -1);
+			ensure(::madvise(reinterpret_cast<void*>(ptr64 & -get_page_size()), size + (ptr64 & (get_page_size() - 1)), c_madv_dump) != -1);
 		}
 		else
 		{
-			ensure(::madvise(reinterpret_cast<void*>(ptr64 & -c_page_size), size + (ptr64 & (c_page_size - 1)), MADV_WILLNEED) != -1);
+			ensure(::madvise(reinterpret_cast<void*>(ptr64 & -get_page_size()), size + (ptr64 & (get_page_size() - 1)), MADV_WILLNEED) != -1);
 		}
 #endif
 	}
@@ -356,11 +359,11 @@ namespace utils
 
 		if constexpr (c_madv_no_dump != 0)
 		{
-			ensure(::madvise(reinterpret_cast<void*>(ptr64 & -c_page_size), size + (ptr64 & (c_page_size - 1)), c_madv_no_dump) != -1);
+			ensure(::madvise(reinterpret_cast<void*>(ptr64 & -get_page_size()), size + (ptr64 & (get_page_size() - 1)), c_madv_no_dump) != -1);
 		}
 		else
 		{
-			ensure(::madvise(reinterpret_cast<void*>(ptr64 & -c_page_size), size + (ptr64 & (c_page_size - 1)), c_madv_free) != -1);
+			ensure(::madvise(reinterpret_cast<void*>(ptr64 & -get_page_size()), size + (ptr64 & (get_page_size() - 1)), c_madv_free) != -1);
 		}
 #endif
 	}
@@ -388,17 +391,17 @@ namespace utils
 		{
 			if (size % 0x200000 == 0)
 			{
-				::madvise(reinterpret_cast<void*>(ptr64 & -c_page_size), size + (ptr64 & (c_page_size - 1)), c_madv_hugepage);
+				::madvise(reinterpret_cast<void*>(ptr64 & -get_page_size()), size + (ptr64 & (get_page_size() - 1)), c_madv_hugepage);
 			}
 		}
 
 		if constexpr (c_madv_dump != 0)
 		{
-			ensure(::madvise(reinterpret_cast<void*>(ptr64 & -c_page_size), size + (ptr64 & (c_page_size - 1)), c_madv_dump) != -1);
+			ensure(::madvise(reinterpret_cast<void*>(ptr64 & -get_page_size()), size + (ptr64 & (get_page_size() - 1)), c_madv_dump) != -1);
 		}
 		else
 		{
-			ensure(::madvise(reinterpret_cast<void*>(ptr64 & -c_page_size), size + (ptr64 & (c_page_size - 1)), MADV_WILLNEED) != -1);
+			ensure(::madvise(reinterpret_cast<void*>(ptr64 & -get_page_size()), size + (ptr64 & (get_page_size() - 1)), MADV_WILLNEED) != -1);
 		}
 #endif
 	}
@@ -448,7 +451,7 @@ namespace utils
 		}
 #else
 		const u64 ptr64 = reinterpret_cast<u64>(pointer);
-		ensure(::mprotect(reinterpret_cast<void*>(ptr64 & -c_page_size), size + (ptr64 & (c_page_size - 1)), +prot) != -1);
+		ensure(::mprotect(reinterpret_cast<void*>(ptr64 & -get_page_size()), size + (ptr64 & (get_page_size() - 1)), +prot) != -1);
 #endif
 	}
 
@@ -537,21 +540,33 @@ namespace utils
 		{
 			f.close();
 
-			for (u32 try_count = 3, i = 0; !f && i < try_count; i++)
+			for (u32 i = 1; i <= 3; i++)
+			{
+				// Cleanup
+				fs::remove_file(fmt::format("%s.%d.tmp", path, i));
+			}
+
+			for (u32 try_count = 3, i = 0; !f && i < try_count; i++, ::Sleep(100))
 			{
 				// Bug workaround: removing old file may be safer than rewriting it
 				if (!fs::remove_file(path) && fs::g_tls_error != fs::error::noent)
 				{
-					return false;
+					// Try MoveFile
+					fs::rename(path, fmt::format("%s.%d.tmp", path, i + 1), true);
 				}
 
-				if (!f.open(path, fs::read + fs::write + fs::create + fs::excl) && fs::g_tls_error != fs::error::exist)
+				if (f.open(path, fs::read + fs::write + fs::create + fs::excl))
+				{
+					return true;
+				}
+
+				if (fs::g_tls_error != fs::error::exist && fs::g_tls_error != fs::error::acces)
 				{
 					return false;
 				}
 			}
 
-			return f.operator bool();
+			return false;
 		};
 
 		std::string storage1 = fs::get_temp_dir();
@@ -687,9 +702,8 @@ namespace utils
 #else
 
 #ifdef __linux__
-
-#if defined(__ANDROID__)
-        if (const char c = 1;c)
+#ifdef ANDROID
+		if constexpr (constexpr char c = '?')
 #else
 		if (const char c = fs::file("/proc/sys/vm/overcommit_memory").read<char>(); c == '0' || c == '1')
 #endif
@@ -971,19 +985,23 @@ namespace utils
 	{
 		void* ptr = m_ptr;
 
-		while (!ptr)
+		for (void* mapped = nullptr; !ptr;)
 		{
-			const auto mapped = this->map(nullptr, prot);
+			if (!mapped)
+			{
+				mapped = this->map(nullptr, prot);
+			}
 
 			// Install mapped memory
-			if (!m_ptr.compare_exchange(ptr, mapped))
-			{
-				// Mapped already, nothing to do.
-				this->unmap(mapped);
-			}
-			else
+			if (m_ptr.compare_exchange(ptr, mapped))
 			{
 				ptr = mapped;
+			}
+			else if (ptr)
+			{
+				// Mapped already, nothing to do.
+				ensure(ptr != mapped);
+				this->unmap(mapped);
 			}
 		}
 
@@ -1061,4 +1079,4 @@ namespace utils
 			this->unmap(ptr);
 		}
 	}
-}
+} // namespace utils

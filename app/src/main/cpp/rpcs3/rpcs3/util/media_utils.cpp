@@ -3,6 +3,7 @@
 #include "Emu/System.h"
 
 #include <random>
+#include <thread>
 
 #ifdef _MSC_VER
 #pragma warning(push, 0)
@@ -81,8 +82,8 @@ namespace utils
 			return;
 		}
 
-		std::string msg = line;
-		fmt::trim_back(msg, "\n\r\t ");
+		std::string msg_buf = line;
+		std::string_view msg = fmt::trim_back_sv(msg_buf, "\n\r\t ");
 
 		if (level <= AV_LOG_ERROR)
 			media_log.error("av_log: %s", msg);
@@ -345,32 +346,84 @@ namespace utils
 	static bool check_sample_fmt(const AVCodec* codec, enum AVSampleFormat sample_fmt)
 	{
 		if (!codec) return false;
+#if __ANDROID__
+        for (const AVSampleFormat* p = codec->sample_fmts; p && *p != AV_SAMPLE_FMT_NONE; p++)
+        {
+            if (*p == sample_fmt)
+            {
+                return true;
+            }
+        }
+#else
+		const void* sample_formats = nullptr;
+		int num = 0;
 
-		for (const AVSampleFormat* p = codec->sample_fmts; p && *p != AV_SAMPLE_FMT_NONE; p++)
+		if (const int err = avcodec_get_supported_config(nullptr, codec, AVCodecConfig::AV_CODEC_CONFIG_SAMPLE_FORMAT, 0, &sample_formats, &num))
 		{
-			if (*p == sample_fmt)
+			media_log.error("check_sample_fmt: avcodec_get_supported_config error: %d='%s'", err, av_error_to_string(err));
+			return false;
+		}
+
+		if (!sample_formats)
+			return true; // All supported
+
+		int i = 0;
+		for (const AVSampleFormat* fmt = static_cast<const AVSampleFormat*>(sample_formats); fmt && *fmt != AV_SAMPLE_FMT_NONE && i < num; fmt++, i++)
+		{
+			if (*fmt == sample_fmt)
 			{
 				return true;
 			}
 		}
+#endif
 		return false;
 	}
 
 	// just pick the highest supported samplerate
 	static int select_sample_rate(const AVCodec* codec)
 	{
-		if (!codec || !codec->supported_samplerates)
-			return 48000;
+#if __ANDROID__
+        if (!codec || !codec->supported_samplerates)
+            return 48000;
 
-		int best_samplerate = 0;
-		for (const int* samplerate = codec->supported_samplerates; samplerate && *samplerate != 0; samplerate++)
+        int best_samplerate = 0;
+        for (const int* samplerate = codec->supported_samplerates; samplerate && *samplerate != 0; samplerate++)
+        {
+            if (!best_samplerate || abs(48000 - *samplerate) < abs(48000 - best_samplerate))
+            {
+                best_samplerate = *samplerate;
+            }
+        }
+        return best_samplerate;
+#else
+		constexpr int default_sample_rate = 48000;
+
+		if (!codec)
+			return default_sample_rate;
+
+		const void* sample_rates = nullptr;
+		int num = 0;
+
+		if (const int err = avcodec_get_supported_config(nullptr, codec, AVCodecConfig::AV_CODEC_CONFIG_SAMPLE_RATE, 0, &sample_rates, &num))
 		{
-			if (!best_samplerate || abs(48000 - *samplerate) < abs(48000 - best_samplerate))
+			media_log.error("select_sample_rate: avcodec_get_supported_config error: %d='%s'", err, av_error_to_string(err));
+			return default_sample_rate;
+		}
+
+		if (!sample_rates)
+			return default_sample_rate;
+
+		int i = 0;
+		int best_sample_rate = 0;
+		for (const int* sample_rate = static_cast<const int*>(sample_rates); sample_rate && *sample_rate != 0 && i < num; sample_rate++, i++)
+		{
+			if (!best_sample_rate || abs(default_sample_rate - *sample_rate) < abs(default_sample_rate - best_sample_rate))
 			{
-				best_samplerate = *samplerate;
+				best_sample_rate = *sample_rate;
 			}
 		}
-		return best_samplerate;
+		return best_sample_rate;
+#endif
 	}
 
 	AVChannelLayout get_preferred_channel_layout(int channels)
@@ -395,13 +448,43 @@ namespace utils
 	static const AVChannelLayout* select_channel_layout(const AVCodec* codec, int channels)
 	{
 		if (!codec) return nullptr;
+#if __ANDROID__
+        const AVChannelLayout preferred_ch_layout = get_preferred_channel_layout(channels);
+        const AVChannelLayout* found_ch_layout = nullptr;
+
+        for (const AVChannelLayout* ch_layout = codec->ch_layouts;
+             ch_layout && memcmp(ch_layout, &empty_ch_layout, sizeof(AVChannelLayout)) != 0;
+             ch_layout++)
+        {
+            media_log.notice("select_channel_layout: listing channel layout '%s' with %d channels", channel_layout_name(*ch_layout), ch_layout->nb_channels);
+
+            if (ch_layout->nb_channels == channels && memcmp(ch_layout, &preferred_ch_layout, sizeof(AVChannelLayout)) == 0)
+            {
+                found_ch_layout = ch_layout;
+            }
+        }
+
+        return found_ch_layout;
+#else
+		const void* ch_layouts = nullptr;
+		int num = 0;
+
+		if (const int err = avcodec_get_supported_config(nullptr, codec, AVCodecConfig::AV_CODEC_CONFIG_CHANNEL_LAYOUT, 0, &ch_layouts, &num))
+		{
+			media_log.error("select_channel_layout: avcodec_get_supported_config error: %d='%s'", err, av_error_to_string(err));
+			return nullptr;
+		}
+
+		if (!ch_layouts)
+			return nullptr;
 
 		const AVChannelLayout preferred_ch_layout = get_preferred_channel_layout(channels);
 		const AVChannelLayout* found_ch_layout = nullptr;
 
-		for (const AVChannelLayout* ch_layout = codec->ch_layouts;
-			 ch_layout && memcmp(ch_layout, &empty_ch_layout, sizeof(AVChannelLayout)) != 0;
-			 ch_layout++)
+		int i = 0;
+		for (const AVChannelLayout* ch_layout = static_cast<const AVChannelLayout*>(ch_layouts);
+			 i < num && ch_layout && memcmp(ch_layout, &empty_ch_layout, sizeof(AVChannelLayout)) != 0;
+			 ch_layout++, i++)
 		{
 			media_log.notice("select_channel_layout: listing channel layout '%s' with %d channels", channel_layout_name(*ch_layout), ch_layout->nb_channels);
 
@@ -412,6 +495,7 @@ namespace utils
 		}
 
 		return found_ch_layout;
+#endif
 	}
 
 	audio_decoder::audio_decoder()
@@ -532,35 +616,53 @@ namespace utils
 				has_error = true;
 				return;
 			}
+#if __ANDROID__
 
-			// Prepare resampler
-			av.swr = swr_alloc();
+            // Prepare resampler
+            av.swr = swr_alloc();
+            if (!av.swr)
+            {
+                media_log.error("audio_decoder: Failed to allocate resampler for stream #%u in file '%s'", stream_index, path);
+                has_error = true;
+                return;
+            }
+#endif
+
+			const int dst_channels = 2;
+			const AVChannelLayout dst_channel_layout = AV_CHANNEL_LAYOUT_STEREO;
+			const AVSampleFormat dst_format = AV_SAMPLE_FMT_FLT;
+#if __ANDROID__
+
+            int set_err = 0;
+            if ((set_err = av_opt_set_int(av.swr, "in_channel_count", stream->codecpar->ch_layout.nb_channels, 0)) ||
+                (set_err = av_opt_set_int(av.swr, "out_channel_count", dst_channels, 0)) ||
+                (set_err = av_opt_set_chlayout(av.swr, "in_channel_layout", &stream->codecpar->ch_layout, 0)) ||
+                (set_err = av_opt_set_chlayout(av.swr, "out_channel_layout", &dst_channel_layout, 0)) ||
+                (set_err = av_opt_set_int(av.swr, "in_sample_rate", stream->codecpar->sample_rate, 0)) ||
+                (set_err = av_opt_set_int(av.swr, "out_sample_rate", sample_rate, 0)) ||
+                (set_err = av_opt_set_sample_fmt(av.swr, "in_sample_fmt", static_cast<AVSampleFormat>(stream->codecpar->format), 0)) ||
+                (set_err = av_opt_set_sample_fmt(av.swr, "out_sample_fmt", dst_format, 0)))
+
+#else
+			const int set_err = swr_alloc_set_opts2(&av.swr, &dst_channel_layout, dst_format,
+				sample_rate, &stream->codecpar->ch_layout,
+				static_cast<AVSampleFormat>(stream->codecpar->format),
+				stream->codecpar->sample_rate, 0, nullptr);
+			if (set_err < 0)
+#endif
+			{
+				media_log.error("audio_decoder: Failed to set resampler options: Error: %d='%s'", set_err, av_error_to_string(set_err));
+				has_error = true;
+				return;
+			}
+#ifndef __ANDROID__
 			if (!av.swr)
 			{
 				media_log.error("audio_decoder: Failed to allocate resampler for stream #%u in file '%s'", stream_index, path);
 				has_error = true;
 				return;
 			}
-
-			const int dst_channels = 2;
-			const AVChannelLayout dst_channel_layout = AV_CHANNEL_LAYOUT_STEREO;
-			const AVSampleFormat dst_format = AV_SAMPLE_FMT_FLT;
-
-			int set_err = 0;
-			if ((set_err = av_opt_set_int(av.swr, "in_channel_count", stream->codecpar->ch_layout.nb_channels, 0)) ||
-				(set_err = av_opt_set_int(av.swr, "out_channel_count", dst_channels, 0)) ||
-				(set_err = av_opt_set_chlayout(av.swr, "in_channel_layout", &stream->codecpar->ch_layout, 0)) ||
-				(set_err = av_opt_set_chlayout(av.swr, "out_channel_layout", &dst_channel_layout, 0)) ||
-				(set_err = av_opt_set_int(av.swr, "in_sample_rate", stream->codecpar->sample_rate, 0)) ||
-				(set_err = av_opt_set_int(av.swr, "out_sample_rate", sample_rate, 0)) ||
-				(set_err = av_opt_set_sample_fmt(av.swr, "in_sample_fmt", static_cast<AVSampleFormat>(stream->codecpar->format), 0)) ||
-				(set_err = av_opt_set_sample_fmt(av.swr, "out_sample_fmt", dst_format, 0)))
-			{
-				media_log.error("audio_decoder: Failed to set resampler options: Error: %d='%s'", set_err, av_error_to_string(set_err));
-				has_error = true;
-				return;
-			}
-
+#endif
 			if (int err = swr_init(av.swr); err < 0 || !swr_is_initialized(av.swr))
 			{
 				media_log.error("audio_decoder: Resampler has not been properly initialized: %d='%s'", err, av_error_to_string(err));
@@ -825,11 +927,12 @@ namespace utils
 					std::this_thread::sleep_for(1ms);
 				}
 			}
-
-			auto& thread = *m_thread;
-			thread = thread_state::aborting;
-			thread();
-
+#if __ANDROID__
+            auto& thread = *m_thread;
+            thread = thread_state::aborting;
+            thread();
+#endif
+			// Join thread
 			m_thread.reset();
 		}
 

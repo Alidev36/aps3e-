@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "overlay_trophy_notification.h"
 #include "Emu/Cell/ErrorCodes.h"
-#include "Emu/System.h"
 
 namespace rsx
 {
@@ -70,7 +69,7 @@ namespace rsx
 			{
 				// First tick
 				creation_time_us = timestamp_us;
-				Emu.GetCallbacks().play_sound(fs::get_config_dir() + "sounds/snd_trophy.wav");
+				play_sound(sound_effect::trophy);
 				return;
 			}
 
@@ -159,7 +158,7 @@ namespace rsx
 			default: break;
 			}
 
-			text_view.set_unicode_text(utf8_to_u32string(get_localized_string(string_id, trophy.name)));
+			text_view.set_unicode_text(get_localized_u32string(string_id, trophy.name));
 			text_view.auto_resize();
 
 			// Resize background to cover the text

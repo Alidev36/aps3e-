@@ -10,11 +10,12 @@ enum class pad_handler
 	ds4,
 	dualsense,
 	skateboard,
+	move,
 #ifdef _WIN32
 	xinput,
 	mm,
 #endif
-#ifdef HAVE_SDL2
+#ifdef HAVE_SDL3
 	sdl,
 #endif
 #ifdef HAVE_LIBEVDEV

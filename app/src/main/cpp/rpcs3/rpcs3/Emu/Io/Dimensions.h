@@ -30,7 +30,9 @@ public:
 	void get_model(const u8* buf, u8 sequence, std::array<u8, 32>& reply_buf);
 	std::optional<std::array<u8, 32>> pop_added_removed_response();
 
-	bool remove_figure(u8 pad, u8 index, bool save, bool lock);
+	bool remove_figure(u8 pad, u8 index, bool full_remove, bool lock);
+	bool temp_remove(u8 index);
+	bool cancel_remove(u8 index);
 	u32 load_figure(const std::array<u8, 0x2D * 0x04>& buf, fs::file in_file, u8 pad, u8 index, bool lock);
 	bool move_figure(u8 pad, u8 index, u8 old_pad, u8 old_index);
 	static bool create_blank_character(std::array<u8, 0x2D * 0x04>& buf, u16 id);
@@ -47,7 +49,7 @@ private:
 	static std::array<u8, 16> generate_figure_key(const std::array<u8, 0x2D * 0x04>& buf);
 	static u32 scramble(const std::array<u8, 7>& uid, u8 count);
 	static std::array<u8, 4> pwd_generate(const std::array<u8, 7>& uid);
-	static std::array<u8, 4> dimensions_randomize(const std::vector<u8> key, u8 count);
+	static std::array<u8, 4> dimensions_randomize(const std::vector<u8>& key, u8 count);
 	static u32 get_figure_id(const std::array<u8, 0x2D * 0x04>& buf);
 	u32 get_next();
 	dimensions_figure& get_figure_by_index(u8 index);
@@ -69,11 +71,12 @@ public:
 	usb_device_dimensions(const std::array<u8, 7>& location);
 	~usb_device_dimensions();
 
+	static std::shared_ptr<usb_device> make_instance(u32 controller_index, const std::array<u8, 7>& location);
+	static u16 get_num_emu_devices();
+
 	void control_transfer(u8 bmRequestType, u8 bRequest, u16 wValue, u16 wIndex, u16 wLength, u32 buf_size, u8* buf, UsbTransfer* transfer) override;
 	void interrupt_transfer(u32 buf_size, u8* buf, u32 endpoint, UsbTransfer* transfer) override;
-	void isochronous_transfer(UsbTransfer* transfer) override;
 
 protected:
-	shared_mutex m_query_mutex;
 	std::queue<std::array<u8, 32>> m_queries;
 };

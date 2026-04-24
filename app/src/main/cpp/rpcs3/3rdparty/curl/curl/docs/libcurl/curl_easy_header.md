@@ -81,12 +81,12 @@ the time it is called.
 
 ~~~c
 struct curl_header {
-   char *name;
-   char *value;
-   size_t amount;
-   size_t index;
-   unsigned int origin;
-   void *anchor;
+  char *name;
+  char *value;
+  size_t amount;
+  size_t index;
+  unsigned int origin;
+  void *anchor;
 };
 ~~~
 
@@ -160,4 +160,6 @@ int main(void)
 
 # RETURN VALUE
 
-This function returns a CURLHcode indicating success or error.
+This function returns a CURLHcode indicating success or error. CURLHE_OK (0)
+means everything was OK, non-zero means an error occurred, see
+libcurl-errors(3).

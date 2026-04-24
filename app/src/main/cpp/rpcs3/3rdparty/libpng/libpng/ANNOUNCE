@@ -1,5 +1,5 @@
-libpng 1.6.44 - September 12, 2024
-==================================
+libpng 1.6.56 - March 25, 2026
+==============================
 
 This is a public release of libpng, intended for use in production code.
 
@@ -7,15 +7,12 @@ This is a public release of libpng, intended for use in production code.
 Files available for download
 ----------------------------
 
-Source files with LF line endings (for Unix/Linux):
+Source files:
 
- * libpng-1.6.44.tar.xz (LZMA-compressed, recommended)
- * libpng-1.6.44.tar.gz (deflate-compressed)
-
-Source files with CRLF line endings (for Windows):
-
- * lpng1644.7z (LZMA-compressed, recommended)
- * lpng1644.zip (deflate-compressed)
+ * libpng-1.6.56.tar.xz (LZMA-compressed, recommended)
+ * libpng-1.6.56.tar.gz (deflate-compressed)
+ * lpng1656.7z (LZMA-compressed)
+ * lpng1656.zip (deflate-compressed)
 
 Other information:
 
@@ -25,32 +22,41 @@ Other information:
  * TRADEMARK.md
 
 
-Changes from version 1.6.43 to version 1.6.44
+Changes from version 1.6.55 to version 1.6.56
 ---------------------------------------------
 
- * Hardened calculations in chroma handling to prevent overflows, and
-   relaxed a constraint in cHRM validation to accomodate the standard
-   ACES AP1 set of color primaries.
-   (Contributed by John Bowler)
- * Removed the ASM implementation of ARM Neon optimizations and updated
-   the build accordingly. Only the remaining C implementation shall be
-   used from now on, thus ensuring the support of the PAC/BTI security
-   features on ARM64.
-   (Contributed by Ross Burton and John Bowler)
- * Fixed the pickup of the PNG_HARDWARE_OPTIMIZATIONS option in the
-   CMake build on FreeBSD/amd64. This is an important performance fix
-   on this platform.
- * Applied various fixes and improvements to the CMake build.
-   (Contributed by Eric Riff, Benjamin Buch and Erik Scholz)
- * Added fuzzing targets for the simplified read API.
-   (Contributed by Mikhail Khachayants)
- * Fixed a build error involving pngtest.c under a custom config.
-   This was a regression introduced in a code cleanup in libpng-1.6.43.
-   (Contributed by Ben Wagner)
- * Fixed and improved the config files for AppVeyor CI and Travis CI.
+ * Fixed CVE-2026-33416 (high severity):
+   Use-after-free via pointer aliasing in `png_set_tRNS` and `png_set_PLTE`.
+   (Reported by Halil Oktay and Ryo Shimada;
+   fixed by Halil Oktay and Cosmin Truta.)
+ * Fixed CVE-2026-33636 (high severity):
+   Out-of-bounds read/write in the palette expansion on ARM Neon.
+   (Reported by Taegu Ha; fixed by Taegu Ha and Cosmin Truta.)
+ * Fixed uninitialized reads beyond `num_trans` in `trans_alpha` buffers.
+   (Contributed by Halil Oktay.)
+ * Fixed stale `info_ptr->palette` after in-place gamma and background
+   transforms.
+ * Fixed wrong channel indices in `png_image_read_and_map` RGB_ALPHA path.
+   (Contributed by Yuelin Wang.)
+ * Fixed wrong background color in colormap read.
+   (Contributed by Yuelin Wang.)
+ * Fixed dead loop in sPLT write.
+   (Contributed by Yuelin Wang.)
+ * Added missing null pointer checks in four public API functions.
+   (Contributed by Yuelin Wang.)
+ * Validated shift bit depths in `png_set_shift` to prevent infinite loop.
+   (Contributed by Yuelin Wang.)
+ * Avoided undefined behavior in library and tests.
+ * Deprecated the hardly-ever-tested POINTER_INDEXING config option.
+ * Added negative-stride test coverage for the simplified API.
+ * Fixed memory leaks and API misuse in oss-fuzz.
+   (Contributed by Owen Sanzas.)
+ * Implemented various fixes and improvements in oss-fuzz.
+   (Contributed by Bob Friesenhahn and Philippe Antoine.)
+ * Performed various refactorings and cleanups.
 
 
 Send comments/corrections/commendations to png-mng-implement at lists.sf.net.
 Subscription is required; visit
-https://lists.sourceforge.net/lists/listinfo/png-mng-implement
+<https://lists.sourceforge.net/lists/listinfo/png-mng-implement>
 to subscribe.

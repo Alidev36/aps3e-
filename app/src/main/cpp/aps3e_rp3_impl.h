@@ -250,7 +250,7 @@ public:
     static QStringList GetKeyNames(const QKeyEvent* keyEvent);
     static std::string GetKeyName(const QKeyEvent* keyEvent, bool with_modifiers);
     static std::string GetKeyName(const u32& keyCode);*/
-    static std::set<u32> GetKeyCodes(const cfg::string& cfg_string);
+    static std::vector<std::set<u32>> GetKeyCombos(const cfg::string& cfg_string);
     //static u32 GetKeyCode(const QString& keyName);
 
     static int native_scan_code_from_string(const std::string& key);
@@ -335,7 +335,7 @@ public:
     f64 client_display_rate(){PR;return 60.0;}
     bool has_alpha(){PR;return true;}
 
-    display_handle_t handle() const{PR;return reinterpret_cast<void*>(this->wnd);}
+    display_handle_t handle() const{PR;return this->wnd;}
 
     bool can_consume_frame() const
     {PR;
@@ -343,10 +343,10 @@ public:
         return video_provider.can_consume_frame();
     }
 
-    void present_frame(std::vector<u8>& data, u32 pitch, u32 width, u32 height, bool is_bgra) const
+    void present_frame(std::vector<u8>&& data, u32 pitch, u32 width, u32 height, bool is_bgra) const
     {PR;
         utils::video_provider& video_provider = g_fxo->get<utils::video_provider>();
-        video_provider.present_frame(data, pitch, width, height, is_bgra);
+        video_provider.present_frame(std::move(data), pitch, width, height, is_bgra);
     }
 
     void take_screenshot(std::vector<u8>&& sshot_data, u32 sshot_width, u32 sshot_height, bool is_bgra) {PR;}
@@ -370,7 +370,7 @@ public:
 
 class android_save_dialog:public SaveDialogBase{
 public:
-    s32 ShowSaveDataList(std::vector<SaveDataEntry>& save_entries, s32 focused, u32 op, vm::ptr<CellSaveDataListSet> listSet, bool enable_overlay) override
+    s32 ShowSaveDataList(const std::string& base_dir, std::vector<SaveDataEntry>& save_entries, s32 focused, u32 op, vm::ptr<CellSaveDataListSet> listSet, bool enable_overlay) override
     {
         LOGI("ShowSaveDataList(save_entries=%d, focused=%d, op=0x%x, listSet=*0x%x, enable_overlay=%d)", save_entries.size(), focused, op, listSet, enable_overlay);
 
@@ -387,7 +387,7 @@ public:
         {
             LOGI("ShowSaveDataList: Showing native UI dialog");
 
-            const s32 result = manager->create<rsx::overlays::save_dialog>()->show(save_entries, focused, op, listSet, enable_overlay);
+            const s32 result = manager->create<rsx::overlays::save_dialog>()->show(base_dir, save_entries, focused, op, listSet, enable_overlay);
             if (result != rsx::overlays::user_interface::selection_code::error)
             {
                 LOGI("ShowSaveDataList: Native UI dialog returned with selection %d", result);
@@ -553,4 +553,27 @@ public:
     }
 };
 
+class dummy_video_source : public video_source
+{
+public:
+    dummy_video_source():video_source(){}
+    virtual ~dummy_video_source(){}
+
+    void set_video_path(const std::string& video_path) override{}
+    void set_audio_path(const std::string& audio_path) override{}
+
+    void get_image(std::vector<u8>& data, int& w, int& h, int& ch, int& bpp) override{}
+    bool has_new() const override { return m_has_new; }
+
+    void set_active(bool active) override { m_active = active; }
+    bool get_active() const override { return m_active; }
+
+
+protected:
+
+    shared_mutex m_image_mutex;
+
+    atomic_t<bool> m_active = false;
+    atomic_t<bool> m_has_new = false;
+};
 #endif //APS3E_APS3E_RP3_IMPL_H

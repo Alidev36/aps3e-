@@ -15,8 +15,10 @@ void fmt_class_string<cfg::node>::format(std::string& out, u64 arg)
 
 namespace cfg
 {
+	u32 _base::id_counter = 0;
+
 	_base::_base(type _type)
-		: m_type(_type)
+		: m_type(_type), m_id(id_counter++)
 	{
 		if (_type != type::node)
 		{
@@ -25,7 +27,7 @@ namespace cfg
 	}
 
 	_base::_base(type _type, node* owner, std::string name, bool dynamic)
-		: m_type(_type), m_dynamic(dynamic), m_name(std::move(name))
+		: m_type(_type), m_parent(owner), m_dynamic(dynamic), m_name(std::move(name)), m_id(id_counter++)
 	{
 		for (const auto& node : owner->m_nodes)
 		{
@@ -164,6 +166,55 @@ bool try_to_uint64(u64* out, std::string_view value, u64 min, u64 max)
 	return true;
 }
 
+bool try_to_uint128(u128* out, std::string_view value)
+{
+	if (value.empty())
+	{
+		if (out) cfg_log.error("cfg::try_to_uint128(): called with an empty string");
+		return false;
+	}
+
+	u64 result_low = 0, result_high = 0;
+	const char* start_high64 = value.data();
+	const char* end = value.data() + value.size();
+
+	if (start_high64[0] == '0' && value.size() >= 2 && (start_high64[1] == 'x' || start_high64[1] == 'X'))
+	{
+		// Hex support
+		start_high64 += 2;
+	}
+
+	const char* start_low64 = end - std::min<usz>(end - start_high64, 16);
+
+	// Hexadecimal-only
+	constexpr int base = 16;
+
+	auto ret = std::from_chars(start_low64, end, result_low, base);
+
+	if (ret.ec != std::errc() || ret.ptr != end)
+	{
+		if (out) cfg_log.error("cfg::try_to_uint128('%s'): invalid integer", value);
+		return false;
+	}
+
+	if (start_high64 == start_low64)
+	{
+		if (out) *out = result_low;
+		return true;
+	}
+
+	ret = std::from_chars(start_high64, start_low64, result_high, base);
+
+	if (ret.ec != std::errc() || ret.ptr != start_low64)
+	{
+		if (out) cfg_log.error("cfg::try_to_uint128('%s'): invalid integer", value);
+		return false;
+	}
+
+	if (out) *out = result_low + (u128{result_high} << 64);
+	return true;
+}
+
 std::vector<std::string> cfg::make_float_range(f64 min, f64 max)
 {
 	return {std::to_string(min), std::to_string(max)};
@@ -276,6 +327,19 @@ bool cfg::try_to_enum_value(u64* out, decltype(&fmt_class_string<int>::format) f
 	return true;
 }
 
+std::string cfg::uint128::to_string(u128 value) noexcept
+{
+	std::string result = "0x";
+	result.resize(result.size() + 32);
+
+	for (u32 i = 0; i < 32; i++)
+	{
+		result[result.size() - 1 - i] = "0123456789ABCDEF"[static_cast<u64>(value >> (i * 4)) % 16];
+	}
+
+	return result;
+}
+
 std::vector<std::string> cfg::try_to_enum_list(decltype(&fmt_class_string<int>::format) func)
 {
 	std::vector<std::string> result;
@@ -293,6 +357,27 @@ std::vector<std::string> cfg::try_to_enum_list(decltype(&fmt_class_string<int>::
 		}
 
 		result.emplace_back(std::move(var));
+	}
+
+	return result;
+}
+
+size_t cfg::try_to_enum_size(decltype(&fmt_class_string<int>::format) func)
+{
+	size_t result = 0;
+	for (u64 i = 0;; i++)
+	{
+		std::string var;
+		func(var, i);
+
+		std::string hex;
+		fmt_class_string<u64>::format(hex, i);
+		if (var == hex)
+		{
+			break;
+		}
+
+		result++;
 	}
 
 	return result;
@@ -335,12 +420,24 @@ void cfg::encode(YAML::Emitter& out, const cfg::_base& rhs)
 		out << YAML::EndMap;
 		return;
 	}
+	case type::node_map:
+	{
+		//out << YAML::Block; // Does nothing, output is in Flow mode still (TODO)
+		out << YAML::BeginMap;
+		for (const auto& np : static_cast<const node_map_entry&>(rhs).get_map())
+		{
+			out << YAML::Key << np.first;
+			out << YAML::Value << fmt::format("%s", np.second);
+		}
+		out << YAML::EndMap;
+		return;
+	}
 	case type::log:
 	{
 		out << YAML::BeginMap;
 		for (const auto& np : static_cast<const log_entry&>(rhs).get_map())
 		{
-			if (np.second == logs::level::notice) continue;
+			if (np.second == logs::level::_default) continue;
 			out << YAML::Key << np.first;
 			out << YAML::Value << fmt::format("%s", np.second);
 		}
@@ -415,6 +512,7 @@ void cfg::decode(const YAML::Node& data, cfg::_base& rhs, bool dynamic)
 		break;
 	}
 	case type::map:
+	case type::node_map:
 	{
 		if (!data.IsMap())
 		{
@@ -538,19 +636,12 @@ void cfg::node::from_default()
 	}
 }
 
-void cfg::_bool::from_default()
+void cfg::node::restore_defaults()
 {
-	m_value = def;
-}
-
-void cfg::string::from_default()
-{
-	m_value = def;
-}
-
-void cfg::set_entry::from_default()
-{
-	m_set = {};
+	for (auto& node : m_nodes)
+	{
+		node->restore_defaults();
+	}
 }
 
 std::string cfg::map_entry::get_value(std::string_view key)

@@ -1,14 +1,21 @@
 # CMake Project for FAudio
 # Written by @NeroBurner
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.10)
 project(FAudio C)
+
+if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
+  set(FAUDIO_MAINPROJECT ON)
+else()
+  set(FAUDIO_MAINPROJECT OFF)
+endif()
 
 # Options
 option(BUILD_UTILS "Build utils/ folder" OFF)
 option(BUILD_TESTS "Build tests/ folder for unit tests to be executed on the host against FAudio" OFF)
-option(BUILD_SDL3 "Build against SDL 3.0" OFF)
+option(BUILD_SDL3 "Build against SDL 3.0" ON)
 if(WIN32)
 option(PLATFORM_WIN32 "Enable native Win32 platform instead of SDL" OFF)
+option(WMA_DECODING "Enable WMA decoding support" ${PLATFORM_WIN32})
 endif()
 option(XNASONG "Build with XNA_Song.c" ON)
 option(LOG_ASSERTIONS "Bind FAudio_assert to log, instead of platform's assert" OFF)
@@ -18,6 +25,7 @@ option(BUILD_SHARED_LIBS "Build shared library" ON)
 if(WIN32)
 option(INSTALL_MINGW_DEPENDENCIES "Add dependent libraries to MinGW install target" OFF)
 endif()
+option(FAUDIO_INSTALL "Enable installation of FAudio" ${FAUDIO_MAINPROJECT})
 
 # C99 Requirement
 if(${CMAKE_VERSION} VERSION_LESS "3.1.3")
@@ -29,8 +37,8 @@ endif()
 
 # Version
 SET(LIB_MAJOR_VERSION "0")
-SET(LIB_MINOR_VERSION "24")
-SET(LIB_REVISION "10")
+SET(LIB_MINOR_VERSION "26")
+SET(LIB_REVISION "04")
 SET(LIB_VERSION "${LIB_MAJOR_VERSION}.${LIB_MINOR_VERSION}.${LIB_REVISION}")
 
 # Build Type
@@ -100,6 +108,7 @@ add_library(${target}
 	src/FAPOFX_reverb.c
 	src/FAudio.c
 	src/FAudioFX_reverb.c
+	src/FAudioFX_collector.c
 	src/FAudioFX_volumemeter.c
 	src/FAudio_internal.c
 	src/FAudio_internal_simd.c
@@ -107,14 +116,19 @@ add_library(${target}
 	src/FAudio_platform_sdl2.c
 	src/FAudio_platform_sdl3.c
 	src/FAudio_platform_win32.c
+	src/FAudio_platform_win32_wmadec.c
 	# Optional source files
 	src/XNA_Song.c
 )
 
+if(WMA_DECODING)
+	target_compile_definitions(${target} PRIVATE HAVE_WMADEC=1)
+	target_link_libraries(${target} PRIVATE ole32 mfplat mfuuid)
+endif()
+
 if(PLATFORM_WIN32)
 	target_link_libraries(${target} PRIVATE dxguid uuid winmm ole32 advapi32 user32 mfplat mfreadwrite mfuuid propsys)
 	target_compile_definitions(${target} PUBLIC FAUDIO_WIN32_PLATFORM)
-	target_compile_definitions(${target} PRIVATE HAVE_WMADEC=1)
 	set(PLATFORM_CFLAGS "-DFAUDIO_WIN32_PLATFORM")
 	set(XNASONG OFF)
 else()
@@ -164,6 +178,8 @@ if(DUMP_VOICES)
 endif()
 
 # SDL Dependency
+set(FAUDIO_USING_SDL2_PACKAGE OFF)
+set(FAUDIO_USING_SDL3_PACKAGE OFF)
 if (PLATFORM_WIN32)
 	message(STATUS "not using SDL")
 elseif (BUILD_SDL3)
@@ -179,12 +195,14 @@ elseif (BUILD_SDL3)
 		find_package(SDL3 CONFIG)
 		if (TARGET SDL3::SDL3)
 			message(STATUS "using TARGET SDL3::SDL3")
+			set(FAUDIO_USING_SDL3_PACKAGE ON)
 			target_link_libraries(${target} PUBLIC SDL3::SDL3)
 			if(INSTALL_MINGW_DEPENDENCIES)
 				install_shared_libs(TARGETS SDL3::SDL3 DESTINATION bin NO_INSTALL_SYMLINKS REQUIRED)
 			endif()
 		elseif (TARGET SDL3)
 			message(STATUS "using TARGET SDL3")
+			set(FAUDIO_USING_SDL3_PACKAGE ON)
 			target_link_libraries(${target} PUBLIC SDL3)
 			if(INSTALL_MINGW_DEPENDENCIES)
 				install_shared_libs(TARGETS SDL3 DESTINATION bin NO_INSTALL_SYMLINKS REQUIRED)
@@ -210,12 +228,14 @@ else()
 	find_package(SDL2 CONFIG)
 	if (TARGET SDL2::SDL2)
 		message(STATUS "using TARGET SDL2::SDL2")
+		set(FAUDIO_USING_SDL2_PACKAGE ON)
 		target_link_libraries(${target} PUBLIC SDL2::SDL2)
 		if(INSTALL_MINGW_DEPENDENCIES)
 			install_shared_libs(TARGETS SDL2::SDL2 DESTINATION bin NO_INSTALL_SYMLINKS REQUIRED)
 		endif()
 	elseif (TARGET SDL2)
 		message(STATUS "using TARGET SDL2")
+		set(FAUDIO_USING_SDL2_PACKAGE ON)
 		target_link_libraries(${target} PUBLIC SDL2)
 		if(INSTALL_MINGW_DEPENDENCIES)
 			install_shared_libs(TARGETS SDL2 DESTINATION bin NO_INSTALL_SYMLINKS REQUIRED)
@@ -324,64 +344,67 @@ endif()
 
 # Installation
 
-# Public Headers...
-install(
-	DIRECTORY include/
-	DESTINATION ${FAudio_INSTALL_INCLUDEDIR}
-)
-# Libraries...
-set(export ${PROJECT_NAME}-targets-shared)
+if(FAUDIO_INSTALL)
 
-if(NOT BUILD_SHARED_LIBS)
-	set(export ${PROJECT_NAME}-targets-static)
-endif()
+	# Public Headers...
+	install(
+		DIRECTORY include/
+		DESTINATION ${FAudio_INSTALL_INCLUDEDIR}
+	)
+	# Libraries...
+	set(export ${PROJECT_NAME}-targets-shared)
 
-install(
-	TARGETS ${target}
-	EXPORT ${export}
-	INCLUDES DESTINATION ${FAudio_INSTALL_INCLUDEDIR}
-	RUNTIME DESTINATION ${FAudio_INSTALL_BINDIR}
-	LIBRARY DESTINATION ${FAudio_INSTALL_LIBDIR}
-	ARCHIVE DESTINATION ${FAudio_INSTALL_LIBDIR}
-)
-
-# Generate a pkgconfig file
-include(cmake/JoinPaths.cmake)
-join_paths(FAUDIO_PKGCONF_LIBDIR "\${prefix}" "${CMAKE_INSTALL_LIBDIR}")
-join_paths(FAUDIO_PKGCONF_INCLUDEDIR "\${prefix}" "${CMAKE_INSTALL_INCLUDEDIR}")
-
-if(NOT PLATFORM_WIN32)
-	if(BUILD_SDL3)
-		set(PC_REQUIRES_PRIVATE "Requires.private: sdl3")
-	else()
-		set(PC_REQUIRES_PRIVATE "Requires.private: sdl2")
+	if(NOT BUILD_SHARED_LIBS)
+		set(export ${PROJECT_NAME}-targets-static)
 	endif()
+
+	install(
+		TARGETS ${target}
+		EXPORT ${export}
+		INCLUDES DESTINATION ${FAudio_INSTALL_INCLUDEDIR}
+		RUNTIME DESTINATION ${FAudio_INSTALL_BINDIR}
+		LIBRARY DESTINATION ${FAudio_INSTALL_LIBDIR}
+		ARCHIVE DESTINATION ${FAudio_INSTALL_LIBDIR}
+	)
+
+	# Generate a pkgconfig file
+	include(cmake/JoinPaths.cmake)
+	join_paths(FAUDIO_PKGCONF_LIBDIR "\${prefix}" "${FAudio_INSTALL_LIBDIR}")
+	join_paths(FAUDIO_PKGCONF_INCLUDEDIR "\${prefix}" "${FAudio_INSTALL_INCLUDEDIR}")
+
+	if(NOT PLATFORM_WIN32)
+		if(BUILD_SDL3)
+			set(PC_REQUIRES_PRIVATE "Requires.private: sdl3")
+		else()
+			set(PC_REQUIRES_PRIVATE "Requires.private: sdl2")
+		endif()
+	endif()
+
+	configure_file(
+		"${PROJECT_SOURCE_DIR}/cmake/${PROJECT_NAME}.pc.in"
+		${PROJECT_BINARY_DIR}/generated/${PROJECT_NAME}.pc
+		@ONLY
+	)
+	install(
+		FILES ${CMAKE_CURRENT_BINARY_DIR}/generated/${PROJECT_NAME}.pc
+		DESTINATION ${FAudio_INSTALL_LIBDIR}/pkgconfig
+	)
+
+	# Generate cmake-config file, install CMake files
+	include(CMakePackageConfigHelpers)
+	configure_package_config_file(
+		cmake/config.cmake.in
+		${CMAKE_CURRENT_BINARY_DIR}/generated/${PROJECT_NAME}Config.cmake
+		INSTALL_DESTINATION ${FAudio_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
+	)
+	install(
+		FILES ${CMAKE_CURRENT_BINARY_DIR}/generated/${PROJECT_NAME}Config.cmake
+		DESTINATION ${FAudio_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
+	)
+
+	install(
+		EXPORT ${export}
+		NAMESPACE ${PROJECT_NAME}::
+		DESTINATION ${FAudio_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
+	)
 endif()
-
-configure_file(
-	"${PROJECT_SOURCE_DIR}/cmake/${PROJECT_NAME}.pc.in"
-	${PROJECT_BINARY_DIR}/generated/${PROJECT_NAME}.pc
-	@ONLY
-)
-install(
-	FILES ${CMAKE_CURRENT_BINARY_DIR}/generated/${PROJECT_NAME}.pc
-	DESTINATION ${FAudio_INSTALL_LIBDIR}/pkgconfig
-)
-
-# Generate cmake-config file, install CMake files
-include(CMakePackageConfigHelpers)
-configure_package_config_file(
-	cmake/config.cmake.in
-	${CMAKE_CURRENT_BINARY_DIR}/generated/${PROJECT_NAME}Config.cmake
-	INSTALL_DESTINATION ${FAudio_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
-)
-install(
-	FILES ${CMAKE_CURRENT_BINARY_DIR}/generated/${PROJECT_NAME}Config.cmake
-	DESTINATION ${FAudio_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
-)
-
-install(
-	EXPORT ${export}
-	NAMESPACE ${PROJECT_NAME}::
-	DESTINATION ${FAudio_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
-)

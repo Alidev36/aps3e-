@@ -121,7 +121,7 @@ public:
 private:
 	usz response_pos{};
 	bool buttons_enabled{};
-	
+
 #if !defined(__ANDROID__)
 	RtMidiInPtr midi_in{};
 #endif
@@ -134,7 +134,7 @@ private:
 		std::string name;
 		std::vector<u8> notes;
 		std::function<rb3drums::KitState()> create_state;
-	
+
 		Definition(std::string name, const std::string_view csv, const std::function<rb3drums::KitState()> create_state);
 	};
 

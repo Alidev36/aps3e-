@@ -37,6 +37,8 @@ namespace vk
 		VkInstance m_instance = VK_NULL_HANDLE;
 		VkSurfaceKHR m_surface = VK_NULL_HANDLE;
 
+		//PFN_vkDestroyDebugReportCallbackEXT _vkDestroyDebugReportCallback = nullptr;
+		//PFN_vkCreateDebugReportCallbackEXT _vkCreateDebugReportCallback = nullptr;
 		VkDebugReportCallbackEXT m_debugger = nullptr;
 
 		bool extensions_loaded = false;

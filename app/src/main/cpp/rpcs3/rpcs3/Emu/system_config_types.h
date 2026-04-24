@@ -1,11 +1,5 @@
 #pragma once
 
-enum class texture_upload_type : unsigned
-{
-    cpu,
-    gpu,
-};
-
 enum class ppu_decoder_type : unsigned
 {
 	_static,
@@ -50,9 +44,7 @@ enum class mouse_handler
 enum class video_renderer
 {
 	null,
-#ifndef __ANDROID__
 	opengl,
-#endif
 	vulkan,
 };
 
@@ -124,7 +116,10 @@ enum class camera_handler
 {
 	null,
 	fake,
-	qt
+	qt,
+#ifdef HAVE_SDL3
+	sdl,
+#endif
 };
 
 enum class camera_flip
@@ -146,6 +141,7 @@ enum class fake_camera_type
 enum class move_handler
 {
 	null,
+	real,
 	fake,
 	mouse,
 	raw_mouse,
@@ -255,17 +251,23 @@ enum class rsx_fifo_mode : unsigned
 	as_ps3,
 };
 
-enum class tsx_usage
-{
-	disabled,
-	enabled,
-	forced,
-};
-
 enum class enter_button_assign
 {
 	circle, // CELL_SYSUTIL_ENTER_BUTTON_ASSIGN_CIRCLE
 	cross   // CELL_SYSUTIL_ENTER_BUTTON_ASSIGN_CROSS
+};
+
+enum class date_format
+{
+	yyyymmdd, // CELL_SYSUTIL_DATE_FMT_YYYYMMDD
+	ddmmyyyy, // CELL_SYSUTIL_DATE_FMT_DDMMYYYY
+	mmddyyyy  // CELL_SYSUTIL_DATE_FMT_MMDDYYYY
+};
+
+enum class time_format
+{
+	clock12, // CELL_SYSUTIL_TIME_FMT_CLOCK12
+	clock24  // CELL_SYSUTIL_TIME_FMT_CLOCK24
 };
 
 enum class np_internet_status
@@ -274,7 +276,7 @@ enum class np_internet_status
 	enabled,
 };
 
-enum np_psn_status
+enum class np_psn_status
 {
 	disabled,
 	psn_fake,
@@ -305,7 +307,8 @@ enum class vk_gpu_scheduler_mode
 enum class thread_scheduler_mode
 {
 	os,
-	affinity,
+	old,
+	alt
 };
 
 enum class perf_graph_detail_level
@@ -361,6 +364,12 @@ enum class xfloat_accuracy
 	inaccurate
 };
 
+enum class vsync_mode
+{
+	off,
+	adaptive,
+	full,
+};
 enum class vertex_buffer_upload_mode
 {
     _auto,
@@ -371,6 +380,5 @@ enum class vertex_buffer_upload_mode
 enum class font_file_selection
 {
     from_firmware,
-    from_os,
     custom
 };

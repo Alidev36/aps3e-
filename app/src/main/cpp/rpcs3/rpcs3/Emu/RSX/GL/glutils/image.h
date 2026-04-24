@@ -4,6 +4,7 @@
 
 #include "Utilities/geometry.h"
 #include "Emu/RSX/Common/TextureUtils.h"
+#include "Emu/RSX/Common/io_buffer.h"
 
 //using enum rsx::format_class;
 using namespace ::rsx::format_class_;
@@ -58,7 +59,7 @@ namespace gl
 		GLuint num_layers;
 	};
 
-	class texture
+	class texture : public named_object<GL_TEXTURE>
 	{
 		friend class texture_view;
 
@@ -69,43 +70,19 @@ namespace gl
 			ushort = GL_UNSIGNED_SHORT,
 			uint = GL_UNSIGNED_INT,
 
-#ifndef USE_GLES
 			ubyte_3_3_2 = GL_UNSIGNED_BYTE_3_3_2,
 			ubyte_2_3_3_rev = GL_UNSIGNED_BYTE_2_3_3_REV,
 
-
+			ushort_5_6_5 = GL_UNSIGNED_SHORT_5_6_5,
 			ushort_5_6_5_rev = GL_UNSIGNED_SHORT_5_6_5_REV,
-
+			ushort_4_4_4_4 = GL_UNSIGNED_SHORT_4_4_4_4,
 			ushort_4_4_4_4_rev = GL_UNSIGNED_SHORT_4_4_4_4_REV,
-
+			ushort_5_5_5_1 = GL_UNSIGNED_SHORT_5_5_5_1,
 			ushort_1_5_5_5_rev = GL_UNSIGNED_SHORT_1_5_5_5_REV,
 
 			uint_8_8_8_8 = GL_UNSIGNED_INT_8_8_8_8,
 			uint_8_8_8_8_rev = GL_UNSIGNED_INT_8_8_8_8_REV,
 			uint_10_10_10_2 = GL_UNSIGNED_INT_10_10_10_2,
-
-			f64 = GL_DOUBLE,
-
-			#else
-			/* ubyte_3_3_2 = _GL_UNSIGNED_BYTE_3_3_2,
-			ubyte_2_3_3_rev = _GL_UNSIGNED_BYTE_2_3_3_REV,
-
-			ushort_5_6_5_rev = _GL_UNSIGNED_SHORT_5_6_5_REV,
-
-			ushort_4_4_4_4_rev = _GL_UNSIGNED_SHORT_4_4_4_4_REV,
-
-			ushort_1_5_5_5_rev = _GL_UNSIGNED_SHORT_1_5_5_5_REV,
-
-			uint_8_8_8_8 = _GL_UNSIGNED_INT_8_8_8_8,
-			uint_8_8_8_8_rev = _GL_UNSIGNED_INT_8_8_8_8_REV,
-			uint_10_10_10_2 = _GL_UNSIGNED_INT_10_10_10_2,
-
-			f64 = _GL_DOUBLE,*/
-#endif
-			ushort_5_6_5 = GL_UNSIGNED_SHORT_5_6_5,
-			ushort_4_4_4_4 = GL_UNSIGNED_SHORT_4_4_4_4,
-			ushort_5_5_5_1 = GL_UNSIGNED_SHORT_5_5_5_1,
-
 			uint_2_10_10_10_rev = GL_UNSIGNED_INT_2_10_10_10_REV,
 			uint_24_8 = GL_UNSIGNED_INT_24_8,
 			float32_uint8 = GL_FLOAT_32_UNSIGNED_INT_24_8_REV,
@@ -115,6 +92,7 @@ namespace gl
 			sint = GL_INT,
 			f16 = GL_HALF_FLOAT,
 			f32 = GL_FLOAT,
+			f64 = GL_DOUBLE,
 		};
 
 		enum class channel
@@ -134,10 +112,9 @@ namespace gl
 			rgb = GL_RGB,
 			rgba = GL_RGBA,
 
-#ifndef USE_GLES
 			bgr = GL_BGR,
 			bgra = GL_BGRA,
-#endif
+
 			stencil = GL_STENCIL_INDEX,
 			depth = GL_DEPTH_COMPONENT,
 			depth_stencil = GL_DEPTH_STENCIL
@@ -164,20 +141,10 @@ namespace gl
 			bgr5a1 = GL_BGR5_A1,
 			rgba4 = GL_RGBA4,
 			r8 = GL_R8,
-
-#ifdef USE_GLES
-            r16 = GL_R16_EXT,
-#else
 			r16 = GL_R16,
-#endif
 			r32f = GL_R32F,
 			rg8 = GL_RG8,
-
-#ifdef USE_GLES
-            rg16 = GL_RG16_EXT,
-#else
 			rg16 = GL_RG16,
-#endif
 			rg16f = GL_RG16F,
 			rgba16f = GL_RGBA16F,
 			rgba32f = GL_RGBA32F,
@@ -191,12 +158,9 @@ namespace gl
 			mirrored_repeat = GL_MIRRORED_REPEAT,
 			clamp_to_edge = GL_CLAMP_TO_EDGE,
 			clamp_to_border = GL_CLAMP_TO_BORDER,
-
-#ifndef USE_GLES
 			mirror_clamp = GL_MIRROR_CLAMP_EXT,
 			//mirror_clamp_to_edge = GL_MIRROR_CLAMP_TO_EDGE,
 			mirror_clamp_to_border = GL_MIRROR_CLAMP_TO_BORDER_EXT
-#endif
 		};
 
 		enum class compare_mode
@@ -207,12 +171,7 @@ namespace gl
 
 		enum class target
 		{
-
-#ifdef USE_GLES
-			texture1D = _GL_TEXTURE_1D,
-			#else
 			texture1D = GL_TEXTURE_1D,
-#endif
 			texture2D = GL_TEXTURE_2D,
 			texture3D = GL_TEXTURE_3D,
 			textureCUBE = GL_TEXTURE_CUBE_MAP,
@@ -222,7 +181,6 @@ namespace gl
 		};
 
 	protected:
-		GLuint m_id = GL_NONE;
 		GLuint m_width = 0;
 		GLuint m_height = 0;
 		GLuint m_depth = 0;
@@ -259,7 +217,6 @@ namespace gl
 			return m_target;
 		}
 
-#if 1//ndef USE_GLES
 		static bool compressed_format(internal_format format_) noexcept
 		{
 			switch (format_)
@@ -273,7 +230,7 @@ namespace gl
 				return false;
 			}
 		}
-#endif
+
 		uint id() const noexcept
 		{
 			return m_id;
@@ -364,39 +321,43 @@ namespace gl
 		}
 
 		// Data management
-		void copy_from(const void* src, texture::format format, texture::type type, int level, const coord3u region, const pixel_unpack_settings& pixel_settings);
+		void copy_from(const rsx::io_buffer& src, texture::format format, texture::type type, int level, const coord3u region, const pixel_unpack_settings& pixel_settings);
 
-		void copy_from(buffer& buf, u32 gl_format_type, u32 offset, u32 length);
+		void copy_from(buffer& buf, GLsizeiptr offset, texture::format format, texture::type type, int level, const coord3u region, const pixel_unpack_settings& pixel_settings);
 
 		void copy_from(buffer_view& view);
 
-		void copy_to(void* dst, texture::format format, texture::type type, int level, const coord3u& region, const pixel_pack_settings& pixel_settings) const;
+		void copy_to(const rsx::io_buffer& dst, texture::format format, texture::type type, int level, const coord3u& region, const pixel_pack_settings& pixel_settings) const;
+
+		void copy_to(buffer& buf, GLsizeiptr offset, texture::format format, texture::type type, int level, const coord3u& region, const pixel_pack_settings& pixel_settings) const;
 
 		// Convenience wrappers
-		void copy_from(const void* src, texture::format format, texture::type type, const pixel_unpack_settings& pixel_settings)
+		void copy_from(const rsx::io_buffer& src, texture::format format, texture::type type, const pixel_unpack_settings& pixel_settings)
 		{
 			const coord3u region = { {}, size3D() };
 			copy_from(src, format, type, 0, region, pixel_settings);
 		}
 
-		void copy_to(void* dst, texture::format format, texture::type type, const pixel_pack_settings& pixel_settings) const
+		void copy_to(const rsx::io_buffer& dst, texture::format format, texture::type type, const pixel_pack_settings& pixel_settings) const
 		{
 			const coord3u region = { {}, size3D() };
 			copy_to(dst, format, type, 0, region, pixel_settings);
 		}
 	};
 
-	class texture_view
+	class texture_view : public named_object<GL_TEXTURE>
 	{
 	protected:
-		GLuint m_id = GL_NONE;
 		GLenum m_target = 0;
 		GLenum m_format = 0;
 		GLenum m_view_format = 0;
 		GLenum m_aspect_flags = 0;
 		texture* m_image_data = nullptr;
 
-		GLenum component_swizzle[4];
+		GLenum component_swizzle[4]{};
+
+		std::unordered_map<GLenum, std::unique_ptr<texture_view>> m_subviews;
+		texture_view* m_root_view = nullptr;
 
 		texture_view() = default;
 
@@ -437,6 +398,8 @@ namespace gl
 		}
 
 		virtual ~texture_view();
+
+		texture_view* as(GLenum format);
 
 		GLuint id() const
 		{
@@ -500,6 +463,7 @@ namespace gl
 
 	class viewable_image : public texture
 	{
+	protected:
 		std::unordered_map<u64, std::unique_ptr<texture_view>> views;
 
 	public:

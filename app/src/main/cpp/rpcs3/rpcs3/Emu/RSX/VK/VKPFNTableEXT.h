@@ -4,8 +4,8 @@
 VK_FUNC(vkCreateDebugReportCallbackEXT);
 VK_FUNC(vkDestroyDebugReportCallbackEXT);
 
-VK_FUNC(vkGetPhysicalDeviceFeatures2KHR);
-VK_FUNC(vkGetPhysicalDeviceProperties2KHR);
+//VK_FUNC(vkGetPhysicalDeviceFeatures2KHR);
+//VK_FUNC(vkGetPhysicalDeviceProperties2KHR);
 
 VK_FUNC(vkGetPhysicalDeviceSurfaceCapabilities2KHR);
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 if test ! -x ./wolfcrypt/test/testwolfcrypt
 then
@@ -12,10 +12,10 @@ then
     exit 1
 fi
 
-NEWHASH=$(./wolfcrypt/test/testwolfcrypt | sed -n 's/hash = \(.*\)/\1/p')
+OUT=$(./wolfcrypt/test/testwolfcrypt | sed -n 's/hash = \(.*\)/\1/p')
+NEWHASH=$(echo "$OUT" | cut -c1-64)
 if test -n "$NEWHASH"
 then
     cp wolfcrypt/src/fips_test.c wolfcrypt/src/fips_test.c.bak
     sed "s/^\".*\";/\"${NEWHASH}\";/" wolfcrypt/src/fips_test.c.bak >wolfcrypt/src/fips_test.c
 fi
-

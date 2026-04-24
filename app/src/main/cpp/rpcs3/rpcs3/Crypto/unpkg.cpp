@@ -16,48 +16,11 @@
 
 LOG_CHANNEL(pkg_log, "PKG");
 
-package_reader::package_reader(iso_fs& iso_fs, const std::string& entry_path)
-        :m_iso_fs(&iso_fs), m_path(entry_path)
-{
-    if (!m_file.open(iso_fs, entry_path))
-    {
-        pkg_log.error("PKG file not found!");
-        return;
-    }
-
-    m_is_valid = read_header();
-
-    if (!m_is_valid)
-    {
-        return;
-    }
-
-    m_is_valid = read_metadata();
-
-    if (!m_is_valid)
-    {
-        return;
-    }
-
-    m_is_valid = set_decryption_key();
-
-    if (!m_is_valid)
-    {
-        return;
-    }
-
-    const bool param_sfo_found = read_param_sfo();
-
-    if (!param_sfo_found)
-    {
-        pkg_log.notice("PKG does not contain a PARAM.SFO");
-    }
-}
-
-package_reader::package_reader(const std::string& path)
+package_reader::package_reader(const std::string& path, fs::file file)
 	: m_path(path)
+	, m_file(std::move(file))
 {
-	if (!m_file.open(path))
+	if (!m_file && !m_file.open(path))
 	{
 		pkg_log.error("PKG file not found!");
 		return;
@@ -92,49 +55,13 @@ package_reader::package_reader(const std::string& path)
 	}
 }
 
-
-package_reader::package_reader(fs::file&& file)
-//: m_path(path)
-{
-    m_file.reset(file.release());
-
-    m_is_valid = read_header();
-
-    if (!m_is_valid)
-    {
-        return;
-    }
-
-    m_is_valid = read_metadata();
-
-    if (!m_is_valid)
-    {
-        return;
-    }
-
-    m_is_valid = set_decryption_key();
-
-    if (!m_is_valid)
-    {
-        return;
-    }
-
-    const bool param_sfo_found = read_param_sfo();
-
-    if (!param_sfo_found)
-    {
-        pkg_log.notice("PKG does not contain a PARAM.SFO");
-    }
-}
-
-
 package_reader::~package_reader()
 {
 }
 
 bool package_reader::read_header()
 {
-	if (/*m_path.empty() || */!m_file)
+	if (m_path.empty() || !m_file)
 	{
 		pkg_log.error("Reading PKG header: no file to read!");
 		return false;
@@ -146,7 +73,6 @@ bool package_reader::read_header()
 		return false;
 	}
 
-    if(!m_path.empty())
 	pkg_log.notice("Path: '%s'", m_path);
 	pkg_log.notice("Header: pkg_magic = 0x%x = \"%s\"", +m_header.pkg_magic, std::string_view(reinterpret_cast<const char*>(&m_header.pkg_magic), 4).substr(1)); // Skip 0x7F
 	pkg_log.notice("Header: pkg_type = 0x%x = %d", m_header.pkg_type, m_header.pkg_type);
@@ -194,7 +120,7 @@ bool package_reader::read_header()
 		return false;
 	}
 
-	if (u64{umax} / sizeof(PKGEntry) < m_header.file_count)
+	if (u64{umax} / sizeof(PKGEntry) < u64(m_header.file_count))
 	{
 		pkg_log.error("PKG file count is too large! (0x%x)", m_header.file_count);
 		return false;
@@ -224,11 +150,6 @@ bool package_reader::read_header()
 
 	if (m_header.pkg_size > m_file.size())
 	{
-        if(m_path.empty()){
-            pkg_log.error("PKG file size mismatch (pkg_size=0x%llx)", m_header.pkg_size);
-            return false;
-        }
-
 		// Check if multi-files pkg
 		if (!m_path.ends_with("_00.pkg"))
 		{
@@ -246,18 +167,12 @@ bool package_reader::read_header()
 		{
 			const std::string archive_filename = fmt::format("%s_%02d.pkg", name_wo_number, filelist.size());
 
-			fs::file archive_file;
-            if(m_iso_fs&&name_wo_number[0]==':'){
-                if(!m_iso_fs->exists(archive_filename)){
-                    pkg_log.error("Missing part of the multi-files pkg: %s", archive_filename);
-                    return false;
-                }
-                ensure(archive_file.open(*m_iso_fs, archive_filename));
-            }
-            else if(!archive_file.open(archive_filename)){
-                pkg_log.error("Missing part of the multi-files pkg: %s", archive_filename);
-                return false;
-            }
+			fs::file archive_file(archive_filename);
+			if (!archive_file)
+			{
+				pkg_log.error("Missing part of the multi-files pkg: %s", archive_filename);
+				return false;
+			}
 
 			const usz add_size = archive_file.size();
 
@@ -613,7 +528,7 @@ bool package_reader::read_entries(std::vector<PKGEntry>& entries)
 	entries.clear();
 	entries.resize(m_header.file_count + BUF_PADDING / sizeof(PKGEntry) + 1);
 
-	const usz read_size = decrypt(0, m_header.file_count * sizeof(PKGEntry), m_dec_key.data(), entries.data());
+	const usz read_size = decrypt(0, m_header.file_count * sizeof(PKGEntry), m_header.pkg_platform == PKG_PLATFORM_TYPE_PSP_PSVITA ? PKG_AES_KEY2 : m_dec_key.data(), entries.data());
 
 	if (read_size < m_header.file_count * sizeof(PKGEntry))
 	{
@@ -683,15 +598,15 @@ bool package_reader::read_param_sfo()
 
 		const bool is_psp = (entry.type & PKG_FILE_ENTRY_PSP) != 0u;
 
-		std::string name(entry.name_size + BUF_PADDING, '\0');
+		std::string name_buf(entry.name_size + BUF_PADDING, '\0');
 
-		if (usz read_size = decrypt(entry.name_offset, entry.name_size, is_psp ? PKG_AES_KEY2 : m_dec_key.data(), name.data()); read_size < entry.name_size)
+		if (usz read_size = decrypt(entry.name_offset, entry.name_size, is_psp ? PKG_AES_KEY2 : m_dec_key.data(), name_buf.data()); read_size < entry.name_size)
 		{
 			pkg_log.error("PKG name could not be read (size=0x%x, offset=0x%x)", entry.name_size, entry.name_offset);
 			continue;
 		}
 
-		fmt::trim_back(name, "\0"sv);
+		std::string_view name = fmt::trim_back_sv(name_buf, "\0"sv);
 
 		// We're looking for the PARAM.SFO file, if there is any
 		if (usz ndelim = name.find_first_not_of('/'); ndelim == umax || name.substr(ndelim) != "PARAM.SFO")
@@ -939,18 +854,18 @@ bool package_reader::fill_data(std::map<std::string, install_entry*>& all_instal
 			break;
 		}
 
-		std::string name(entry.name_size + BUF_PADDING, '\0');
+		std::string name_buf(entry.name_size + BUF_PADDING, '\0');
 
 		const bool is_psp = (entry.type & PKG_FILE_ENTRY_PSP) != 0u;
 
-		if (const usz read_size = decrypt(entry.name_offset, entry.name_size, is_psp ? PKG_AES_KEY2 : m_dec_key.data(), name.data()); read_size < entry.name_size)
+		if (const usz read_size = decrypt(entry.name_offset, entry.name_size, is_psp ? PKG_AES_KEY2 : m_dec_key.data(), name_buf.data()); read_size < entry.name_size)
 		{
 			num_failures++;
 			pkg_log.error("PKG name could not be read (size=0x%x, offset=0x%x)", entry.name_size, entry.name_offset);
 			break;
 		}
 
-		fmt::trim_back(name, "\0"sv);
+		std::string_view name = fmt::trim_back_sv(name_buf, "\0"sv);
 
 		std::string path = m_install_path + vfs::escape(name);
 

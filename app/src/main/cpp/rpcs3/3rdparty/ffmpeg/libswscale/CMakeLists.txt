@@ -3,14 +3,19 @@ project(libswscale LANGUAGES C CXX ASM)
 
 set(CMAKE_C_STANDARD 11)
 
+if(ANDROID)
+
+    set(libswscale_aarch64
+            ${FFMPEG_DIR}/libswscale/aarch64/hscale.S
+            ${FFMPEG_DIR}/libswscale/aarch64/output.S
+            ${FFMPEG_DIR}/libswscale/aarch64/rgb2rgb.c
+            ${FFMPEG_DIR}/libswscale/aarch64/rgb2rgb_neon.S
+            ${FFMPEG_DIR}/libswscale/aarch64/swscale.c
+            ${FFMPEG_DIR}/libswscale/aarch64/swscale_unscaled.c
+            ${FFMPEG_DIR}/libswscale/aarch64/yuv2rgb_neon.S)
+endif ()
 add_library(libswscale STATIC
-        ${FFMPEG_DIR}/libswscale/aarch64/hscale.S
-        ${FFMPEG_DIR}/libswscale/aarch64/output.S
-        ${FFMPEG_DIR}/libswscale/aarch64/rgb2rgb.c
-        ${FFMPEG_DIR}/libswscale/aarch64/rgb2rgb_neon.S
-        ${FFMPEG_DIR}/libswscale/aarch64/swscale.c
-        ${FFMPEG_DIR}/libswscale/aarch64/swscale_unscaled.c
-        ${FFMPEG_DIR}/libswscale/aarch64/yuv2rgb_neon.S
+        ${libswscale_aarch64}
         ${FFMPEG_DIR}/libswscale/alphablend.c
         ${FFMPEG_DIR}/libswscale/gamma.c
         ${FFMPEG_DIR}/libswscale/hscale.c

@@ -3,7 +3,69 @@ project(libavcodec LANGUAGES C CXX ASM)
 
 set(CMAKE_C_STANDARD 11)
 
+if(ANDROID)
+
+    set(libavcodec_aarch64
+            ${FFMPEG_DIR}/libavcodec/aarch64/aacpsdsp_init_aarch64.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/aacpsdsp_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/fft_init_aarch64.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/fft_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/fmtconvert_init.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/fmtconvert_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/h264chroma_init_aarch64.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/h264cmc_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/h264dsp_init_aarch64.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/h264dsp_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/h264idct_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/h264pred_init.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/h264pred_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/h264qpel_init_aarch64.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/h264qpel_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/hevcdsp_init_aarch64.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/hevcdsp_idct_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/hevcdsp_sao_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/hpeldsp_init_aarch64.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/hpeldsp_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/idctdsp_init_aarch64.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/idctdsp_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/me_cmp_init_aarch64.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/me_cmp_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/mdct_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/mpegaudiodsp_init.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/mpegaudiodsp_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/opusdsp_init.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/opusdsp_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/pixblockdsp_init_aarch64.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/pixblockdsp_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/rv40dsp_init_aarch64.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/sbrdsp_init_aarch64.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/sbrdsp_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/simple_idct_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/synth_filter_init.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/synth_filter_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/vc1dsp_init_aarch64.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/vc1dsp_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/videodsp_init.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/videodsp.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/vorbisdsp_init.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/vorbisdsp_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/vp8dsp_init_aarch64.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/vp8dsp_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/vp9dsp_init_10bpp_aarch64.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/vp9dsp_init_12bpp_aarch64.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/vp9dsp_init_16bpp_aarch64_template.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/vp9dsp_init_aarch64.c
+            ${FFMPEG_DIR}/libavcodec/aarch64/vp9itxfm_16bpp_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/vp9itxfm_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/vp9lpf_16bpp_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/vp9lpf_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/vp9mc_16bpp_neon.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/vp9mc_aarch64.S
+            ${FFMPEG_DIR}/libavcodec/aarch64/vp9mc_neon.S)
+endif()
+
 add_library(libavcodec STATIC
+        ${libavcodec_aarch64}
         ${FFMPEG_DIR}/libavcodec/012v.c
         ${FFMPEG_DIR}/libavcodec/4xm.c
         ${FFMPEG_DIR}/libavcodec/8bps.c
@@ -31,62 +93,6 @@ add_library(libavcodec STATIC
         ${FFMPEG_DIR}/libavcodec/aacsbr_fixed.c
         ${FFMPEG_DIR}/libavcodec/aactab.c
         ${FFMPEG_DIR}/libavcodec/aandcttab.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/aacpsdsp_init_aarch64.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/aacpsdsp_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/fft_init_aarch64.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/fft_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/fmtconvert_init.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/fmtconvert_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/h264chroma_init_aarch64.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/h264cmc_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/h264dsp_init_aarch64.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/h264dsp_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/h264idct_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/h264pred_init.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/h264pred_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/h264qpel_init_aarch64.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/h264qpel_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/hevcdsp_init_aarch64.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/hevcdsp_idct_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/hevcdsp_sao_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/hpeldsp_init_aarch64.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/hpeldsp_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/idctdsp_init_aarch64.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/idctdsp_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/me_cmp_init_aarch64.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/me_cmp_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/mdct_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/mpegaudiodsp_init.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/mpegaudiodsp_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/opusdsp_init.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/opusdsp_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/pixblockdsp_init_aarch64.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/pixblockdsp_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/rv40dsp_init_aarch64.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/sbrdsp_init_aarch64.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/sbrdsp_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/simple_idct_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/synth_filter_init.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/synth_filter_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/vc1dsp_init_aarch64.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/vc1dsp_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/videodsp_init.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/videodsp.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/vorbisdsp_init.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/vorbisdsp_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/vp8dsp_init_aarch64.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/vp8dsp_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/vp9dsp_init_10bpp_aarch64.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/vp9dsp_init_12bpp_aarch64.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/vp9dsp_init_16bpp_aarch64_template.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/vp9dsp_init_aarch64.c
-        ${FFMPEG_DIR}/libavcodec/aarch64/vp9itxfm_16bpp_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/vp9itxfm_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/vp9lpf_16bpp_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/vp9lpf_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/vp9mc_16bpp_neon.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/vp9mc_aarch64.S
-        ${FFMPEG_DIR}/libavcodec/aarch64/vp9mc_neon.S
         ${FFMPEG_DIR}/libavcodec/aasc.c
         ${FFMPEG_DIR}/libavcodec/ac3.c
         ${FFMPEG_DIR}/libavcodec/ac3_channel_layout_tab.c

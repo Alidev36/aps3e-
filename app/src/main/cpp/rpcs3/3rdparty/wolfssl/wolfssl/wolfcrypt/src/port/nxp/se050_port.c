@@ -1,12 +1,12 @@
 /* se050_port.c
  *
- * Copyright (C) 2006-2023 wolfSSL Inc.
+ * Copyright (C) 2006-2026 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
  * wolfSSL is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * wolfSSL is distributed in the hope that it will be useful,
@@ -54,7 +54,7 @@
     #define SE050_ECC_DER_MAX 256
     #endif
 #endif
-#ifndef NO_RSA
+#if !defined(NO_RSA) && !defined(WOLFSSL_SE050_NO_RSA)
     #include <wolfssl/wolfcrypt/rsa.h>
     struct RsaKey;
 #endif
@@ -266,25 +266,30 @@ int se050_hash_copy(SE050_HASH_Context* src, SE050_HASH_Context* dst)
 
 int se050_hash_update(SE050_HASH_Context* se050Ctx, const byte* data, word32 len)
 {
-        byte* tmp = NULL;
+    byte* tmp = NULL;
+    word32 usedSz = 0;
 
-    if (se050Ctx == NULL || (len > 0 && data == NULL)) {
+    if (se050Ctx == NULL || (len > 0 && data == NULL) || (len == 0) ||
+        !WC_SAFE_SUM_WORD32(se050Ctx->used, len, usedSz)) {
         return BAD_FUNC_ARG;
     }
 
-    if (se050Ctx->len < se050Ctx->used + len) {
+    if (se050Ctx->len < usedSz) {
         if (se050Ctx->msg == NULL) {
-            se050Ctx->msg = (byte*)XMALLOC(se050Ctx->used + len,
+            se050Ctx->msg = (byte*)XMALLOC(usedSz,
                 se050Ctx->heap, DYNAMIC_TYPE_TMP_BUFFER);
-            XMEMSET(se050Ctx->msg, 0, se050Ctx->used + len);
+            if (se050Ctx->msg == NULL) {
+                return MEMORY_E;
+            }
+            XMEMSET(se050Ctx->msg, 0, usedSz);
         }
         else {
-            tmp = (byte*)XMALLOC(se050Ctx->used + len, se050Ctx->heap,
+            tmp = (byte*)XMALLOC(usedSz, se050Ctx->heap,
                                  DYNAMIC_TYPE_TMP_BUFFER);
             if (tmp == NULL) {
                 return MEMORY_E;
             }
-            XMEMSET(tmp, 0, se050Ctx->used + len);
+            XMEMSET(tmp, 0, usedSz);
             XMEMCPY(tmp, se050Ctx->msg, se050Ctx->used);
             XFREE(se050Ctx->msg, se050Ctx->heap, DYNAMIC_TYPE_TMP_BUFFER);
             se050Ctx->msg = tmp;
@@ -292,7 +297,7 @@ int se050_hash_update(SE050_HASH_Context* se050Ctx, const byte* data, word32 len
         if (se050Ctx->msg == NULL) {
             return MEMORY_E;
         }
-        se050Ctx->len = se050Ctx->used + len;
+        se050Ctx->len = usedSz;
     }
 
     XMEMCPY(se050Ctx->msg + se050Ctx->used, data, len);
@@ -633,7 +638,7 @@ int wc_se050_get_binary_object(word32 keyId, byte* out, word32* outSz)
         else {
             if (out == NULL) {
                 *outSz = ret;
-                return LENGTH_ONLY_E;
+                return WC_NO_ERR_TRACE(LENGTH_ONLY_E);
             }
             if ((word32)ret > *outSz) {
                 WOLFSSL_MSG("Output buffer not large enough for object");
@@ -659,7 +664,7 @@ int wc_se050_get_binary_object(word32 keyId, byte* out, word32* outSz)
     return ret;
 }
 
-#ifndef NO_RSA
+#if !defined(NO_RSA) && !defined(WOLFSSL_SE050_NO_RSA)
 
 /**
  * Use specified SE050 key ID with this RsaKey struct.
@@ -738,9 +743,7 @@ int se050_rsa_use_key_id(struct RsaKey* key, word32 keyId)
             status = kStatus_SSS_Fail;
         }
     }
-    if (derBuf != NULL) {
-        XFREE(derBuf, key->heap, DYNAMIC_TYPE_TMP_BUFFER);
-    }
+    XFREE(derBuf, key->heap, DYNAMIC_TYPE_TMP_BUFFER);
 
     if (status == kStatus_SSS_Success) {
         key->keyId = keyId;
@@ -884,9 +887,7 @@ int se050_rsa_create_key(struct RsaKey* key, int size, long e)
             status = kStatus_SSS_Fail;
         }
     }
-    if (derBuf != NULL) {
-        XFREE(derBuf, key->heap, DYNAMIC_TYPE_TMP_BUFFER);
-    }
+    XFREE(derBuf, key->heap, DYNAMIC_TYPE_TMP_BUFFER);
 
     if (status == kStatus_SSS_Success) {
         key->keyId = keyId;
@@ -1228,9 +1229,7 @@ int se050_rsa_sign(const byte* in, word32 inLen, byte* out,
                                                derSz, (keySz * 8), NULL, 0);
             }
 
-            if (derBuf != NULL) {
-                XFREE(derBuf, NULL, DYNAMIC_TYPE_TMP_BUFFER);
-            }
+            XFREE(derBuf, NULL, DYNAMIC_TYPE_TMP_BUFFER);
         }
         else {
             status = sss_key_object_get_handle(&newKey, keyId);
@@ -1392,9 +1391,7 @@ int se050_rsa_verify(const byte* in, word32 inLen, byte* out, word32 outLen,
                                                derSz, (keySz * 8), NULL, 0);
             }
 
-            if (derBuf != NULL) {
-                XFREE(derBuf, NULL, DYNAMIC_TYPE_TMP_BUFFER);
-            }
+            XFREE(derBuf, NULL, DYNAMIC_TYPE_TMP_BUFFER);
         }
         else {
             status = sss_key_object_get_handle(&newKey, keyId);
@@ -1579,9 +1576,7 @@ int se050_rsa_public_encrypt(const byte* in, word32 inLen, byte* out,
             status = sss_key_object_get_handle(&newKey, keyId);
         }
 
-        if (derBuf != NULL) {
-            XFREE(derBuf, NULL, DYNAMIC_TYPE_TMP_BUFFER);
-        }
+        XFREE(derBuf, NULL, DYNAMIC_TYPE_TMP_BUFFER);
     }
 
     if (status == kStatus_SSS_Success) {
@@ -1746,9 +1741,7 @@ int se050_rsa_private_decrypt(const byte* in, word32 inLen, byte* out,
             status = sss_key_object_get_handle(&newKey, keyId);
         }
 
-        if (derBuf != NULL) {
-            XFREE(derBuf, NULL, DYNAMIC_TYPE_TMP_BUFFER);
-        }
+        XFREE(derBuf, NULL, DYNAMIC_TYPE_TMP_BUFFER);
     }
 
     if (status == kStatus_SSS_Success) {
@@ -2344,6 +2337,7 @@ void se050_ecc_free_key(struct ecc_key* key)
     if (status == kStatus_SSS_Success) {
         status = sss_key_object_get_handle(&keyObject, key->keyId);
     }
+
     if (status == kStatus_SSS_Success) {
         sss_key_object_free(&keyObject);
         key->keyId = 0;
@@ -2544,8 +2538,8 @@ int se050_ecc_create_key(struct ecc_key* key, int curve_id, int keySize)
     wolfSSL_CryptHwMutexUnLock();
 
 #ifdef SE050_DEBUG
-    printf("se050_ecc_create_key: key %p, ret %d, keyId %d\n",
-        key, ret, key->keyId);
+    printf("se050_ecc_create_key: key %p, ret %d, status %d, keyId %d\n",
+        key, ret, status, key->keyId);
 #endif
 
     return ret;
@@ -2700,7 +2694,8 @@ int se050_ecc_shared_secret(ecc_key* private_key, ecc_key* public_key,
     wolfSSL_CryptHwMutexUnLock();
 
 #ifdef SE050_DEBUG
-    printf("se050_ecc_shared_secret: ret %d, outlen %d\n", ret, *outlen);
+    printf("se050_ecc_shared_secret: ret %d, status %d, outlen %d\n", ret,
+            status, *outlen);
 #endif
 
     return ret;

@@ -94,11 +94,8 @@ namespace vk
 		}
 
 		auto& tex = g_null_image_views[type];
-
-        static const VkFormat tex_fmt=g_cfg.video.bgra_format?VK_FORMAT_B8G8R8A8_UNORM:VK_FORMAT_R8G8B8A8_UNORM;
-
 		tex = std::make_unique<viewable_image>(*g_render_device, g_render_device->get_memory_mapping().device_local, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			image_type, tex_fmt, size, size, 1, 1, num_layers, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+			image_type, VK_FORMAT_B8G8R8A8_UNORM, size, size, 1, 1, num_layers, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, flags | VK_IMAGE_CREATE_ALLOW_NULL_RPCS3, VMM_ALLOCATION_POOL_SCRATCH);
 
 		if (!tex->value)
@@ -180,7 +177,7 @@ namespace vk
 		return { scratch_buffer.get(), is_new };
 	}
 
-	vk::buffer* get_scratch_buffer(const vk::command_buffer& cmd, u64 min_required_size, bool zero_memory)
+	vk::buffer* get_scratch_buffer(const vk::command_buffer& cmd, u64 min_required_size, VkPipelineStageFlags dst_stage_flags, VkAccessFlags dst_access, bool zero_memory)
 	{
 		const auto [buf, init_mem] = get_scratch_buffer(cmd.get_queue_family(), min_required_size);
 
@@ -193,6 +190,12 @@ namespace vk
 			insert_buffer_memory_barrier(cmd, buf->value, 0, zero_length,
 				VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
 				VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT);
+		}
+		else if (dst_access != VK_ACCESS_NONE)
+		{
+			insert_buffer_memory_barrier(cmd, buf->value, 0, min_required_size,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, dst_stage_flags,
+				VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, dst_access);
 		}
 
 		return buf;

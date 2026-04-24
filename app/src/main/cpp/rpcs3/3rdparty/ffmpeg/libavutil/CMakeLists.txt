@@ -3,11 +3,16 @@ project(libavutil LANGUAGES C CXX ASM)
 
 set(CMAKE_C_STANDARD 11)
 
-add_library(libavutil STATIC
+if(ANDROID)
+
+    set(libavutil_aarch64
+            ${FFMPEG_DIR}/libavutil/aarch64/cpu.c
+            ${FFMPEG_DIR}/libavutil/aarch64/float_dsp_init.c
+            ${FFMPEG_DIR}/libavutil/aarch64/float_dsp_neon.S)
+endif()
+    add_library(libavutil STATIC
+        ${libavutil_aarch64}
         ${FFMPEG_DIR}/libavutil/../compat/strtod.c
-        ${FFMPEG_DIR}/libavutil/aarch64/cpu.c
-        ${FFMPEG_DIR}/libavutil/aarch64/float_dsp_init.c
-        ${FFMPEG_DIR}/libavutil/aarch64/float_dsp_neon.S
         ${FFMPEG_DIR}/libavutil/adler32.c
         ${FFMPEG_DIR}/libavutil/aes.c
         ${FFMPEG_DIR}/libavutil/aes_ctr.c

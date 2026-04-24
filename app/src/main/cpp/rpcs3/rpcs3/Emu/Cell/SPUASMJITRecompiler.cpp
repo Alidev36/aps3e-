@@ -5,15 +5,12 @@
 #include "Emu/IdManager.h"
 #include "Emu/Cell/timers.hpp"
 
-#include "SPUDisAsm.h"
 #include "SPUThread.h"
 #include "SPUInterpreter.h"
-#include "PPUAnalyser.h"
 #include "Crypto/sha1.h"
 
 #include "util/asm.hpp"
 #include "util/v128.hpp"
-#include "util/simd.hpp"
 #include "util/sysinfo.hpp"
 
 #include <cmath>
@@ -189,7 +186,7 @@ spu_function_t spu_recompiler::compile(spu_program&& _func)
 	c->cmp(SPU_OFF_32(state), 0);
 	c->jnz(label_stop);
 
-	if (g_cfg.core.spu_prof && g_cfg.core.spu_verification)
+	if ((g_cfg.core.spu_prof || g_cfg.core.spu_debug) && g_cfg.core.spu_verification)
 	{
 		c->mov(x86::rax, m_hash_start & -0xffff);
 		c->mov(SPU_OFF_64(block_hash), x86::rax);
@@ -758,7 +755,7 @@ spu_function_t spu_recompiler::compile(spu_program&& _func)
 	c->add(SPU_OFF_64(block_counter), ::size32(words) / (words_align / 4));
 
 	// Set block hash for profiling (if enabled)
-	if (g_cfg.core.spu_prof)
+	if (g_cfg.core.spu_prof || g_cfg.core.spu_debug)
 	{
 		c->mov(x86::rax, m_hash_start | 0xffff);
 		c->mov(SPU_OFF_64(block_hash), x86::rax);
@@ -1202,7 +1199,7 @@ void spu_recompiler::branch_set_link(u32 target)
 				c->movdqa(x86::dqword_ptr(*cpu, *qw1, 0, ::offset32(&spu_thread::stack_mirror)), x86::xmm0);
 
 				// Set block hash for profiling (if enabled)
-				if (g_cfg.core.spu_prof)
+				if (g_cfg.core.spu_prof || g_cfg.core.spu_debug)
 				{
 					c->mov(x86::rax, m_hash_start | 0xffff);
 					c->mov(SPU_OFF_64(block_hash), x86::rax);
@@ -2773,14 +2770,17 @@ void spu_recompiler::FREST(spu_opcode_t op)
 	const u64 fraction_lut_addr = reinterpret_cast<u64>(spu_frest_fraction_lut);
 	const u64 exponent_lut_addr = reinterpret_cast<u64>(spu_frest_exponent_lut);
 
+	c->movabs(*arg0, fraction_lut_addr);
+	c->movabs(*arg1, exponent_lut_addr);
+
 	for (u32 index = 0; index < 4; index++)
 	{
 		c->pextrd(*qw0, v_fraction, index);
-		c->mov(*qw1, asmjit::x86::dword_ptr(fraction_lut_addr, *qw0, 2));
+		c->mov(*qw1, asmjit::x86::dword_ptr(*arg0, *qw0, 2));
 		c->pinsrd(v_fraction, *qw1, index);
 
 		c->pextrd(*qw0, v_exponent, index);
-		c->mov(*qw1, asmjit::x86::dword_ptr(exponent_lut_addr, *qw0, 2));
+		c->mov(*qw1, asmjit::x86::dword_ptr(*arg1, *qw0, 2));
 		c->pinsrd(v_exponent, *qw1, index);
 	}
 
@@ -2813,14 +2813,17 @@ void spu_recompiler::FRSQEST(spu_opcode_t op)
 	const u64 fraction_lut_addr = reinterpret_cast<u64>(spu_frsqest_fraction_lut);
 	const u64 exponent_lut_addr = reinterpret_cast<u64>(spu_frsqest_exponent_lut);
 
+	c->movabs(*arg0, fraction_lut_addr);
+	c->movabs(*arg1, exponent_lut_addr);
+
 	for (u32 index = 0; index < 4; index++)
 	{
 		c->pextrd(*qw0, v_fraction, index);
-		c->mov(*qw1, asmjit::x86::dword_ptr(fraction_lut_addr, *qw0, 2));
+		c->mov(*qw1, asmjit::x86::dword_ptr(*arg0, *qw0, 2));
 		c->pinsrd(v_fraction, *qw1, index);
 
 		c->pextrd(*qw0, v_exponent, index);
-		c->mov(*qw1, asmjit::x86::dword_ptr(exponent_lut_addr, *qw0, 2));
+		c->mov(*qw1, asmjit::x86::dword_ptr(*arg1, *qw0, 2));
 		c->pinsrd(v_exponent, *qw1, index);
 	}
 
@@ -3209,7 +3212,7 @@ void spu_recompiler::ROTQBYI(spu_opcode_t op)
 	}
 	else if (s == 4 || s == 8 || s == 12)
 	{
-		c->pshufd(va, va, utils::rol8(0xE4, s / 2));
+		c->pshufd(va, va, std::rotl<u8>(0xE4, s / 2));
 	}
 	else if (utils::has_ssse3())
 	{

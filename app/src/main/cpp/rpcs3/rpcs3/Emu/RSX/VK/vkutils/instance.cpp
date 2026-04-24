@@ -70,12 +70,15 @@ namespace vk
 
 		PFN_vkDebugReportCallbackEXT callback = vk::dbgFunc;
 
+		//_vkCreateDebugReportCallback = reinterpret_cast<PFN_vkCreateDebugReportCallbackEXT>(_vkGetInstanceProcAddr(m_instance, "_vkCreateDebugReportCallbackEXT"));
+		//_vkDestroyDebugReportCallback = reinterpret_cast<PFN_vkDestroyDebugReportCallbackEXT>(_vkGetInstanceProcAddr(m_instance, "_vkDestroyDebugReportCallbackEXT"));
+
 		VkDebugReportCallbackCreateInfoEXT dbgCreateInfo = {};
 		dbgCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT;
 		dbgCreateInfo.pfnCallback = callback;
 		dbgCreateInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
 
-		CHECK_RESULT(_vkCreateDebugReportCallbackEXT(m_instance, &dbgCreateInfo, nullptr, &m_debugger));
+		CHECK_RESULT(_vkCreateDebugReportCallbackEXT(m_instance, &dbgCreateInfo, NULL, &m_debugger));
 	}
 
 #ifdef __clang__
@@ -92,7 +95,7 @@ namespace vk
 		app.applicationVersion = 0;
 		app.pEngineName = app_name;
 		app.engineVersion = 0;
-		app.apiVersion = VK_API_VERSION_1_0;
+		app.apiVersion = VK_API_VERSION_1_1;
 
 		// Set up instance information
 
@@ -120,16 +123,12 @@ namespace vk
 				extensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
 			}
 
-			if (support.is_supported(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME))
-			{
-				extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
-			}
-
 #ifdef __APPLE__
+			extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+			extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 			if (support.is_supported(VK_EXT_LAYER_SETTINGS_EXTENSION_NAME))
 			{
 				extensions.push_back(VK_EXT_LAYER_SETTINGS_EXTENSION_NAME);
-				layers.push_back(kMVKMoltenVKDriverLayerName);
 
 				mvk_settings.push_back(VkLayerSettingEXT{ kMVKMoltenVKDriverLayerName, "MVK_CONFIG_RESUME_LOST_DEVICE", VK_LAYER_SETTING_TYPE_BOOL32_EXT, 1, &setting_true });
 				mvk_settings.push_back(VkLayerSettingEXT{ kMVKMoltenVKDriverLayerName, "MVK_CONFIG_FAST_MATH_ENABLED", VK_LAYER_SETTING_TYPE_INT32_EXT, 1, &setting_fast_math });
@@ -143,11 +142,6 @@ namespace vk
 			}
 #endif
 
-			if (support.is_supported(VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME))
-			{
-				extensions.push_back(VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME);
-			}
-
 			if (support.is_supported(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME))
 			{
 				extensions.push_back(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
@@ -160,10 +154,8 @@ namespace vk
 
 #ifdef _WIN32
 			extensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
-#elif defined(__ANDROID__)
-            extensions.push_back(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
 #elif defined(__APPLE__)
-			extensions.push_back(VK_MVK_MACOS_SURFACE_EXTENSION_NAME);
+			extensions.push_back(VK_EXT_METAL_SURFACE_EXTENSION_NAME);
 #else
 			bool found_surface_ext = false;
 #ifdef HAVE_X11
@@ -173,13 +165,20 @@ namespace vk
 				found_surface_ext = true;
 			}
 #endif
-#ifdef VK_USE_PLATFORM_WAYLAND_KHR
+#ifdef HAVE_WAYLAND
 			if (support.is_supported(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME))
 			{
 				extensions.push_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
 				found_surface_ext = true;
 			}
 #endif //(WAYLAND)
+#ifdef ANDROID
+			if (support.is_supported(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME))
+			{
+				extensions.push_back(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
+				found_surface_ext = true;
+			}
+#endif
 			if (!found_surface_ext)
 			{
 				rsx_log.error("Could not find a supported Vulkan surface extension");
@@ -189,15 +188,32 @@ namespace vk
 			if (g_cfg.video.debug_output)
 				layers.push_back("VK_LAYER_KHRONOS_validation");
 		}
+#ifdef __APPLE__
+		// MoltenVK's ICD will not be detected without these extensions enabled.
+		else
+		{
+			extensions_loaded = true;
+			extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+			extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+		}
+#endif
 
 		VkInstanceCreateInfo instance_info = {};
 		instance_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 		instance_info.pApplicationInfo = &app;
 		instance_info.enabledLayerCount = static_cast<u32>(layers.size());
 		instance_info.ppEnabledLayerNames = layers.data();
+#ifdef __APPLE__
+		instance_info.enabledExtensionCount = static_cast<u32>(extensions.size());
+		instance_info.ppEnabledExtensionNames = extensions.data();
+#else
 		instance_info.enabledExtensionCount = fast ? 0 : static_cast<u32>(extensions.size());
 		instance_info.ppEnabledExtensionNames = fast ? nullptr : extensions.data();
+#endif
 		instance_info.pNext = next_info;
+#ifdef __APPLE__
+		instance_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
 
 		if (VkResult result = _vkCreateInstance(&instance_info, nullptr, &m_instance); result != VK_SUCCESS)
 		{
@@ -318,13 +334,12 @@ namespace vk
 			present_possible = false;
 		}
 
-        const VkFormat surf_color_fmt=g_cfg.video.bgra_format?VK_FORMAT_B8G8R8A8_UNORM:VK_FORMAT_R8G8B8A8_UNORM;
 		if (!present_possible)
 		{
 			//Native(sw) swapchain
 			rsx_log.error("It is not possible for the currently selected GPU to present to the window (Likely caused by NVIDIA driver running the current display)");
 			rsx_log.warning("Falling back to software present support (native windowing API)");
-			auto swapchain = new swapchain_NATIVE(dev, -1, graphics_queue_idx, transfer_queue_idx,surf_color_fmt);
+			auto swapchain = new swapchain_NATIVE(dev, -1, graphics_queue_idx, transfer_queue_idx);
 			swapchain->create(window_handle);
 			return swapchain;
 		}
@@ -341,7 +356,7 @@ namespace vk
 
 		if (formatCount == 1 && surfFormats[0].format == VK_FORMAT_UNDEFINED)
 		{
-			format = surf_color_fmt;
+			format = VK_FORMAT_B8G8R8A8_UNORM;
 		}
 		else
 		{
@@ -351,9 +366,9 @@ namespace vk
 			//Prefer BGRA8_UNORM to avoid sRGB compression (RADV)
 			for (auto& surface_format : surfFormats)
 			{
-				if (surface_format.format == surf_color_fmt)
+				if (surface_format.format == VK_FORMAT_B8G8R8A8_UNORM)
 				{
-					format = surf_color_fmt;
+					format = VK_FORMAT_B8G8R8A8_UNORM;
 					break;
 				}
 			}

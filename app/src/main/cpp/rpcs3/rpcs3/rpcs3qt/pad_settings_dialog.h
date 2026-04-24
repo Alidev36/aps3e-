@@ -66,6 +66,7 @@ class pad_settings_dialog : public QDialog
 
 		id_pressure_intensity, // Special button for pressure intensity
 		id_analog_limiter, // Special button for analog limiter
+		id_orientation_reset, // Special button for orientation reset
 
 		id_pad_end, // end
 
@@ -73,16 +74,36 @@ class pad_settings_dialog : public QDialog
 		id_reset_parameters,
 		id_blacklist,
 		id_refresh,
-		id_add_config_file
+		id_add_config_file,
+		id_remove_config_file
+	};
+
+	enum class binding_mode
+	{
+		single,
+		multi,
+		combo
 	};
 
 	struct pad_button
 	{
-		cfg::string* cfg_text = nullptr;
-		std::string keys;
-		QString text;
+		pad_button() {}
+		pad_button(cfg::string* cfg_text) : m_cfg_text(ensure(cfg_text))
+		{
+			update(*cfg_text);
+		}
 
-		void insert_key(const std::string& key, bool append_key);
+		void insert_button(const std::string& button, binding_mode mode);
+		void update(const std::string& button_string);
+
+		cfg::string* cfg_text() const { return m_cfg_text; }
+		const std::string& button_string() const { return m_button_string; }
+		const QString& text() const { return m_text; }
+
+	private:
+		cfg::string* m_cfg_text = nullptr;
+		std::string m_button_string;
+		QString m_text;
 	};
 
 	const QString Disconnected_suffix = tr(" (disconnected)");
@@ -99,7 +120,9 @@ private Q_SLOTS:
 	void ChangeConfig(const QString& config_file);
 	void ChangeDevice(int index);
 	void HandleDeviceClassChange(u32 class_id) const;
+	void HandleDeviceProductChange(u32 product_id) const;
 	void AddConfigFile();
+	void RemoveConfigFile();
 	/** Update the current player config with the GUI values. */
 	void ApplyCurrentPlayerConfig(int new_player_id);
 	void RefreshPads();
@@ -123,12 +146,13 @@ private:
 	bool m_enable_motion{ false };
 	bool m_enable_pressure_intensity_button{ true };
 	bool m_enable_analog_limiter_button{ true };
+	bool m_enable_orientation_reset_button{ true };
 
 	// Button Mapping
 	QButtonGroup* m_pad_buttons = nullptr;
 	atomic_t<u32> m_button_id = button_ids::id_pad_begin;
 	std::map<int /*id*/, pad_button /*info*/> m_cfg_entries;
-	std::map<int /*id*/, std::string> m_duplicate_buttons;
+	std::map<int /*id*/, std::string> m_duplicate_combos;
 
 	// Real time stick values
 	int m_lx = 0;
@@ -137,8 +161,8 @@ private:
 	int m_ry = 0;
 
 	// Rumble
-	s32 m_min_force = 0;
-	s32 m_max_force = 0;
+	static constexpr u8 m_min_force = 0;
+	static constexpr u8 m_max_force = 255;
 
 	// Backup for standard button palette
 	QPalette m_palette;
@@ -156,7 +180,7 @@ private:
 	static constexpr int MAX_SECONDS = 5;
 	int m_seconds = MAX_SECONDS;
 	QTimer m_remap_timer;
-	bool m_enable_multi_binding = false;
+	binding_mode m_binding_mode = binding_mode::single;
 
 	// Mouse Move
 	QPoint m_last_pos;
@@ -168,12 +192,18 @@ private:
 	{
 		PadHandlerBase::connection status = PadHandlerBase::connection::disconnected;
 		bool has_new_data = false;
-		u32 button_id = button_ids::id_pad_begin;
-		u16 val = 0;
-		std::string name;
 		std::string pad_name;
 		u32 battery_level = 0;
 		std::array<int, 6> preview_values{};
+		pad_capabilities capabilities{};
+
+		struct input_values
+		{
+			u32 button_id = button_ids::id_pad_begin;
+			std::map<std::string, u16> buttons;
+			std::array<std::pair<std::string, u16>, 2> sticks{};
+		};
+		std::vector<input_values> values;
 	} m_input_callback_data;
 
 	// Input thread. Its Callback handles the input
@@ -184,11 +214,14 @@ private:
 	void start_input_thread();
 	void pause_input_thread();
 
+	std::pair<QStringList, QString> get_config_files();
+
+	bool save(bool check_duplicates);
 	void SaveExit();
 	void CancelExit();
 
 	// Set vibrate data while keeping the current color
-	void SetPadData(u32 large_motor, u32 small_motor, bool led_battery_indicator = false);
+	void SetPadData(u8 large_motor, u8 small_motor, bool led_battery_indicator = false);
 
 	/** Update all the Button Labels with current button mapping */
 	void UpdateLabels(bool is_reset = false);
@@ -240,10 +273,10 @@ protected:
 	void showEvent(QShowEvent* event) override;
 
 	/** Handle keyboard handler input */
-	void keyPressEvent(QKeyEvent *keyEvent) override;
-	void mouseReleaseEvent(QMouseEvent *event) override;
-	void mouseMoveEvent(QMouseEvent *event) override;
-	void wheelEvent(QWheelEvent *event) override;
+	void keyPressEvent(QKeyEvent* keyEvent) override;
+	void mouseReleaseEvent(QMouseEvent* event) override;
+	void mouseMoveEvent(QMouseEvent* event) override;
+	void wheelEvent(QWheelEvent* event) override;
 	bool eventFilter(QObject* object, QEvent* event) override;
 	void closeEvent(QCloseEvent* event) override;
 };

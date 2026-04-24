@@ -1,10 +1,11 @@
-#include "stdafx.h"
+﻿#include "stdafx.h"
 #include "perf_meter.hpp"
 
 #include "util/sysinfo.hpp"
 #include "util/fence.hpp"
 #include "util/tsc.hpp"
 #include "Utilities/Thread.h"
+#include "Utilities/mutex.h"
 
 #include <map>
 #include <mutex>

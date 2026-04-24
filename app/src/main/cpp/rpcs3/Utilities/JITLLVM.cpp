@@ -46,6 +46,10 @@ LOG_CHANNEL(jit_log, "JIT");
 #pragma GCC diagnostic pop
 #endif
 
+#ifdef ARCH_ARM64
+#include "Emu/CPU/Backends/AArch64/AArch64Common.h"
+#endif
+
 const bool jit_initialize = []() -> bool
 {
 	llvm::InitializeNativeTarget();
@@ -242,7 +246,7 @@ struct MemoryManager1 : llvm::RTDyldMemoryManager
 	u8* allocate(u64& alloc_pos, void* block, uptr size, u64 align, utils::protection prot)
 	{
 		align = align ? align : 16;
-
+ 
 		const u64 sizea = utils::align(size, align);
 
 		if (!size || align > c_page_size || sizea > c_max_size || sizea < size)
@@ -409,7 +413,7 @@ public:
 	{
 		std::string name = m_path;
 
-		name.append(_module->getName().data());
+		name.append(_module->getName());
 		//fs::file(name, fs::rewrite).write(obj.getBufferStart(), obj.getBufferSize());
 		name.append(".gz");
 
@@ -421,9 +425,9 @@ public:
 
 		ensure(m_compiler);
 
-		fs::file module_file(name, fs::rewrite);
+		fs::pending_file module_file;
 
-		if (!module_file)
+		if (!module_file.open((name)))
 		{
 			jit_log.error("LLVM: Failed to create module file: %s (%s)", name, fs::g_tls_error);
 			return;
@@ -438,18 +442,17 @@ public:
 			return;
 		}
 
-		if (!zip(obj.getBufferStart(), obj.getBufferSize(), module_file))
+		if (!zip(obj.getBufferStart(), obj.getBufferSize(), module_file.file))
 		{
-			jit_log.error("LLVM: Failed to compress module: %s", _module->getName().data());
-			module_file.close();
-			fs::remove_file(name);
+			jit_log.error("LLVM: Failed to compress module: %s", std::string(_module->getName()));
 			return;
 		}
 
-		jit_log.trace("LLVM: Created module: %s", _module->getName().data());
+		jit_log.trace("LLVM: Created module: %s", std::string(_module->getName()));
 
 		// Restore space that was overestimated
-		ensure(m_compiler->add_sub_disk_space(max_size - module_file.size()));
+		ensure(m_compiler->add_sub_disk_space(max_size - module_file.file.size()));
+		module_file.commit();
 	}
 
 	static std::unique_ptr<llvm::MemoryBuffer> load(const std::string& path)
@@ -592,6 +595,8 @@ std::string jit_compiler::triple1()
 	return llvm::Triple::normalize("x86_64-unknown-linux-gnu");
 #elif (defined(__ANDROID__) || defined(__APPLE__)) && defined(ARCH_ARM64)
 	return llvm::Triple::normalize("aarch64-unknown-linux-android"); // Set environment to android to reserve x18
+#elif defined(__ANDROID__) && defined(ARCH_X64)
+	return llvm::Triple::normalize("x86_64-unknown-linux-android");
 #else
 	return llvm::Triple::normalize(llvm::sys::getProcessTriple());
 #endif
@@ -607,6 +612,8 @@ std::string jit_compiler::triple2()
 	return llvm::Triple::normalize("x86_64-unknown-linux-gnu");
 #elif (defined(__ANDROID__) || defined(__APPLE__)) && defined(ARCH_ARM64)
 	return llvm::Triple::normalize("aarch64-unknown-linux-android"); // Set environment to android to reserve x18
+#elif defined(__ANDROID__) && defined(ARCH_X64)
+	return llvm::Triple::normalize("x86_64-unknown-linux-android"); // Set environment to android to reserve x18
 #else
 	return llvm::Triple::normalize(llvm::sys::getProcessTriple());
 #endif
@@ -636,7 +643,7 @@ jit_compiler::jit_compiler(const std::unordered_map<std::string, u64>& _link, co
 	: m_context(new llvm::LLVMContext)
 	, m_cpu(cpu(_cpu))
 {
-	static const bool s_install_llvm_error_handler = []()
+	[[maybe_unused]] static const bool s_install_llvm_error_handler = []()
 	{
 		llvm::remove_fatal_error_handler();
 		llvm::install_fatal_error_handler([](void*, const char* msg, bool)
@@ -651,7 +658,11 @@ jit_compiler::jit_compiler(const std::unordered_map<std::string, u64>& _link, co
 	std::string result;
 
 	auto null_mod = std::make_unique<llvm::Module> ("null_", *m_context);
+#if LLVM_VERSION_MAJOR >= 21 && (LLVM_VERSION_MINOR >= 1 || LLVM_VERSION_MAJOR >= 22)
+	null_mod->setTargetTriple(llvm::Triple(jit_compiler::triple1()));
+#else
 	null_mod->setTargetTriple(jit_compiler::triple1());
+#endif
 
 	std::unique_ptr<llvm::RTDyldMemoryManager> mem;
 
@@ -665,13 +676,41 @@ jit_compiler::jit_compiler(const std::unordered_map<std::string, u64>& _link, co
 		else
 		{
 			mem = std::make_unique<MemoryManager2>(std::move(symbols_cement));
+#if LLVM_VERSION_MAJOR >= 21 && (LLVM_VERSION_MINOR >= 1 || LLVM_VERSION_MAJOR >= 22)
+			null_mod->setTargetTriple(llvm::Triple(jit_compiler::triple2()));
+#else
 			null_mod->setTargetTriple(jit_compiler::triple2());
+#endif
 		}
 	}
 	else
 	{
 		mem = std::make_unique<MemoryManager1>(std::move(symbols_cement));
 	}
+
+	std::vector<std::string> attributes;
+
+#if defined(ARCH_ARM64)
+	if (utils::has_sha3())
+		attributes.push_back("+sha3");
+	else
+		attributes.push_back("-sha3");
+
+	if (utils::has_dotprod())
+		attributes.push_back("+dotprod");
+	else
+		attributes.push_back("-dotprod");
+
+	if (utils::has_sve())
+		attributes.push_back("+sve");
+	else
+		attributes.push_back("-sve");
+
+	if (utils::has_sve2())
+		attributes.push_back("+sve2");
+	else
+		attributes.push_back("-sve2");
+#endif
 
 	{
 		m_engine.reset(llvm::EngineBuilder(std::move(null_mod))
@@ -684,6 +723,7 @@ jit_compiler::jit_compiler(const std::unordered_map<std::string, u64>& _link, co
 			//.setCodeModel(llvm::CodeModel::Large)
 #endif
 			.setRelocationModel(llvm::Reloc::Model::PIC_)
+			.setMAttrs(attributes)
 			.setMCPU(m_cpu)
 			.create());
 	}
@@ -817,9 +857,9 @@ u64 jit_compiler::get(const std::string& name)
 	return m_engine->getGlobalValueAddress(name);
 }
 
-llvm::StringRef fallback_cpu_detection()
+const char * fallback_cpu_detection()
 {
-#if defined (ARCH_X64)
+#if defined(ARCH_X64)
 	// If we got here we either have a very old and outdated CPU or a new CPU that has not been seen by LLVM yet.
 	const std::string brand = utils::get_cpu_brand();
 	const auto family = utils::get_cpu_family();
@@ -849,11 +889,11 @@ llvm::StringRef fallback_cpu_detection()
 			// Return zen4 as a workaround until the next LLVM upgrade.
 			return "znver4";
 		default:
-		 	// Safest guesses
+			// Safest guesses
 			return utils::has_avx512() ? "znver4" :
-				utils::has_avx2() ? "znver1" :
-				utils::has_avx() ? "bdver1" :
-				"nehalem";
+			       utils::has_avx2()   ? "znver1" :
+			       utils::has_avx()    ? "bdver1" :
+			                             "nehalem";
 		}
 	}
 	else if (brand.find("Intel") != std::string::npos)
@@ -883,10 +923,26 @@ llvm::StringRef fallback_cpu_detection()
 	}
 
 #elif defined(ARCH_ARM64)
+#ifdef ANDROID
+	static std::string s_result = []() -> std::string
+	{
+		std::string result = aarch64::get_cpu_name();
+		if (result.empty())
+		{
+			return "cortex-a78";
+		}
+
+		std::transform(result.begin(), result.end(), result.begin(), ::tolower);
+		return result;
+	}();
+
+	return s_result.c_str();
+#else
 	// TODO: Read the data from /proc/cpuinfo. ARM CPU registers are not accessible from usermode.
 	// This will be a pain when supporting snapdragon on windows but we'll cross that bridge when we get there.
 	// Require at least armv8-2a. Older chips are going to be useless anyway.
-	return "cortex-a53";//"cortex-a78";
+	return "cortex-a78";
+#endif
 #endif
 
 	// Failed to guess, use generic fallback

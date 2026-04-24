@@ -18,7 +18,10 @@
 #include <string>
 #include <vector>
 
-constexpr auto qstr = QString::fromStdString;
+namespace cfg
+{
+	class _base;
+}
 
 class emu_settings : public QObject
 {
@@ -64,7 +67,10 @@ public:
 	void SaveSelectedLibraries(const std::vector<std::string>& libs);
 
 	/** Returns the valid options for a given setting.*/
-	static QStringList GetSettingOptions(emu_settings_type type);
+	static std::vector<std::string> GetSettingOptions(emu_settings_type type);
+
+	/** Returns the valid options for a given setting.*/
+	static QStringList GetQStringSettingOptions(emu_settings_type type);
 
 	/** Returns the default value of the setting type.*/
 	std::string GetSettingDefault(emu_settings_type type) const;
@@ -72,8 +78,20 @@ public:
 	/** Returns the value of the setting type.*/
 	std::string GetSetting(emu_settings_type type) const;
 
+	/** Returns the default map value of the setting type.*/
+	std::map<std::string, std::string> GetMapSettingDefault(emu_settings_type type) const;
+
+	/** Returns the value of the setting type as map.*/
+	std::map<std::string, std::string> GetMapSetting(emu_settings_type type) const;
+
 	/** Sets the setting type to a given value.*/
 	void SetSetting(emu_settings_type type, const std::string& val) const;
+
+	/** Sets the setting type to a given map value.*/
+	void SetMapSetting(emu_settings_type type, const std::map<std::string, std::string>& val) const;
+
+	/** Try to find the settings type for a given string.*/
+	emu_settings_type FindSettingsType(const cfg::_base* node) const;
 
 	/** Gets all the renderer info for gpu settings.*/
 	render_creator* m_render_creator = nullptr;
@@ -92,6 +110,12 @@ public:
 
 	/** Get a localized and therefore freely adjustable version of the string used in config.yml.*/
 	QString GetLocalizedSetting(const QString& original, emu_settings_type type, int index, bool strict) const;
+
+	/** Get a localized and therefore freely adjustable version of the string used in config.yml.*/
+	std::string GetLocalizedSetting(const std::string& original, emu_settings_type type, int index, bool strict) const;
+
+	/** Get a localized and therefore freely adjustable version of the string used in config.yml.*/
+	std::string GetLocalizedSetting(const cfg::_base* node, u32 index) const;
 
 	/** Validates the settings and logs unused entries or cleans up the yaml*/
 	bool ValidateSettings(bool cleanup);

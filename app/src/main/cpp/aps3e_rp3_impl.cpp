@@ -175,8 +175,9 @@ extern VkPhysicalDeviceLimits get_physical_device_limits(){
 extern bool vk_limit_max_vertex_output_components_le_64(){
     return get_physical_device_limits().maxVertexOutputComponents<=64;
 }
-
 extern bool cfg_vertex_buffer_upload_mode_use_buffer_view(){
+    //FIXME
+    /*
     static const bool r=[]{
         switch(g_cfg.video.vertex_buffer_upload_mode){
             case vertex_buffer_upload_mode::buffer_view:
@@ -187,7 +188,8 @@ extern bool cfg_vertex_buffer_upload_mode_use_buffer_view(){
                 return get_physical_device_limits().maxTexelBufferElements>=64*1024*1024;//>=64M
         }
     }();
-    return r;
+    return r;*/
+    return true;
 }
 
 extern const std::unordered_map<rsx::overlays::language_class,std::string>& cfg_font_files(){
@@ -201,13 +203,6 @@ extern const std::unordered_map<rsx::overlays::language_class,std::string>& cfg_
                         {rsx::overlays::language_class::cjk_base, "SCE-PS3-SR-R-JPN.TTF"},
                         {rsx::overlays::language_class::hangul,   "SCE-PS3-YG-R-KOR.TTF"}
                 };
-
-            case font_file_selection::from_os:
-                return {
-                        {rsx::overlays::language_class::default_, "/system/fonts/Roboto-Regular.ttf"},
-                        {rsx::overlays::language_class::cjk_base, "/system/fonts/NotoSansCJK-Regular.ttc"},
-                        {rsx::overlays::language_class::hangul,   "/system/fonts/NotoSansCJK-Regular.ttc"}
-                };
             case font_file_selection::custom:
                 std::string custom_font_file_path = g_cfg.misc.custom_font_file_path.to_string();
                 if (!custom_font_file_path.empty() &&
@@ -218,10 +213,7 @@ extern const std::unordered_map<rsx::overlays::language_class,std::string>& cfg_
                             {rsx::overlays::language_class::hangul,   custom_font_file_path}
                     };
                 else {
-                    //Android 15+
-                    g_cfg.misc.font_file_selection.set(
-                            atoi(getenv("APS3E_ANDROID_API_VERSION")) >= 35
-                            ? font_file_selection::from_firmware : font_file_selection::from_os);
+                    g_cfg.misc.font_file_selection.set(font_file_selection::from_firmware);
                     goto case_lab;
                 }
         };
@@ -232,7 +224,7 @@ extern const std::unordered_map<rsx::overlays::language_class,std::string>& cfg_
     return r;
 }
 
-
+#if 0
 android_camera_handler::android_camera_handler(JavaVM *vm) : camera_handler_base()
 {
     aps3e_log.notice("android_camera_handler created");
@@ -612,7 +604,7 @@ camera_handler_base::camera_handler_state android_camera_handler::get_image(
 
     return current_state;
 }
-
+#endif
 enum class APS3E_VKC:u32{
     none=0,
     l,u,r,d,
@@ -671,7 +663,7 @@ const std::unordered_map<std::string, u32> mouse_list_r =
                 VKC1(ps)
         };
 
-#undef VKC
+#undef VKCf
 #undef VKC1
 #undef VKC2
 #undef VKC3
@@ -758,24 +750,50 @@ void AndroidVirtualPadHandler::Key(const u32 code, bool pressed, u16 value)
 
     for (auto& pad : m_pads_internal)
     {
-        const auto register_new_button_value = [&](std::map<u32, u16>& pressed_keys) -> u16
+        const auto register_new_button_value = [code, pressed, value](Button& btn) -> u16
         {
-            u16 actual_value = 0;
-
             // Make sure we keep this button pressed until all related keys are released.
             if (pressed)
             {
-                pressed_keys[code] = value;
+                btn.m_pressed_keys[code] = value;
             }
             else
             {
-                pressed_keys.erase(code);
+                btn.m_pressed_keys.erase(code);
+
+                // Optimization: just skip the whole combo parsing if there are no keys pressed
+                if (btn.m_pressed_keys.empty())
+                {
+                    return 0;
+                }
             }
 
-            // Get the max value of all pressed keys for this button
-            for (const auto& [key, val] : pressed_keys)
+            u16 actual_value = 0;
+
+            // Get the max value of all pressed keys for this DS3 button
+            for (const std::set<u32>& key_codes : btn.m_key_combos)
             {
-                actual_value = std::max(actual_value, val);
+                if (key_codes.empty()) continue;
+
+                // Every key in this combination has to be pressed for this button to be considered pressed
+                u16 combo_value = 0;
+                const bool combo_pressed = std::all_of(key_codes.cbegin(), key_codes.cend(), [&btn, &combo_value](u32 key_code)
+                {
+                    const auto it = btn.m_pressed_keys.find(key_code);
+                    if (it == btn.m_pressed_keys.cend() || it->second == 0)
+                    {
+                        return false; // This combo button is not pressed, so the combo is not pressed either.
+                    }
+
+                    // Take minimum combo value. Otherwise we will always end up with the max value.
+                    combo_value = (combo_value == 0) ? it->second : std::min(combo_value, it->second);
+                    return true;
+                });
+
+                if (combo_pressed)
+                {
+                    actual_value = std::max(actual_value, combo_value);
+                }
             }
 
             return actual_value;
@@ -783,18 +801,23 @@ void AndroidVirtualPadHandler::Key(const u32 code, bool pressed, u16 value)
 
         // Find out if special buttons are pressed (introduced by RPCS3).
         // Activate the buttons here if possible since keys don't auto-repeat. This ensures that they are already pressed in the following loop.
-        if (pad.m_pressure_intensity_button_index >= 0)
-        {
-            Button& pressure_intensity_button = pad.m_buttons[pad.m_pressure_intensity_button_index];
 
-            if (pressure_intensity_button.m_key_codes.contains(code))
+        const auto update_special_button_press = [&pad, &register_new_button_value, code](s32 index)
+        {
+            if (index < 0) return;
+
+            Button& pressure_intensity_button = pad.m_buttons[index];
+
+            if (std::any_of(pressure_intensity_button.m_key_combos.cbegin(), pressure_intensity_button.m_key_combos.cend(), [code](const std::set<u32>& key_codes){ return key_codes.contains(code); }))
             {
-                const u16 actual_value = register_new_button_value(pressure_intensity_button.m_pressed_keys);
+                const u16 actual_value = register_new_button_value(pressure_intensity_button);
 
                 pressure_intensity_button.m_pressed = actual_value > 0;
                 pressure_intensity_button.m_value = actual_value;
             }
-        }
+        };
+
+        update_special_button_press(pad.m_pressure_intensity_button_index);
 
         const bool adjust_pressure = pad.get_pressure_intensity_button_active(m_pressure_intensity_toggle_mode, pad.m_player_id);
         const bool adjust_pressure_changed = pad.m_adjust_pressure_last != adjust_pressure;
@@ -804,18 +827,7 @@ void AndroidVirtualPadHandler::Key(const u32 code, bool pressed, u16 value)
             pad.m_adjust_pressure_last = adjust_pressure;
         }
 
-        if (pad.m_analog_limiter_button_index >= 0)
-        {
-            Button& analog_limiter_button = pad.m_buttons[pad.m_analog_limiter_button_index];
-
-            if (analog_limiter_button.m_key_codes.contains(code))
-            {
-                const u16 actual_value = register_new_button_value(analog_limiter_button.m_pressed_keys);
-
-                analog_limiter_button.m_pressed = actual_value > 0;
-                analog_limiter_button.m_value = actual_value;
-            }
-        }
+        update_special_button_press(pad.m_analog_limiter_button_index);
 
         const bool analog_limiter_enabled = pad.get_analog_limiter_button_active(m_analog_limiter_toggle_mode, pad.m_player_id);
         const bool analog_limiter_changed = pad.m_analog_limiter_enabled_last != analog_limiter_enabled;
@@ -832,21 +844,22 @@ void AndroidVirtualPadHandler::Key(const u32 code, bool pressed, u16 value)
         {
             // Ignore special buttons
             if (static_cast<s32>(i) == pad.m_pressure_intensity_button_index ||
-                static_cast<s32>(i) == pad.m_analog_limiter_button_index)
+                static_cast<s32>(i) == pad.m_analog_limiter_button_index ||
+                static_cast<s32>(i) == pad.m_orientation_reset_button_index)
                 continue;
 
             Button& button = pad.m_buttons[i];
 
             bool update_button = true;
 
-            if (!button.m_key_codes.contains(code))
+            if (std::none_of(button.m_key_combos.cbegin(), button.m_key_combos.cend(), [code](const std::set<u32>& key_codes){ return key_codes.contains(code); }))
             {
                 // Handle pressure changes anyway
                 update_button = adjust_pressure_changed;
             }
             else
             {
-                button.m_actual_value = register_new_button_value(button.m_pressed_keys);
+                button.m_actual_value = register_new_button_value(button);
 
                 // to get the fastest response time possible we don't wanna use any lerp with factor 1
                 if (button.m_analog)
@@ -894,8 +907,8 @@ void AndroidVirtualPadHandler::Key(const u32 code, bool pressed, u16 value)
 
             const bool is_left_stick = i < 2;
 
-            const bool is_max = stick.m_key_codes_max.contains(code);
-            const bool is_min = stick.m_key_codes_min.contains(code);
+            const bool is_max = std::any_of(stick.m_key_combos_max.cbegin(), stick.m_key_combos_max.cend(), [code](const std::set<u32>& combo) { return combo.contains(code); });
+            const bool is_min = std::any_of(stick.m_key_combos_min.cbegin(), stick.m_key_combos_min.cend(), [code](const std::set<u32>& combo) { return combo.contains(code); });
 
             if (!is_max && !is_min)
             {
@@ -1506,27 +1519,31 @@ std::string keyboard_pad_handler::GetKeyName(const u32& keyCode)
 	return QKeySequence(keyCode).toString(QKeySequence::NativeText).toStdString();
 }
 #endif
-std::set<u32> AndroidVirtualPadHandler::GetKeyCodes(const cfg::string& cfg_string)
+
+std::vector<std::set<u32>> AndroidVirtualPadHandler::GetKeyCombos(const cfg::string& cfg_string)
 {
-    std::set<u32> key_codes;
-    for (const std::string& key_name : cfg_pad::get_buttons(cfg_string))
+    std::vector<std::set<u32>> res;
+
+    for (const pad::combo& combo : cfg_pad::get_combos(cfg_string.to_string()))
     {
-        //if (u32 code = GetKeyCode(QString::fromStdString(key_name)); code != Qt::NoButton)
-        if (u32 code = mouse_list_r.at(key_name); code)
+        std::set<u32> key_codes;
+
+        for (const std::string& button : combo.buttons())
         {
-            key_codes.insert(code);
+            //if (u32 code = GetKeyCode(QString::fromStdString(button)); code != Qt::NoButton)
+            if (u32 code = mouse_list_r.at(button); code)
+            {
+                key_codes.insert(code);
+            }
+        }
+
+        if (!key_codes.empty())
+        {
+            res.push_back(std::move(key_codes));
         }
     }
-    return key_codes;
-    /*std::set<u32> key_codes;
-    for (const std::string& key_name : cfg_pad::get_buttons(cfg_string))
-    {
-        if (u32 code = GetKeyCode(QString::fromStdString(key_name)); code != Qt::NoButton)
-        {
-            key_codes.insert(code);
-        }
-    }
-    return key_codes;*/
+
+    return res;
 }
 #if 0
 u32 keyboard_pad_handler::GetKeyCode(const QString& keyName)
@@ -1662,23 +1679,37 @@ bool AndroidVirtualPadHandler::bindPadToDevice(std::shared_ptr<Pad> pad)
     m_pressure_intensity_toggle_mode = cfg->pressure_intensity_toggle_mode.get();
     m_pressure_intensity_deadzone = cfg->pressure_intensity_deadzone.get();
 
-    const auto find_keys = [this](const cfg::string& name)
+    const auto find_combos = [this](const cfg::string& name)
     {
-        std::set<u32> keys = FindKeyCodes<u32, u32>(mouse_list, name, false);
-        for (const u32& key : GetKeyCodes(name)) keys.insert(key);
+        std::vector<std::set<u32>> combos = find_key_combos(mouse_list, name);
+        for (const std::set<u32>& combo : GetKeyCombos(name)) combos.push_back(combo);
 
-        /*if (!keys.empty())
+        if (!combos.empty())
         {
-            if (!m_mouse_move_used && (keys.contains(mouse::move_left) || keys.contains(mouse::move_right) || keys.contains(mouse::move_up) || keys.contains(mouse::move_down)))
+            /*if (!m_mouse_move_used)
             {
-                m_mouse_move_used = true;
+                if (std::any_of(combos.cbegin(), combos.cend(), [](const std::set<u32>& keys)
+                {
+                    return keys.contains(mouse::move_left) || keys.contains(mouse::move_right) || keys.contains(mouse::move_up) || keys.contains(mouse::move_down);
+                }))
+                {
+                    m_mouse_move_used = true;
+                }
             }
-            else if (!m_mouse_wheel_used && (keys.contains(mouse::wheel_left) || keys.contains(mouse::wheel_right) || keys.contains(mouse::wheel_up) || keys.contains(mouse::wheel_down)))
+
+            if (!m_mouse_wheel_used)
             {
-                m_mouse_wheel_used = true;
-            }
-        }*/
-        return keys;
+                if (std::any_of(combos.cbegin(), combos.cend(), [](const std::set<u32>& keys)
+                {
+                    return keys.contains(mouse::wheel_left) || keys.contains(mouse::wheel_right) || keys.contains(mouse::wheel_up) || keys.contains(mouse::wheel_down);
+                }))
+                {
+                    m_mouse_wheel_used = true;
+                }
+            }*/
+        }
+
+        return combos;
     };
 
     u32 pclass_profile = 0x0;
@@ -1706,56 +1737,56 @@ bool AndroidVirtualPadHandler::bindPadToDevice(std::shared_ptr<Pad> pad)
 
     if (b_has_pressure_intensity_button)
     {
-        pad->m_buttons.emplace_back(special_button_offset, find_keys(cfg->pressure_intensity_button), special_button_value::pressure_intensity);
+        pad->m_buttons.emplace_back(special_button_offset, find_combos(cfg->pressure_intensity_button), special_button_value::pressure_intensity);
         pad->m_pressure_intensity_button_index = static_cast<s32>(pad->m_buttons.size()) - 1;
     }
 
     if (b_has_analog_limiter_button)
     {
-        pad->m_buttons.emplace_back(special_button_offset, find_keys(cfg->analog_limiter_button), special_button_value::analog_limiter);
+        pad->m_buttons.emplace_back(special_button_offset, find_combos(cfg->analog_limiter_button), special_button_value::analog_limiter);
         pad->m_analog_limiter_button_index = static_cast<s32>(pad->m_buttons.size()) - 1;
     }
 
-    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL1, find_keys(cfg->left),     CELL_PAD_CTRL_LEFT);
-    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL1, find_keys(cfg->down),     CELL_PAD_CTRL_DOWN);
-    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL1, find_keys(cfg->right),    CELL_PAD_CTRL_RIGHT);
-    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL1, find_keys(cfg->up),       CELL_PAD_CTRL_UP);
-    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL1, find_keys(cfg->start),    CELL_PAD_CTRL_START);
-    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL1, find_keys(cfg->r3),       CELL_PAD_CTRL_R3);
-    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL1, find_keys(cfg->l3),       CELL_PAD_CTRL_L3);
-    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL1, find_keys(cfg->select),   CELL_PAD_CTRL_SELECT);
-    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL1, find_keys(cfg->ps),       CELL_PAD_CTRL_PS);
-    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL2, find_keys(cfg->square),   CELL_PAD_CTRL_SQUARE);
-    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL2, find_keys(cfg->cross),    CELL_PAD_CTRL_CROSS);
-    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL2, find_keys(cfg->circle),   CELL_PAD_CTRL_CIRCLE);
-    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL2, find_keys(cfg->triangle), CELL_PAD_CTRL_TRIANGLE);
-    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL2, find_keys(cfg->r1),       CELL_PAD_CTRL_R1);
-    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL2, find_keys(cfg->l1),       CELL_PAD_CTRL_L1);
-    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL2, find_keys(cfg->r2),       CELL_PAD_CTRL_R2);
-    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL2, find_keys(cfg->l2),       CELL_PAD_CTRL_L2);
+    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL1, find_combos(cfg->left),     CELL_PAD_CTRL_LEFT);
+    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL1, find_combos(cfg->down),     CELL_PAD_CTRL_DOWN);
+    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL1, find_combos(cfg->right),    CELL_PAD_CTRL_RIGHT);
+    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL1, find_combos(cfg->up),       CELL_PAD_CTRL_UP);
+    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL1, find_combos(cfg->start),    CELL_PAD_CTRL_START);
+    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL1, find_combos(cfg->r3),       CELL_PAD_CTRL_R3);
+    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL1, find_combos(cfg->l3),       CELL_PAD_CTRL_L3);
+    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL1, find_combos(cfg->select),   CELL_PAD_CTRL_SELECT);
+    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL1, find_combos(cfg->ps),       CELL_PAD_CTRL_PS);
+    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL2, find_combos(cfg->square),   CELL_PAD_CTRL_SQUARE);
+    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL2, find_combos(cfg->cross),    CELL_PAD_CTRL_CROSS);
+    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL2, find_combos(cfg->circle),   CELL_PAD_CTRL_CIRCLE);
+    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL2, find_combos(cfg->triangle), CELL_PAD_CTRL_TRIANGLE);
+    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL2, find_combos(cfg->r1),       CELL_PAD_CTRL_R1);
+    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL2, find_combos(cfg->l1),       CELL_PAD_CTRL_L1);
+    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL2, find_combos(cfg->r2),       CELL_PAD_CTRL_R2);
+    pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_DIGITAL2, find_combos(cfg->l2),       CELL_PAD_CTRL_L2);
 
     if (pad->m_class_type == CELL_PAD_PCLASS_TYPE_SKATEBOARD)
     {
-        pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_PRESS_PIGGYBACK, find_keys(cfg->ir_nose), CELL_PAD_CTRL_PRESS_TRIANGLE);
-        pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_PRESS_PIGGYBACK, find_keys(cfg->ir_tail), CELL_PAD_CTRL_PRESS_CIRCLE);
-        pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_PRESS_PIGGYBACK, find_keys(cfg->ir_left), CELL_PAD_CTRL_PRESS_CROSS);
-        pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_PRESS_PIGGYBACK, find_keys(cfg->ir_right), CELL_PAD_CTRL_PRESS_SQUARE);
-        pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_PRESS_PIGGYBACK, find_keys(cfg->tilt_left), CELL_PAD_CTRL_PRESS_L1);
-        pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_PRESS_PIGGYBACK, find_keys(cfg->tilt_right), CELL_PAD_CTRL_PRESS_R1);
+        pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_PRESS_PIGGYBACK, find_combos(cfg->ir_nose), CELL_PAD_CTRL_PRESS_TRIANGLE);
+        pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_PRESS_PIGGYBACK, find_combos(cfg->ir_tail), CELL_PAD_CTRL_PRESS_CIRCLE);
+        pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_PRESS_PIGGYBACK, find_combos(cfg->ir_left), CELL_PAD_CTRL_PRESS_CROSS);
+        pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_PRESS_PIGGYBACK, find_combos(cfg->ir_right), CELL_PAD_CTRL_PRESS_SQUARE);
+        pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_PRESS_PIGGYBACK, find_combos(cfg->tilt_left), CELL_PAD_CTRL_PRESS_L1);
+        pad->m_buttons.emplace_back(CELL_PAD_BTN_OFFSET_PRESS_PIGGYBACK, find_combos(cfg->tilt_right), CELL_PAD_CTRL_PRESS_R1);
     }
 
-    pad->m_sticks[0] = AnalogStick(CELL_PAD_BTN_OFFSET_ANALOG_LEFT_X,  find_keys(cfg->ls_left), find_keys(cfg->ls_right));
-    pad->m_sticks[1] = AnalogStick(CELL_PAD_BTN_OFFSET_ANALOG_LEFT_Y,  find_keys(cfg->ls_up),   find_keys(cfg->ls_down));
-    pad->m_sticks[2] = AnalogStick(CELL_PAD_BTN_OFFSET_ANALOG_RIGHT_X, find_keys(cfg->rs_left), find_keys(cfg->rs_right));
-    pad->m_sticks[3] = AnalogStick(CELL_PAD_BTN_OFFSET_ANALOG_RIGHT_Y, find_keys(cfg->rs_up),   find_keys(cfg->rs_down));
+    pad->m_sticks[0] = AnalogStick(CELL_PAD_BTN_OFFSET_ANALOG_LEFT_X,  find_combos(cfg->ls_left), find_combos(cfg->ls_right));
+    pad->m_sticks[1] = AnalogStick(CELL_PAD_BTN_OFFSET_ANALOG_LEFT_Y,  find_combos(cfg->ls_up),   find_combos(cfg->ls_down));
+    pad->m_sticks[2] = AnalogStick(CELL_PAD_BTN_OFFSET_ANALOG_RIGHT_X, find_combos(cfg->rs_left), find_combos(cfg->rs_right));
+    pad->m_sticks[3] = AnalogStick(CELL_PAD_BTN_OFFSET_ANALOG_RIGHT_Y, find_combos(cfg->rs_up),   find_combos(cfg->rs_down));
 
     pad->m_sensors[0] = AnalogSensor(CELL_PAD_BTN_OFFSET_SENSOR_X, 0, 0, 0, DEFAULT_MOTION_X);
     pad->m_sensors[1] = AnalogSensor(CELL_PAD_BTN_OFFSET_SENSOR_Y, 0, 0, 0, DEFAULT_MOTION_Y);
     pad->m_sensors[2] = AnalogSensor(CELL_PAD_BTN_OFFSET_SENSOR_Z, 0, 0, 0, DEFAULT_MOTION_Z);
     pad->m_sensors[3] = AnalogSensor(CELL_PAD_BTN_OFFSET_SENSOR_G, 0, 0, 0, DEFAULT_MOTION_G);
 
-    pad->m_vibrateMotors[0] = VibrateMotor(true, 0);
-    pad->m_vibrateMotors[1] = VibrateMotor(false, 0);
+    pad->m_vibrate_motors[0] = VibrateMotor(true);
+    pad->m_vibrate_motors[1] = VibrateMotor(false);
 
     m_bindings.emplace_back(pad, nullptr, nullptr);
     m_pads_internal.push_back(*pad);
@@ -1962,17 +1993,17 @@ void AndroidVirtualPadHandler::process()
 extern void pad_state_notify_state_change(usz index, u32 state);
 extern bool is_input_allowed();
 extern std::string g_input_config_override;
-
+/*
 namespace pad
 {
-    atomic_t<pad_thread*> g_current = nullptr;
+    atomic_t<pad_thread*> g_pad_thread = nullptr;
     shared_mutex g_pad_mutex;
     std::string g_title_id;
     atomic_t<bool> g_started{false};
     atomic_t<bool> g_reset{false};
     atomic_t<bool> g_enabled{true};
     atomic_t<bool> g_home_menu_requested{false};
-}
+}*/
 
 namespace rsx
 {
@@ -1986,17 +2017,17 @@ struct pad_setting
     u32 device_type = 0;
     bool is_ldd_pad = false;
 };
-
+#if 0
 pad_thread::pad_thread(void* curthread, void* curwindow, std::string_view title_id) : m_curthread(curthread), m_curwindow(curwindow)
 {
     pad::g_title_id = title_id;
-    pad::g_current = this;
+    pad::g_pad_thread = this;
     pad::g_started = false;
 }
 
 pad_thread::~pad_thread()
 {
-    pad::g_current = nullptr;
+    pad::g_pad_thread = nullptr;
 }
 
 void pad_thread::Init()
@@ -2135,16 +2166,28 @@ void pad_thread::Init()
     // Initialize active mouse and keyboard. Activate pad handler if one exists.
     input::set_mouse_and_keyboard(m_handlers.contains(pad_handler::keyboard) ? input::active_mouse_and_keyboard::pad : input::active_mouse_and_keyboard::emulated);
 }
-
-void pad_thread::SetRumble(const u32 pad, u8 large_motor, bool small_motor)
+void pad_thread::SetRumble(u32 pad, u8 large_motor, u8 small_motor)
 {
-    if (pad >= m_pads.size())
+    if (pad >= m_pads.size() || !m_pads[pad])
         return;
 
-    m_pads[pad]->m_vibrateMotors[0].m_value = large_motor;
-    m_pads[pad]->m_vibrateMotors[1].m_value = small_motor ? 255 : 0;
-}
+    const u64 now_us = get_system_time();
 
+    m_pads[pad]->m_last_rumble_time_us = now_us;
+    m_pads[pad]->m_vibrate_motors[0].value = large_motor;
+    m_pads[pad]->m_vibrate_motors[1].value = small_motor;
+
+    // Rumble copilots as well
+    for (const auto& copilot : m_pads[pad]->copilots)
+    {
+        if (copilot && copilot->is_connected())
+        {
+            copilot->m_last_rumble_time_us = now_us;
+            copilot->m_vibrate_motors[0].value = large_motor;
+            copilot->m_vibrate_motors[1].value = small_motor;
+        }
+    }
+}
 void pad_thread::SetIntercepted(bool intercepted)
 {
     if (intercepted)
@@ -2627,3 +2670,9 @@ void pad_thread::open_home_menu()
         (result ? input_log.error : input_log.notice)("opened home menu with result %d", s32{result});
     }
 }
+#endif
+
+void mouse_gyro_handler::clear()
+{}
+
+void mouse_gyro_handler::apply_gyro(const std::shared_ptr<Pad>& pad){}

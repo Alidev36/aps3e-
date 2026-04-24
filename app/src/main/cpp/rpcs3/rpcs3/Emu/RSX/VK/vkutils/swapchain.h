@@ -2,7 +2,7 @@
 
 #if defined (_WIN32)
 #include "swapchain_win32.hpp"
-#elif defined (__ANDROID__)
+#elif defined (ANDROID)
 #include "swapchain_android.hpp"
 #elif defined (__APPLE__)
 #include "swapchain_macos.hpp"

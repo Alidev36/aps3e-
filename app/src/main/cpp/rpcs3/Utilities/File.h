@@ -1,6 +1,6 @@
 #pragma once // No BOM and only basic ASCII in this header, or a neko will die
 
-#include "Loader/iso.h"
+#include "util/serialization.hpp"
 #include "util/types.hpp"
 #include "util/shared_ptr.hpp"
 #include "bit_set.h"
@@ -66,18 +66,20 @@ namespace fs
 	// File attributes (TODO)
 	struct stat_t
 	{
-		bool is_directory;
-		bool is_symlink;
-		bool is_writable;
-		u64 size;
-		s64 atime;
-		s64 mtime;
-		s64 ctime;
+		bool is_directory = false;
+		bool is_symlink = false;
+		bool is_writable = false;
+		u64 size = 0;
+		s64 atime = 0;
+		s64 mtime = 0;
+		s64 ctime = 0;
 
 		using enable_bitcopy = std::true_type;
 
 		constexpr bool operator==(const stat_t&) const = default;
 	};
+
+	static_assert(utils::Bitcopy<stat_t>);
 
 	// Helper, layout is equal to iovec struct
 	struct iovec_clone
@@ -112,6 +114,9 @@ namespace fs
 		virtual native_handle get_handle();
 		virtual file_id get_id();
 		virtual u64 write_gather(const iovec_clone* buffers, u64 buf_count);
+		virtual void release()
+		{
+		}
 	};
 
 	// Directory entry (TODO)
@@ -126,6 +131,8 @@ namespace fs
 
 		using enable_bitcopy = std::false_type;
 	};
+
+	static_assert(!utils::Bitcopy<dir_entry>);
 
 	// Directory handle base
 	struct dir_base
@@ -148,7 +155,7 @@ namespace fs
 	// Virtual device
 	struct device_base
 	{
-		const std::string fs_prefix;
+		std::string fs_prefix;
 
 		device_base();
 		virtual ~device_base();
@@ -187,6 +194,9 @@ namespace fs
 	{
 		return std::string{get_parent_dir_view(path, parent_level)};
 	}
+
+	// Return "path" plus an ending delimiter (if missing) if "path" is an existing directory. Otherwise, an empty string
+	std::string get_path_if_dir(const std::string& path);
 
 	// Get file information
 	bool get_stat(const std::string& path, stat_t& info);
@@ -244,15 +254,15 @@ namespace fs
 		// Default constructor
 		file() = default;
 
-        static file from_fd(int fd);
-
 		// Open file with specified mode
 		explicit file(const std::string& path, bs_t<open_mode> mode = ::fs::read);
 
+		file(std::unique_ptr<file_base>&& ptr) : m_file(std::move(ptr)) {}
+
+		static file from_native_handle(native_handle handle);
+
 		// Open memory for read
 		explicit file(const void* ptr, usz size);
-
-        explicit file(iso_fs& _iso_fs, const std::string& entry_path);
 
 		// Open file with specified args (forward to constructor)
 		template <typename... Args>
@@ -280,9 +290,17 @@ namespace fs
 			m_file = std::move(ptr);
 		}
 
+		void release_handle()
+		{
+			if (m_file)
+			{
+				release()->release();
+			}
+		}
+
 		std::unique_ptr<file_base> release()
 		{
-			return std::move(m_file);
+			return std::exchange(m_file, nullptr);
 		}
 
 		// Change file size (possibly appending zero bytes)
@@ -604,11 +622,14 @@ namespace fs
 	// Get executable containing directory
 	std::string get_executable_dir();
 
-	// Get configuration directory
-	const std::string& get_config_dir();
+	// Get configuration directory. Set get_config_subdirectory to true to get the nested config dir on windows.
+	const std::string& get_config_dir(bool get_config_subdirectory = false);
 
 	// Get common cache directory
 	const std::string& get_cache_dir();
+
+	// Get common log directory
+	const std::string& get_log_dir();
 
 	// Temporary directory
 	const std::string& get_temp_dir();
@@ -662,6 +683,7 @@ namespace fs
 		notempty,
 		readonly,
 		isdir,
+		notdir,
 		toolong,
 		nospace,
 		xdev,

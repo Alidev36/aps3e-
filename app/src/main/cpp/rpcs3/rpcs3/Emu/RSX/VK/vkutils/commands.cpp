@@ -64,10 +64,23 @@ namespace vk
 
 		if (m_submit_fence)
 		{
-			//_vkDestroyFence(pool->get_owner(), m_submit_fence, nullptr);
+			//vkDestroyFence(pool->get_owner(), m_submit_fence, nullptr);
 			delete m_submit_fence;
 			m_submit_fence = nullptr;
 		}
+	}
+
+	void command_buffer::reset()
+	{
+		// Do the driver reset
+		CHECK_RESULT(_vkResetCommandBuffer(commands, 0));
+	}
+
+	void command_buffer::clear_state_cache()
+	{
+		m_bound_pipelines[0] = VK_NULL_HANDLE;
+		m_bound_pipelines[1] = VK_NULL_HANDLE;
+		m_bound_descriptor_sets[0] = VK_NULL_HANDLE;
 	}
 
 	void command_buffer::begin()
@@ -77,9 +90,9 @@ namespace vk
 			wait_for_fence(m_submit_fence);
 			is_pending = false;
 
-			//CHECK_RESULT(_vkResetFences(pool->get_owner(), 1, &m_submit_fence));
+			//CHECK_RESULT(vkResetFences(pool->get_owner(), 1, &m_submit_fence));
 			m_submit_fence->reset();
-			CHECK_RESULT(_vkResetCommandBuffer(commands, 0));
+			reset();
 		}
 
 		if (is_open)
@@ -94,6 +107,8 @@ namespace vk
 		begin_infos.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 		CHECK_RESULT(_vkBeginCommandBuffer(commands, &begin_infos));
 		is_open = true;
+
+		clear_state_cache();
 	}
 
 	void command_buffer::end()
@@ -128,5 +143,54 @@ namespace vk
 		submit_info.commands = this->commands;
 		queue_submit(submit_info, flush);
 		clear_flags();
+	}
+
+	void command_buffer::bind_pipeline(VkPipeline pipeline, VkPipelineBindPoint bind_point) const
+	{
+		ensure(is_open && bind_point <= VK_PIPELINE_BIND_POINT_COMPUTE);
+		auto& cached = m_bound_pipelines[static_cast<int>(bind_point)];
+		if (cached == pipeline)
+		{
+			return;
+		}
+
+		cached = pipeline;
+		_vkCmdBindPipeline(commands, bind_point, pipeline);
+	}
+
+	void command_buffer::bind_descriptor_sets(
+		const std::span<VkDescriptorSet>& sets,
+		const std::span<u32>& dynamic_offsets,
+		VkPipelineBindPoint bind_point,
+		VkPipelineLayout pipe_layout) const
+	{
+		const u32 num_sets = ::size32(sets);
+		ensure(num_sets <= 2);
+
+		if (dynamic_offsets.empty() &&
+			!memcmp(sets.data(), m_bound_descriptor_sets.data(), sets.size_bytes()))
+		{
+			return;
+		}
+
+		std::memcpy(m_bound_descriptor_sets.data(), sets.data(), sets.size_bytes());
+		_vkCmdBindDescriptorSets(commands, bind_point, pipe_layout, 0, num_sets, sets.data(), ::size32(dynamic_offsets), dynamic_offsets.data());
+	}
+
+	void command_buffer::bind_descriptor_sets(
+		const std::span<VkDescriptorSet>& sets,
+		VkPipelineBindPoint bind_point,
+		VkPipelineLayout pipe_layout) const
+	{
+		const u32 num_sets = ::size32(sets);
+		ensure(is_open && num_sets <= 2);
+
+		if (!memcmp(sets.data(), m_bound_descriptor_sets.data(), sets.size_bytes()))
+		{
+			return;
+		}
+
+		std::memcpy(m_bound_descriptor_sets.data(), sets.data(), sets.size_bytes());
+		_vkCmdBindDescriptorSets(commands, bind_point, pipe_layout, 0, num_sets, sets.data(), 0, nullptr);
 	}
 }

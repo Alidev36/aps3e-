@@ -3,6 +3,7 @@
 #include "ds4_pad_handler.h"
 #include "dualsense_pad_handler.h"
 #include "skateboard_pad_handler.h"
+#include "ps_move_handler.h"
 #include "util/logs.hpp"
 #include "Utilities/Timer.h"
 #include "Emu/System.h"
@@ -16,6 +17,16 @@
 #include <memory>
 
 LOG_CHANNEL(hid_log, "HID");
+
+#ifdef ANDROID
+std::vector<android_usb_device> g_android_usb_devices;
+std::mutex g_android_usb_devices_mutex;
+#endif
+
+// Global mutex to allow "hid_enumerate()" and "hid_open_path()" are accessed by one thread at a time
+// (e.g. thread running "process()" and thread running enumerate_devices()).
+// It avoids the emulation crash in case the controller gets disconnected (e.g. due to inactivity)
+std::mutex g_hid_mutex;
 
 struct hid_instance
 {
@@ -55,9 +66,19 @@ public:
 
 		hid_log.notice("Initializing HIDAPI ...");
 
-		if (hid_init() != 0)
+#if defined(__APPLE__)
+		int error_code = 0;
+		Emu.BlockingCallFromMainThread([&error_code]()
 		{
-			hid_log.fatal("hid_init error");
+			error_code = hid_init();
+			hid_darwin_set_open_exclusive(0);
+		}, false);
+#else
+		const int error_code = hid_init();
+#endif
+		if (error_code != 0)
+		{
+			hid_log.fatal("hid_init error %d: %s", error_code, hid_error(nullptr));
 			return false;
 		}
 
@@ -70,13 +91,77 @@ private:
 	std::mutex m_hid_mutex;
 };
 
+hid_device* HidDevice::open()
+{
+	// Lock before calling "hid_open_path()"
+	std::unique_lock lock(g_hid_mutex, std::defer_lock);
+
+	if (!lock.try_lock())
+	{
+		// The enumeration thread is busy. If we lock and open the device, we might get input stutter on other devices.
+		return nullptr;
+	}
+
+#ifdef ANDROID
+	hidDevice = hid_libusb_wrap_sys_device(path, -1);
+#elif defined(__APPLE__)
+	Emu.BlockingCallFromMainThread([this]()
+	{
+		hidDevice = hid_open_path(path.c_str());
+	}, false);
+#else
+	hidDevice = hid_open_path(path.data());
+#endif
+
+	return hidDevice;
+}
+
+void HidDevice::close(hid_device* dev)
+{
+	if (!dev) return;
+
+#if defined(__APPLE__)
+	Emu.BlockingCallFromMainThread([dev]()
+	{
+		if (dev)
+		{
+			hid_close(dev);
+		}
+	}, false);
+#else
+	hid_close(dev);
+#endif
+}
+
 void HidDevice::close()
 {
+#if defined(__APPLE__)
+	if (hidDevice)
+	{
+		Emu.BlockingCallFromMainThread([this]()
+		{
+			if (hidDevice)
+			{
+				hid_close(hidDevice);
+				hidDevice = nullptr;
+			}
+		}, false);
+	}
+#else
 	if (hidDevice)
 	{
 		hid_close(hidDevice);
 		hidDevice = nullptr;
 	}
+#endif
+
+#ifdef _WIN32
+	if (bt_device)
+	{
+		hid_close(bt_device);
+		bt_device = nullptr;
+	}
+#endif
 }
 
 template <class Device>
@@ -88,12 +173,11 @@ hid_pad_handler<Device>::hid_pad_handler(pad_handler type, std::vector<id_pair> 
 template <class Device>
 hid_pad_handler<Device>::~hid_pad_handler()
 {
-	if (m_enumeration_thread)
-	{
-		auto& enumeration_thread = *m_enumeration_thread;
-		enumeration_thread = thread_state::aborting;
-		enumeration_thread();
-	}
+	// Join thread
+	m_enumeration_thread.reset();
+
+	// Lock before accessing any controller (e.g. just to close it with "close()")
+	std::lock_guard lock(g_hid_mutex);
 
 	for (auto& controller : m_controllers)
 	{
@@ -112,10 +196,6 @@ bool hid_pad_handler<Device>::Init()
 
 	if (!hid_instance::get_instance().initialize())
 		return false;
-
-#if defined(__APPLE__)
-	hid_darwin_set_open_exclusive(0);
-#endif
 
 	for (usz i = 1; i <= MAX_GAMEPADS; i++) // Controllers 1-n in GUI
 	{
@@ -171,49 +251,113 @@ template <class Device>
 void hid_pad_handler<Device>::enumerate_devices()
 {
 	Timer timer;
-	std::set<std::string> device_paths;
-	std::map<std::string, std::wstring> serials;
+	std::set<hid_enumerated_device_type> device_paths;
+	std::map<hid_enumerated_device_type, std::wstring> serials;
 
+#ifdef ANDROID
+	{
+		std::lock_guard lock(g_android_usb_devices_mutex);
+		for (const android_usb_device& device : g_android_usb_devices)
+		{
+			const auto filter = [&](id_pair id)
+			{
+				return id.m_vid == device.vendorId && id.m_pid == device.productId;
+			};
+
+			if (std::find_if(m_ids.begin(), m_ids.end(), filter) != m_ids.end())
+			{
+				device_paths.insert(device.fd);
+			}
+		}
+	}
+#else
 	for (const auto& [vid, pid] : m_ids)
 	{
-		hid_device_info* dev_info = hid_enumerate(vid, pid);
-		hid_device_info* head     = dev_info;
-		while (dev_info)
+		// Let's make sure hid_enumerate is only done one thread at a time
+		std::lock_guard lock(g_hid_mutex);
+
+#if defined(__APPLE__)
+		Emu.BlockingCallFromMainThread([&]()
+		{
+#endif
+		hid_device_info* head = hid_enumerate(vid, pid);
+		for (hid_device_info* dev_info = head; dev_info != nullptr; dev_info = dev_info->next)
 		{
 			if (!dev_info->path)
 			{
 				hid_log.error("Skipping enumeration of device with empty path.");
 				continue;
 			}
-			device_paths.insert(dev_info->path);
-			serials[dev_info->path] = dev_info->serial_number ? std::wstring(dev_info->serial_number) : std::wstring();
-			dev_info                = dev_info->next;
+
+			std::string path = dev_info->path;
+			device_paths.insert(path);
+
+#ifdef _WIN32
+			// Only add serials for col01 ps move device
+			if (m_type == pad_handler::move && path.find("&Col01#") != umax)
+#endif
+			{
+				serials[std::move(path)] = dev_info->serial_number ? std::wstring(dev_info->serial_number) : std::wstring();
+			}
 		}
 		hid_free_enumeration(head);
+#if defined(__APPLE__)
+		}, false);
+#endif
 	}
+#endif
 	hid_log.notice("%s enumeration found %d devices (%f ms)", m_type, device_paths.size(), timer.GetElapsedTimeInMilliSec());
 
+#ifdef _WIN32
+	if (m_type == pad_handler::move)
+	{
+		// Windows enumerates 3 ps move devices: Col01, Col02, and Col03.
+		// We use Col01 for data and Col02 for bluetooth.
+
+		// Filter paths. We only want the Col01 paths.
+		std::set<std::string> col01_paths;
+
+		for (const std::string& path : device_paths)
+		{
+			hid_log.trace("Found ps move device: %s", path);
+
+			if (path.find("&Col01#") != umax)
+			{
+				col01_paths.insert(path);
+			}
+		}
+
+		device_paths = std::move(col01_paths);
+	}
+#endif
+
 	std::lock_guard lock(m_enumeration_mutex);
-	m_new_enumerated_devices = device_paths;
-	m_enumerated_serials = std::move(serials);
+	m_new_enumerated_devices = std::move(device_paths);
+	m_new_enumerated_serials = std::move(serials);
 }
 
 template <class Device>
 void hid_pad_handler<Device>::update_devices()
 {
-	std::lock_guard lock(m_enumeration_mutex);
-
-	if (m_last_enumerated_devices == m_new_enumerated_devices)
 	{
-		return;
+		std::lock_guard lock(m_enumeration_mutex);
+
+		if (m_enumerated_devices == m_new_enumerated_devices)
+		{
+			return;
+		}
+
+		m_enumerated_devices = m_new_enumerated_devices;
+		m_enumerated_serials = std::move(m_new_enumerated_serials);
 	}
 
-	m_last_enumerated_devices = m_new_enumerated_devices;
+	// Lock before accessing any controller (e.g. just to close it with "close()") or before calling "hid_open_path()"
+	std::lock_guard lock(g_hid_mutex);
 
 	// Scrap devices that are not in the new list
 	for (auto& controller : m_controllers)
 	{
-		if (controller.second && !controller.second->path.empty() && !m_new_enumerated_devices.contains(controller.second->path))
+		if (controller.second && controller.second->path != hid_enumerated_device_default && !m_enumerated_devices.contains(controller.second->path))
 		{
 			controller.second->close();
 			cfg_pad* config = controller.second->config;
@@ -225,7 +369,7 @@ void hid_pad_handler<Device>::update_devices()
 	bool warn_about_drivers = false;
 
 	// Find and add new devices
-	for (const auto& path : m_new_enumerated_devices)
+	for (const auto& path : m_enumerated_devices)
 	{
 		// Check if we have at least one virtual controller left
 		if (std::none_of(m_controllers.cbegin(), m_controllers.cend(), [](const auto& c) { return !c.second || !c.second->hidDevice; }))
@@ -235,8 +379,26 @@ void hid_pad_handler<Device>::update_devices()
 		if (std::any_of(m_controllers.cbegin(), m_controllers.cend(), [&path](const auto& c) { return c.second && c.second->path == path; }))
 			continue;
 
-		hid_device* dev = hid_open_path(path.c_str());
+#ifdef _WIN32
+		if (m_type == pad_handler::move)
+		{
+			check_add_device(nullptr, path, m_enumerated_serials[path]);
+			continue;
+		}
+#endif
+
+#ifdef ANDROID
+		if (hid_device* dev = hid_libusb_wrap_sys_device(path, -1))
+#elif defined(__APPLE__)
+		hid_device* dev = nullptr;
+		Emu.BlockingCallFromMainThread([&]()
+		{
+			dev = hid_open_path(path.c_str());
+		}, false);
 		if (dev)
+#else
+		if (hid_device* dev = hid_open_path(path.c_str()))
+#endif
 		{
 			if (const hid_device_info* info = hid_get_device_info(dev))
 			{
@@ -314,3 +476,4 @@ template class hid_pad_handler<ds3_device>;
 template class hid_pad_handler<DS4Device>;
 template class hid_pad_handler<DualSenseDevice>;
 template class hid_pad_handler<skateboard_device>;
+template class hid_pad_handler<ps_move_device>;

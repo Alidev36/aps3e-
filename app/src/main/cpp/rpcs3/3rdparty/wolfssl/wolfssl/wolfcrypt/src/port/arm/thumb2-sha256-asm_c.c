@@ -1,12 +1,12 @@
 /* thumb2-sha256-asm
  *
- * Copyright (C) 2006-2023 wolfSSL Inc.
+ * Copyright (C) 2006-2026 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
  * wolfSSL is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * wolfSSL is distributed in the hope that it will be useful,
@@ -21,17 +21,15 @@
 
 /* Generated using (from wolfssl):
  *   cd ../scripts
- *   ruby ./sha2/sha256.rb thumb2 ../wolfssl/wolfcrypt/src/port/arm/thumb2-sha256-asm.c
+ *   ruby ./sha2/sha256.rb \
+ *       thumb2 ../wolfssl/wolfcrypt/src/port/arm/thumb2-sha256-asm.c
  */
 
-#ifdef HAVE_CONFIG_H
-    #include <config.h>
-#endif /* HAVE_CONFIG_H */
-#include <wolfssl/wolfcrypt/settings.h>
+#include <wolfssl/wolfcrypt/libwolfssl_sources_asm.h>
 #include <wolfssl/wolfcrypt/error-crypt.h>
 
 #ifdef WOLFSSL_ARMASM
-#if !defined(__aarch64__) && defined(__thumb__)
+#ifdef WOLFSSL_ARMASM_THUMB2
 #ifdef WOLFSSL_ARMASM_INLINE
 
 #ifdef __IAR_SYSTEMS_ICC__
@@ -43,11 +41,12 @@
 #define __asm__        __asm
 #define __volatile__   volatile
 #endif /* __KEIL__ */
+
 #ifndef NO_SHA256
 #include <wolfssl/wolfcrypt/sha256.h>
 
 #ifdef WOLFSSL_ARMASM_NO_NEON
-XALIGNED(16) static const uint32_t L_SHA256_transform_len_k[] = {
+XALIGNED(16) static const word32 L_SHA256_transform_len_k[] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
     0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
     0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
@@ -66,23 +65,31 @@ XALIGNED(16) static const uint32_t L_SHA256_transform_len_k[] = {
     0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 };
 
-void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len);
+void Transform_Sha256_Len_base(wc_Sha256* sha256, const byte* data, word32 len);
 #ifndef WOLFSSL_NO_VAR_ASSIGN_REG
-void Transform_Sha256_Len(wc_Sha256* sha256_p, const byte* data_p, word32 len_p)
+WC_OMIT_FRAME_POINTER void Transform_Sha256_Len_base(wc_Sha256* sha256_p,
+    const byte* data_p, word32 len_p)
 #else
-void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
+WC_OMIT_FRAME_POINTER void Transform_Sha256_Len_base(wc_Sha256* sha256,
+    const byte* data, word32 len)
 #endif /* !WOLFSSL_NO_VAR_ASSIGN_REG */
 {
 #ifndef WOLFSSL_NO_VAR_ASSIGN_REG
     register wc_Sha256* sha256 __asm__ ("r0") = (wc_Sha256*)sha256_p;
     register const byte* data __asm__ ("r1") = (const byte*)data_p;
     register word32 len __asm__ ("r2") = (word32)len_p;
-    register uint32_t* L_SHA256_transform_len_k_c __asm__ ("r3") = (uint32_t*)&L_SHA256_transform_len_k;
+    register word32* L_SHA256_transform_len_k_c __asm__ ("r3") =
+        (word32*)&L_SHA256_transform_len_k;
+
+#else
+    register word32* L_SHA256_transform_len_k_c =
+        (word32*)&L_SHA256_transform_len_k;
+
 #endif /* !WOLFSSL_NO_VAR_ASSIGN_REG */
 
     __asm__ __volatile__ (
         "SUB	sp, sp, #0xc0\n\t"
-        "MOV	r3, %[L_SHA256_transform_len_k]\n\t"
+        "MOV	r12, %[L_SHA256_transform_len_k]\n\t"
         /* Copy digest to add in at end */
         "LDRD	r4, r5, [%[sha256]]\n\t"
         "LDRD	r6, r7, [%[sha256], #8]\n\t"
@@ -94,7 +101,11 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "STRD	r10, r11, [sp, #88]\n\t"
         /* Start of loop processing a block */
         "\n"
-    "L_SHA256_transform_len_begin%=:\n\t"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_begin:\n\t"
+#else
+    "L_SHA256_transform_len_begin_%=:\n\t"
+#endif
         /* Load, Reverse and Store W - 64 bytes */
         "LDR	r4, [%[data]]\n\t"
         "LDR	r5, [%[data], #4]\n\t"
@@ -139,10 +150,15 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "LDR	r11, [%[sha256], #4]\n\t"
         "LDR	r4, [%[sha256], #8]\n\t"
         "EOR	r11, r11, r4\n\t"
-        "MOV	r12, #0x3\n\t"
+#ifndef WOLFSSL_ARMASM_SHA256_SMALL
+        "MOV	r3, #0x3\n\t"
         /* Start of 16 rounds */
         "\n"
-    "L_SHA256_transform_len_start%=:\n\t"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_start_fast:\n\t"
+#else
+    "L_SHA256_transform_len_start_fast_%=:\n\t"
+#endif
         /* Round 0 */
         "LDR	r5, [%[sha256], #16]\n\t"
         "LDR	r6, [%[sha256], #20]\n\t"
@@ -157,7 +173,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp]\n\t"
-        "LDR	r6, [r3]\n\t"
+        "LDR	r6, [r12]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256]]\n\t"
@@ -204,7 +220,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #4]\n\t"
-        "LDR	r6, [r3, #4]\n\t"
+        "LDR	r6, [r12, #4]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #28]\n\t"
@@ -251,7 +267,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #8]\n\t"
-        "LDR	r6, [r3, #8]\n\t"
+        "LDR	r6, [r12, #8]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #24]\n\t"
@@ -298,7 +314,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #12]\n\t"
-        "LDR	r6, [r3, #12]\n\t"
+        "LDR	r6, [r12, #12]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #20]\n\t"
@@ -345,7 +361,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #16]\n\t"
-        "LDR	r6, [r3, #16]\n\t"
+        "LDR	r6, [r12, #16]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #16]\n\t"
@@ -392,7 +408,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #20]\n\t"
-        "LDR	r6, [r3, #20]\n\t"
+        "LDR	r6, [r12, #20]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #12]\n\t"
@@ -439,7 +455,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #24]\n\t"
-        "LDR	r6, [r3, #24]\n\t"
+        "LDR	r6, [r12, #24]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #8]\n\t"
@@ -486,7 +502,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #28]\n\t"
-        "LDR	r6, [r3, #28]\n\t"
+        "LDR	r6, [r12, #28]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #4]\n\t"
@@ -533,7 +549,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #32]\n\t"
-        "LDR	r6, [r3, #32]\n\t"
+        "LDR	r6, [r12, #32]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256]]\n\t"
@@ -580,7 +596,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #36]\n\t"
-        "LDR	r6, [r3, #36]\n\t"
+        "LDR	r6, [r12, #36]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #28]\n\t"
@@ -627,7 +643,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #40]\n\t"
-        "LDR	r6, [r3, #40]\n\t"
+        "LDR	r6, [r12, #40]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #24]\n\t"
@@ -674,7 +690,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #44]\n\t"
-        "LDR	r6, [r3, #44]\n\t"
+        "LDR	r6, [r12, #44]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #20]\n\t"
@@ -721,7 +737,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #48]\n\t"
-        "LDR	r6, [r3, #48]\n\t"
+        "LDR	r6, [r12, #48]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #16]\n\t"
@@ -768,7 +784,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #52]\n\t"
-        "LDR	r6, [r3, #52]\n\t"
+        "LDR	r6, [r12, #52]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #12]\n\t"
@@ -815,7 +831,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #56]\n\t"
-        "LDR	r6, [r3, #56]\n\t"
+        "LDR	r6, [r12, #56]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #8]\n\t"
@@ -862,7 +878,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #60]\n\t"
-        "LDR	r6, [r3, #60]\n\t"
+        "LDR	r6, [r12, #60]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #4]\n\t"
@@ -895,12 +911,14 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r4, r4, r5\n\t"
         "ADD	r9, r9, r4\n\t"
         "STR	r9, [sp, #60]\n\t"
-        "ADD	r3, r3, #0x40\n\t"
-        "SUBS	r12, r12, #0x1\n\t"
-#ifdef __GNUC__
-        "BNE	L_SHA256_transform_len_start%=\n\t"
+        "ADD	r12, r12, #0x40\n\t"
+        "SUBS	r3, r3, #0x1\n\t"
+#if defined(__GNUC__)
+        "BNE	L_SHA256_transform_len_start_fast_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BNE.W	L_SHA256_transform_len_start_fast\n\t"
 #else
-        "BNE.W	L_SHA256_transform_len_start%=\n\t"
+        "BNE.W	L_SHA256_transform_len_start_fast_%=\n\t"
 #endif
         /* Round 0 */
         "LDR	r5, [%[sha256], #16]\n\t"
@@ -916,7 +934,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp]\n\t"
-        "LDR	r6, [r3]\n\t"
+        "LDR	r6, [r12]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256]]\n\t"
@@ -948,7 +966,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #4]\n\t"
-        "LDR	r6, [r3, #4]\n\t"
+        "LDR	r6, [r12, #4]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #28]\n\t"
@@ -980,7 +998,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #8]\n\t"
-        "LDR	r6, [r3, #8]\n\t"
+        "LDR	r6, [r12, #8]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #24]\n\t"
@@ -1012,7 +1030,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #12]\n\t"
-        "LDR	r6, [r3, #12]\n\t"
+        "LDR	r6, [r12, #12]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #20]\n\t"
@@ -1044,7 +1062,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #16]\n\t"
-        "LDR	r6, [r3, #16]\n\t"
+        "LDR	r6, [r12, #16]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #16]\n\t"
@@ -1076,7 +1094,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #20]\n\t"
-        "LDR	r6, [r3, #20]\n\t"
+        "LDR	r6, [r12, #20]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #12]\n\t"
@@ -1108,7 +1126,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #24]\n\t"
-        "LDR	r6, [r3, #24]\n\t"
+        "LDR	r6, [r12, #24]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #8]\n\t"
@@ -1140,7 +1158,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #28]\n\t"
-        "LDR	r6, [r3, #28]\n\t"
+        "LDR	r6, [r12, #28]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #4]\n\t"
@@ -1172,7 +1190,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #32]\n\t"
-        "LDR	r6, [r3, #32]\n\t"
+        "LDR	r6, [r12, #32]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256]]\n\t"
@@ -1204,7 +1222,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #36]\n\t"
-        "LDR	r6, [r3, #36]\n\t"
+        "LDR	r6, [r12, #36]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #28]\n\t"
@@ -1236,7 +1254,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #40]\n\t"
-        "LDR	r6, [r3, #40]\n\t"
+        "LDR	r6, [r12, #40]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #24]\n\t"
@@ -1268,7 +1286,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #44]\n\t"
-        "LDR	r6, [r3, #44]\n\t"
+        "LDR	r6, [r12, #44]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #20]\n\t"
@@ -1300,7 +1318,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #48]\n\t"
-        "LDR	r6, [r3, #48]\n\t"
+        "LDR	r6, [r12, #48]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #16]\n\t"
@@ -1332,7 +1350,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #52]\n\t"
-        "LDR	r6, [r3, #52]\n\t"
+        "LDR	r6, [r12, #52]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #12]\n\t"
@@ -1364,7 +1382,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #56]\n\t"
-        "LDR	r6, [r3, #56]\n\t"
+        "LDR	r6, [r12, #56]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #8]\n\t"
@@ -1396,7 +1414,7 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r4\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [sp, #60]\n\t"
-        "LDR	r6, [r3, #60]\n\t"
+        "LDR	r6, [r12, #60]\n\t"
         "ADD	r9, r9, r5\n\t"
         "ADD	r9, r9, r6\n\t"
         "LDR	r5, [%[sha256], #4]\n\t"
@@ -1414,6 +1432,1002 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "ADD	r9, r9, r10\n\t"
         "STR	r8, [%[sha256], #16]\n\t"
         "STR	r9, [%[sha256]]\n\t"
+#else
+        "MOV	r3, #0x4\n\t"
+        /* Start of 16 rounds */
+        "\n"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_start_small:\n\t"
+#else
+    "L_SHA256_transform_len_start_small_%=:\n\t"
+#endif
+        "SUB	r3, r3, #0x1\n\t"
+        /* Round 0 */
+        "LDR	r5, [%[sha256], #16]\n\t"
+        "LDR	r6, [%[sha256], #20]\n\t"
+        "LDR	r7, [%[sha256], #24]\n\t"
+        "LDR	r9, [%[sha256], #28]\n\t"
+        "ROR	r4, r5, #6\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "EOR	r4, r4, r5, ROR #11\n\t"
+        "AND	r6, r6, r5\n\t"
+        "EOR	r4, r4, r5, ROR #25\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [sp]\n\t"
+        "LDR	r6, [r12]\n\t"
+        "ADD	r9, r9, r5\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [%[sha256]]\n\t"
+        "LDR	r6, [%[sha256], #4]\n\t"
+        "LDR	r7, [%[sha256], #8]\n\t"
+        "LDR	r8, [%[sha256], #12]\n\t"
+        "ROR	r4, r5, #2\n\t"
+        "EOR	r10, r5, r6\n\t"
+        "EOR	r4, r4, r5, ROR #13\n\t"
+        "AND	r11, r11, r10\n\t"
+        "EOR	r4, r4, r5, ROR #22\n\t"
+        "EOR	r11, r11, r6\n\t"
+        "ADD	r8, r8, r9\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r11\n\t"
+        "STR	r8, [%[sha256], #12]\n\t"
+        "STR	r9, [%[sha256], #28]\n\t"
+        "CMP	r3, #0x0\n\t"
+#if defined(__GNUC__)
+        "BEQ	L_SHA256_transform_len_blk_end_0_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BEQ.N	L_SHA256_transform_len_blk_end_0\n\t"
+#else
+        "BEQ.N	L_SHA256_transform_len_blk_end_0_%=\n\t"
+#endif
+        /* Calc new W[0] */
+        "LDR	r6, [sp, #56]\n\t"
+        "LDR	r7, [sp, #36]\n\t"
+        "LDR	r8, [sp, #4]\n\t"
+        "LDR	r9, [sp]\n\t"
+        "ROR	r4, r6, #17\n\t"
+        "ROR	r5, r8, #7\n\t"
+        "EOR	r4, r4, r6, ROR #19\n\t"
+        "EOR	r5, r5, r8, ROR #18\n\t"
+        "EOR	r4, r4, r6, LSR #10\n\t"
+        "EOR	r5, r5, r8, LSR #3\n\t"
+        "ADD	r9, r9, r7\n\t"
+        "ADD	r4, r4, r5\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "STR	r9, [sp]\n\t"
+        "\n"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_blk_end_0:\n\t"
+#else
+    "L_SHA256_transform_len_blk_end_0_%=:\n\t"
+#endif
+        /* Round 1 */
+        "LDR	r5, [%[sha256], #12]\n\t"
+        "LDR	r6, [%[sha256], #16]\n\t"
+        "LDR	r7, [%[sha256], #20]\n\t"
+        "LDR	r9, [%[sha256], #24]\n\t"
+        "ROR	r4, r5, #6\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "EOR	r4, r4, r5, ROR #11\n\t"
+        "AND	r6, r6, r5\n\t"
+        "EOR	r4, r4, r5, ROR #25\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [sp, #4]\n\t"
+        "LDR	r6, [r12, #4]\n\t"
+        "ADD	r9, r9, r5\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [%[sha256], #28]\n\t"
+        "LDR	r6, [%[sha256]]\n\t"
+        "LDR	r7, [%[sha256], #4]\n\t"
+        "LDR	r8, [%[sha256], #8]\n\t"
+        "ROR	r4, r5, #2\n\t"
+        "EOR	r11, r5, r6\n\t"
+        "EOR	r4, r4, r5, ROR #13\n\t"
+        "AND	r10, r10, r11\n\t"
+        "EOR	r4, r4, r5, ROR #22\n\t"
+        "EOR	r10, r10, r6\n\t"
+        "ADD	r8, r8, r9\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r10\n\t"
+        "STR	r8, [%[sha256], #8]\n\t"
+        "STR	r9, [%[sha256], #24]\n\t"
+        "CMP	r3, #0x0\n\t"
+#if defined(__GNUC__)
+        "BEQ	L_SHA256_transform_len_blk_end_1_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BEQ.N	L_SHA256_transform_len_blk_end_1\n\t"
+#else
+        "BEQ.N	L_SHA256_transform_len_blk_end_1_%=\n\t"
+#endif
+        /* Calc new W[1] */
+        "LDR	r6, [sp, #60]\n\t"
+        "LDR	r7, [sp, #40]\n\t"
+        "LDR	r8, [sp, #8]\n\t"
+        "LDR	r9, [sp, #4]\n\t"
+        "ROR	r4, r6, #17\n\t"
+        "ROR	r5, r8, #7\n\t"
+        "EOR	r4, r4, r6, ROR #19\n\t"
+        "EOR	r5, r5, r8, ROR #18\n\t"
+        "EOR	r4, r4, r6, LSR #10\n\t"
+        "EOR	r5, r5, r8, LSR #3\n\t"
+        "ADD	r9, r9, r7\n\t"
+        "ADD	r4, r4, r5\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "STR	r9, [sp, #4]\n\t"
+        "\n"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_blk_end_1:\n\t"
+#else
+    "L_SHA256_transform_len_blk_end_1_%=:\n\t"
+#endif
+        /* Round 2 */
+        "LDR	r5, [%[sha256], #8]\n\t"
+        "LDR	r6, [%[sha256], #12]\n\t"
+        "LDR	r7, [%[sha256], #16]\n\t"
+        "LDR	r9, [%[sha256], #20]\n\t"
+        "ROR	r4, r5, #6\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "EOR	r4, r4, r5, ROR #11\n\t"
+        "AND	r6, r6, r5\n\t"
+        "EOR	r4, r4, r5, ROR #25\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [sp, #8]\n\t"
+        "LDR	r6, [r12, #8]\n\t"
+        "ADD	r9, r9, r5\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [%[sha256], #24]\n\t"
+        "LDR	r6, [%[sha256], #28]\n\t"
+        "LDR	r7, [%[sha256]]\n\t"
+        "LDR	r8, [%[sha256], #4]\n\t"
+        "ROR	r4, r5, #2\n\t"
+        "EOR	r10, r5, r6\n\t"
+        "EOR	r4, r4, r5, ROR #13\n\t"
+        "AND	r11, r11, r10\n\t"
+        "EOR	r4, r4, r5, ROR #22\n\t"
+        "EOR	r11, r11, r6\n\t"
+        "ADD	r8, r8, r9\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r11\n\t"
+        "STR	r8, [%[sha256], #4]\n\t"
+        "STR	r9, [%[sha256], #20]\n\t"
+        "CMP	r3, #0x0\n\t"
+#if defined(__GNUC__)
+        "BEQ	L_SHA256_transform_len_blk_end_2_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BEQ.N	L_SHA256_transform_len_blk_end_2\n\t"
+#else
+        "BEQ.N	L_SHA256_transform_len_blk_end_2_%=\n\t"
+#endif
+        /* Calc new W[2] */
+        "LDR	r6, [sp]\n\t"
+        "LDR	r7, [sp, #44]\n\t"
+        "LDR	r8, [sp, #12]\n\t"
+        "LDR	r9, [sp, #8]\n\t"
+        "ROR	r4, r6, #17\n\t"
+        "ROR	r5, r8, #7\n\t"
+        "EOR	r4, r4, r6, ROR #19\n\t"
+        "EOR	r5, r5, r8, ROR #18\n\t"
+        "EOR	r4, r4, r6, LSR #10\n\t"
+        "EOR	r5, r5, r8, LSR #3\n\t"
+        "ADD	r9, r9, r7\n\t"
+        "ADD	r4, r4, r5\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "STR	r9, [sp, #8]\n\t"
+        "\n"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_blk_end_2:\n\t"
+#else
+    "L_SHA256_transform_len_blk_end_2_%=:\n\t"
+#endif
+        /* Round 3 */
+        "LDR	r5, [%[sha256], #4]\n\t"
+        "LDR	r6, [%[sha256], #8]\n\t"
+        "LDR	r7, [%[sha256], #12]\n\t"
+        "LDR	r9, [%[sha256], #16]\n\t"
+        "ROR	r4, r5, #6\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "EOR	r4, r4, r5, ROR #11\n\t"
+        "AND	r6, r6, r5\n\t"
+        "EOR	r4, r4, r5, ROR #25\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [sp, #12]\n\t"
+        "LDR	r6, [r12, #12]\n\t"
+        "ADD	r9, r9, r5\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [%[sha256], #20]\n\t"
+        "LDR	r6, [%[sha256], #24]\n\t"
+        "LDR	r7, [%[sha256], #28]\n\t"
+        "LDR	r8, [%[sha256]]\n\t"
+        "ROR	r4, r5, #2\n\t"
+        "EOR	r11, r5, r6\n\t"
+        "EOR	r4, r4, r5, ROR #13\n\t"
+        "AND	r10, r10, r11\n\t"
+        "EOR	r4, r4, r5, ROR #22\n\t"
+        "EOR	r10, r10, r6\n\t"
+        "ADD	r8, r8, r9\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r10\n\t"
+        "STR	r8, [%[sha256]]\n\t"
+        "STR	r9, [%[sha256], #16]\n\t"
+        "CMP	r3, #0x0\n\t"
+#if defined(__GNUC__)
+        "BEQ	L_SHA256_transform_len_blk_end_3_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BEQ.N	L_SHA256_transform_len_blk_end_3\n\t"
+#else
+        "BEQ.N	L_SHA256_transform_len_blk_end_3_%=\n\t"
+#endif
+        /* Calc new W[3] */
+        "LDR	r6, [sp, #4]\n\t"
+        "LDR	r7, [sp, #48]\n\t"
+        "LDR	r8, [sp, #16]\n\t"
+        "LDR	r9, [sp, #12]\n\t"
+        "ROR	r4, r6, #17\n\t"
+        "ROR	r5, r8, #7\n\t"
+        "EOR	r4, r4, r6, ROR #19\n\t"
+        "EOR	r5, r5, r8, ROR #18\n\t"
+        "EOR	r4, r4, r6, LSR #10\n\t"
+        "EOR	r5, r5, r8, LSR #3\n\t"
+        "ADD	r9, r9, r7\n\t"
+        "ADD	r4, r4, r5\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "STR	r9, [sp, #12]\n\t"
+        "\n"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_blk_end_3:\n\t"
+#else
+    "L_SHA256_transform_len_blk_end_3_%=:\n\t"
+#endif
+        /* Round 4 */
+        "LDR	r5, [%[sha256]]\n\t"
+        "LDR	r6, [%[sha256], #4]\n\t"
+        "LDR	r7, [%[sha256], #8]\n\t"
+        "LDR	r9, [%[sha256], #12]\n\t"
+        "ROR	r4, r5, #6\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "EOR	r4, r4, r5, ROR #11\n\t"
+        "AND	r6, r6, r5\n\t"
+        "EOR	r4, r4, r5, ROR #25\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [sp, #16]\n\t"
+        "LDR	r6, [r12, #16]\n\t"
+        "ADD	r9, r9, r5\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [%[sha256], #16]\n\t"
+        "LDR	r6, [%[sha256], #20]\n\t"
+        "LDR	r7, [%[sha256], #24]\n\t"
+        "LDR	r8, [%[sha256], #28]\n\t"
+        "ROR	r4, r5, #2\n\t"
+        "EOR	r10, r5, r6\n\t"
+        "EOR	r4, r4, r5, ROR #13\n\t"
+        "AND	r11, r11, r10\n\t"
+        "EOR	r4, r4, r5, ROR #22\n\t"
+        "EOR	r11, r11, r6\n\t"
+        "ADD	r8, r8, r9\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r11\n\t"
+        "STR	r8, [%[sha256], #28]\n\t"
+        "STR	r9, [%[sha256], #12]\n\t"
+        "CMP	r3, #0x0\n\t"
+#if defined(__GNUC__)
+        "BEQ	L_SHA256_transform_len_blk_end_4_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BEQ.N	L_SHA256_transform_len_blk_end_4\n\t"
+#else
+        "BEQ.N	L_SHA256_transform_len_blk_end_4_%=\n\t"
+#endif
+        /* Calc new W[4] */
+        "LDR	r6, [sp, #8]\n\t"
+        "LDR	r7, [sp, #52]\n\t"
+        "LDR	r8, [sp, #20]\n\t"
+        "LDR	r9, [sp, #16]\n\t"
+        "ROR	r4, r6, #17\n\t"
+        "ROR	r5, r8, #7\n\t"
+        "EOR	r4, r4, r6, ROR #19\n\t"
+        "EOR	r5, r5, r8, ROR #18\n\t"
+        "EOR	r4, r4, r6, LSR #10\n\t"
+        "EOR	r5, r5, r8, LSR #3\n\t"
+        "ADD	r9, r9, r7\n\t"
+        "ADD	r4, r4, r5\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "STR	r9, [sp, #16]\n\t"
+        "\n"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_blk_end_4:\n\t"
+#else
+    "L_SHA256_transform_len_blk_end_4_%=:\n\t"
+#endif
+        /* Round 5 */
+        "LDR	r5, [%[sha256], #28]\n\t"
+        "LDR	r6, [%[sha256]]\n\t"
+        "LDR	r7, [%[sha256], #4]\n\t"
+        "LDR	r9, [%[sha256], #8]\n\t"
+        "ROR	r4, r5, #6\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "EOR	r4, r4, r5, ROR #11\n\t"
+        "AND	r6, r6, r5\n\t"
+        "EOR	r4, r4, r5, ROR #25\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [sp, #20]\n\t"
+        "LDR	r6, [r12, #20]\n\t"
+        "ADD	r9, r9, r5\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [%[sha256], #12]\n\t"
+        "LDR	r6, [%[sha256], #16]\n\t"
+        "LDR	r7, [%[sha256], #20]\n\t"
+        "LDR	r8, [%[sha256], #24]\n\t"
+        "ROR	r4, r5, #2\n\t"
+        "EOR	r11, r5, r6\n\t"
+        "EOR	r4, r4, r5, ROR #13\n\t"
+        "AND	r10, r10, r11\n\t"
+        "EOR	r4, r4, r5, ROR #22\n\t"
+        "EOR	r10, r10, r6\n\t"
+        "ADD	r8, r8, r9\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r10\n\t"
+        "STR	r8, [%[sha256], #24]\n\t"
+        "STR	r9, [%[sha256], #8]\n\t"
+        "CMP	r3, #0x0\n\t"
+#if defined(__GNUC__)
+        "BEQ	L_SHA256_transform_len_blk_end_5_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BEQ.N	L_SHA256_transform_len_blk_end_5\n\t"
+#else
+        "BEQ.N	L_SHA256_transform_len_blk_end_5_%=\n\t"
+#endif
+        /* Calc new W[5] */
+        "LDR	r6, [sp, #12]\n\t"
+        "LDR	r7, [sp, #56]\n\t"
+        "LDR	r8, [sp, #24]\n\t"
+        "LDR	r9, [sp, #20]\n\t"
+        "ROR	r4, r6, #17\n\t"
+        "ROR	r5, r8, #7\n\t"
+        "EOR	r4, r4, r6, ROR #19\n\t"
+        "EOR	r5, r5, r8, ROR #18\n\t"
+        "EOR	r4, r4, r6, LSR #10\n\t"
+        "EOR	r5, r5, r8, LSR #3\n\t"
+        "ADD	r9, r9, r7\n\t"
+        "ADD	r4, r4, r5\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "STR	r9, [sp, #20]\n\t"
+        "\n"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_blk_end_5:\n\t"
+#else
+    "L_SHA256_transform_len_blk_end_5_%=:\n\t"
+#endif
+        /* Round 6 */
+        "LDR	r5, [%[sha256], #24]\n\t"
+        "LDR	r6, [%[sha256], #28]\n\t"
+        "LDR	r7, [%[sha256]]\n\t"
+        "LDR	r9, [%[sha256], #4]\n\t"
+        "ROR	r4, r5, #6\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "EOR	r4, r4, r5, ROR #11\n\t"
+        "AND	r6, r6, r5\n\t"
+        "EOR	r4, r4, r5, ROR #25\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [sp, #24]\n\t"
+        "LDR	r6, [r12, #24]\n\t"
+        "ADD	r9, r9, r5\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [%[sha256], #8]\n\t"
+        "LDR	r6, [%[sha256], #12]\n\t"
+        "LDR	r7, [%[sha256], #16]\n\t"
+        "LDR	r8, [%[sha256], #20]\n\t"
+        "ROR	r4, r5, #2\n\t"
+        "EOR	r10, r5, r6\n\t"
+        "EOR	r4, r4, r5, ROR #13\n\t"
+        "AND	r11, r11, r10\n\t"
+        "EOR	r4, r4, r5, ROR #22\n\t"
+        "EOR	r11, r11, r6\n\t"
+        "ADD	r8, r8, r9\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r11\n\t"
+        "STR	r8, [%[sha256], #20]\n\t"
+        "STR	r9, [%[sha256], #4]\n\t"
+        "CMP	r3, #0x0\n\t"
+#if defined(__GNUC__)
+        "BEQ	L_SHA256_transform_len_blk_end_6_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BEQ.N	L_SHA256_transform_len_blk_end_6\n\t"
+#else
+        "BEQ.N	L_SHA256_transform_len_blk_end_6_%=\n\t"
+#endif
+        /* Calc new W[6] */
+        "LDR	r6, [sp, #16]\n\t"
+        "LDR	r7, [sp, #60]\n\t"
+        "LDR	r8, [sp, #28]\n\t"
+        "LDR	r9, [sp, #24]\n\t"
+        "ROR	r4, r6, #17\n\t"
+        "ROR	r5, r8, #7\n\t"
+        "EOR	r4, r4, r6, ROR #19\n\t"
+        "EOR	r5, r5, r8, ROR #18\n\t"
+        "EOR	r4, r4, r6, LSR #10\n\t"
+        "EOR	r5, r5, r8, LSR #3\n\t"
+        "ADD	r9, r9, r7\n\t"
+        "ADD	r4, r4, r5\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "STR	r9, [sp, #24]\n\t"
+        "\n"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_blk_end_6:\n\t"
+#else
+    "L_SHA256_transform_len_blk_end_6_%=:\n\t"
+#endif
+        /* Round 7 */
+        "LDR	r5, [%[sha256], #20]\n\t"
+        "LDR	r6, [%[sha256], #24]\n\t"
+        "LDR	r7, [%[sha256], #28]\n\t"
+        "LDR	r9, [%[sha256]]\n\t"
+        "ROR	r4, r5, #6\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "EOR	r4, r4, r5, ROR #11\n\t"
+        "AND	r6, r6, r5\n\t"
+        "EOR	r4, r4, r5, ROR #25\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [sp, #28]\n\t"
+        "LDR	r6, [r12, #28]\n\t"
+        "ADD	r9, r9, r5\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [%[sha256], #4]\n\t"
+        "LDR	r6, [%[sha256], #8]\n\t"
+        "LDR	r7, [%[sha256], #12]\n\t"
+        "LDR	r8, [%[sha256], #16]\n\t"
+        "ROR	r4, r5, #2\n\t"
+        "EOR	r11, r5, r6\n\t"
+        "EOR	r4, r4, r5, ROR #13\n\t"
+        "AND	r10, r10, r11\n\t"
+        "EOR	r4, r4, r5, ROR #22\n\t"
+        "EOR	r10, r10, r6\n\t"
+        "ADD	r8, r8, r9\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r10\n\t"
+        "STR	r8, [%[sha256], #16]\n\t"
+        "STR	r9, [%[sha256]]\n\t"
+        "CMP	r3, #0x0\n\t"
+#if defined(__GNUC__)
+        "BEQ	L_SHA256_transform_len_blk_end_7_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BEQ.N	L_SHA256_transform_len_blk_end_7\n\t"
+#else
+        "BEQ.N	L_SHA256_transform_len_blk_end_7_%=\n\t"
+#endif
+        /* Calc new W[7] */
+        "LDR	r6, [sp, #20]\n\t"
+        "LDR	r7, [sp]\n\t"
+        "LDR	r8, [sp, #32]\n\t"
+        "LDR	r9, [sp, #28]\n\t"
+        "ROR	r4, r6, #17\n\t"
+        "ROR	r5, r8, #7\n\t"
+        "EOR	r4, r4, r6, ROR #19\n\t"
+        "EOR	r5, r5, r8, ROR #18\n\t"
+        "EOR	r4, r4, r6, LSR #10\n\t"
+        "EOR	r5, r5, r8, LSR #3\n\t"
+        "ADD	r9, r9, r7\n\t"
+        "ADD	r4, r4, r5\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "STR	r9, [sp, #28]\n\t"
+        "\n"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_blk_end_7:\n\t"
+#else
+    "L_SHA256_transform_len_blk_end_7_%=:\n\t"
+#endif
+        /* Round 8 */
+        "LDR	r5, [%[sha256], #16]\n\t"
+        "LDR	r6, [%[sha256], #20]\n\t"
+        "LDR	r7, [%[sha256], #24]\n\t"
+        "LDR	r9, [%[sha256], #28]\n\t"
+        "ROR	r4, r5, #6\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "EOR	r4, r4, r5, ROR #11\n\t"
+        "AND	r6, r6, r5\n\t"
+        "EOR	r4, r4, r5, ROR #25\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [sp, #32]\n\t"
+        "LDR	r6, [r12, #32]\n\t"
+        "ADD	r9, r9, r5\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [%[sha256]]\n\t"
+        "LDR	r6, [%[sha256], #4]\n\t"
+        "LDR	r7, [%[sha256], #8]\n\t"
+        "LDR	r8, [%[sha256], #12]\n\t"
+        "ROR	r4, r5, #2\n\t"
+        "EOR	r10, r5, r6\n\t"
+        "EOR	r4, r4, r5, ROR #13\n\t"
+        "AND	r11, r11, r10\n\t"
+        "EOR	r4, r4, r5, ROR #22\n\t"
+        "EOR	r11, r11, r6\n\t"
+        "ADD	r8, r8, r9\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r11\n\t"
+        "STR	r8, [%[sha256], #12]\n\t"
+        "STR	r9, [%[sha256], #28]\n\t"
+        "CMP	r3, #0x0\n\t"
+#if defined(__GNUC__)
+        "BEQ	L_SHA256_transform_len_blk_end_8_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BEQ.N	L_SHA256_transform_len_blk_end_8\n\t"
+#else
+        "BEQ.N	L_SHA256_transform_len_blk_end_8_%=\n\t"
+#endif
+        /* Calc new W[8] */
+        "LDR	r6, [sp, #24]\n\t"
+        "LDR	r7, [sp, #4]\n\t"
+        "LDR	r8, [sp, #36]\n\t"
+        "LDR	r9, [sp, #32]\n\t"
+        "ROR	r4, r6, #17\n\t"
+        "ROR	r5, r8, #7\n\t"
+        "EOR	r4, r4, r6, ROR #19\n\t"
+        "EOR	r5, r5, r8, ROR #18\n\t"
+        "EOR	r4, r4, r6, LSR #10\n\t"
+        "EOR	r5, r5, r8, LSR #3\n\t"
+        "ADD	r9, r9, r7\n\t"
+        "ADD	r4, r4, r5\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "STR	r9, [sp, #32]\n\t"
+        "\n"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_blk_end_8:\n\t"
+#else
+    "L_SHA256_transform_len_blk_end_8_%=:\n\t"
+#endif
+        /* Round 9 */
+        "LDR	r5, [%[sha256], #12]\n\t"
+        "LDR	r6, [%[sha256], #16]\n\t"
+        "LDR	r7, [%[sha256], #20]\n\t"
+        "LDR	r9, [%[sha256], #24]\n\t"
+        "ROR	r4, r5, #6\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "EOR	r4, r4, r5, ROR #11\n\t"
+        "AND	r6, r6, r5\n\t"
+        "EOR	r4, r4, r5, ROR #25\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [sp, #36]\n\t"
+        "LDR	r6, [r12, #36]\n\t"
+        "ADD	r9, r9, r5\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [%[sha256], #28]\n\t"
+        "LDR	r6, [%[sha256]]\n\t"
+        "LDR	r7, [%[sha256], #4]\n\t"
+        "LDR	r8, [%[sha256], #8]\n\t"
+        "ROR	r4, r5, #2\n\t"
+        "EOR	r11, r5, r6\n\t"
+        "EOR	r4, r4, r5, ROR #13\n\t"
+        "AND	r10, r10, r11\n\t"
+        "EOR	r4, r4, r5, ROR #22\n\t"
+        "EOR	r10, r10, r6\n\t"
+        "ADD	r8, r8, r9\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r10\n\t"
+        "STR	r8, [%[sha256], #8]\n\t"
+        "STR	r9, [%[sha256], #24]\n\t"
+        "CMP	r3, #0x0\n\t"
+#if defined(__GNUC__)
+        "BEQ	L_SHA256_transform_len_blk_end_9_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BEQ.N	L_SHA256_transform_len_blk_end_9\n\t"
+#else
+        "BEQ.N	L_SHA256_transform_len_blk_end_9_%=\n\t"
+#endif
+        /* Calc new W[9] */
+        "LDR	r6, [sp, #28]\n\t"
+        "LDR	r7, [sp, #8]\n\t"
+        "LDR	r8, [sp, #40]\n\t"
+        "LDR	r9, [sp, #36]\n\t"
+        "ROR	r4, r6, #17\n\t"
+        "ROR	r5, r8, #7\n\t"
+        "EOR	r4, r4, r6, ROR #19\n\t"
+        "EOR	r5, r5, r8, ROR #18\n\t"
+        "EOR	r4, r4, r6, LSR #10\n\t"
+        "EOR	r5, r5, r8, LSR #3\n\t"
+        "ADD	r9, r9, r7\n\t"
+        "ADD	r4, r4, r5\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "STR	r9, [sp, #36]\n\t"
+        "\n"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_blk_end_9:\n\t"
+#else
+    "L_SHA256_transform_len_blk_end_9_%=:\n\t"
+#endif
+        /* Round 10 */
+        "LDR	r5, [%[sha256], #8]\n\t"
+        "LDR	r6, [%[sha256], #12]\n\t"
+        "LDR	r7, [%[sha256], #16]\n\t"
+        "LDR	r9, [%[sha256], #20]\n\t"
+        "ROR	r4, r5, #6\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "EOR	r4, r4, r5, ROR #11\n\t"
+        "AND	r6, r6, r5\n\t"
+        "EOR	r4, r4, r5, ROR #25\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [sp, #40]\n\t"
+        "LDR	r6, [r12, #40]\n\t"
+        "ADD	r9, r9, r5\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [%[sha256], #24]\n\t"
+        "LDR	r6, [%[sha256], #28]\n\t"
+        "LDR	r7, [%[sha256]]\n\t"
+        "LDR	r8, [%[sha256], #4]\n\t"
+        "ROR	r4, r5, #2\n\t"
+        "EOR	r10, r5, r6\n\t"
+        "EOR	r4, r4, r5, ROR #13\n\t"
+        "AND	r11, r11, r10\n\t"
+        "EOR	r4, r4, r5, ROR #22\n\t"
+        "EOR	r11, r11, r6\n\t"
+        "ADD	r8, r8, r9\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r11\n\t"
+        "STR	r8, [%[sha256], #4]\n\t"
+        "STR	r9, [%[sha256], #20]\n\t"
+        "CMP	r3, #0x0\n\t"
+#if defined(__GNUC__)
+        "BEQ	L_SHA256_transform_len_blk_end_10_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BEQ.N	L_SHA256_transform_len_blk_end_10\n\t"
+#else
+        "BEQ.N	L_SHA256_transform_len_blk_end_10_%=\n\t"
+#endif
+        /* Calc new W[10] */
+        "LDR	r6, [sp, #32]\n\t"
+        "LDR	r7, [sp, #12]\n\t"
+        "LDR	r8, [sp, #44]\n\t"
+        "LDR	r9, [sp, #40]\n\t"
+        "ROR	r4, r6, #17\n\t"
+        "ROR	r5, r8, #7\n\t"
+        "EOR	r4, r4, r6, ROR #19\n\t"
+        "EOR	r5, r5, r8, ROR #18\n\t"
+        "EOR	r4, r4, r6, LSR #10\n\t"
+        "EOR	r5, r5, r8, LSR #3\n\t"
+        "ADD	r9, r9, r7\n\t"
+        "ADD	r4, r4, r5\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "STR	r9, [sp, #40]\n\t"
+        "\n"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_blk_end_10:\n\t"
+#else
+    "L_SHA256_transform_len_blk_end_10_%=:\n\t"
+#endif
+        /* Round 11 */
+        "LDR	r5, [%[sha256], #4]\n\t"
+        "LDR	r6, [%[sha256], #8]\n\t"
+        "LDR	r7, [%[sha256], #12]\n\t"
+        "LDR	r9, [%[sha256], #16]\n\t"
+        "ROR	r4, r5, #6\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "EOR	r4, r4, r5, ROR #11\n\t"
+        "AND	r6, r6, r5\n\t"
+        "EOR	r4, r4, r5, ROR #25\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [sp, #44]\n\t"
+        "LDR	r6, [r12, #44]\n\t"
+        "ADD	r9, r9, r5\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [%[sha256], #20]\n\t"
+        "LDR	r6, [%[sha256], #24]\n\t"
+        "LDR	r7, [%[sha256], #28]\n\t"
+        "LDR	r8, [%[sha256]]\n\t"
+        "ROR	r4, r5, #2\n\t"
+        "EOR	r11, r5, r6\n\t"
+        "EOR	r4, r4, r5, ROR #13\n\t"
+        "AND	r10, r10, r11\n\t"
+        "EOR	r4, r4, r5, ROR #22\n\t"
+        "EOR	r10, r10, r6\n\t"
+        "ADD	r8, r8, r9\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r10\n\t"
+        "STR	r8, [%[sha256]]\n\t"
+        "STR	r9, [%[sha256], #16]\n\t"
+        "CMP	r3, #0x0\n\t"
+#if defined(__GNUC__)
+        "BEQ	L_SHA256_transform_len_blk_end_11_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BEQ.N	L_SHA256_transform_len_blk_end_11\n\t"
+#else
+        "BEQ.N	L_SHA256_transform_len_blk_end_11_%=\n\t"
+#endif
+        /* Calc new W[11] */
+        "LDR	r6, [sp, #36]\n\t"
+        "LDR	r7, [sp, #16]\n\t"
+        "LDR	r8, [sp, #48]\n\t"
+        "LDR	r9, [sp, #44]\n\t"
+        "ROR	r4, r6, #17\n\t"
+        "ROR	r5, r8, #7\n\t"
+        "EOR	r4, r4, r6, ROR #19\n\t"
+        "EOR	r5, r5, r8, ROR #18\n\t"
+        "EOR	r4, r4, r6, LSR #10\n\t"
+        "EOR	r5, r5, r8, LSR #3\n\t"
+        "ADD	r9, r9, r7\n\t"
+        "ADD	r4, r4, r5\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "STR	r9, [sp, #44]\n\t"
+        "\n"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_blk_end_11:\n\t"
+#else
+    "L_SHA256_transform_len_blk_end_11_%=:\n\t"
+#endif
+        /* Round 12 */
+        "LDR	r5, [%[sha256]]\n\t"
+        "LDR	r6, [%[sha256], #4]\n\t"
+        "LDR	r7, [%[sha256], #8]\n\t"
+        "LDR	r9, [%[sha256], #12]\n\t"
+        "ROR	r4, r5, #6\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "EOR	r4, r4, r5, ROR #11\n\t"
+        "AND	r6, r6, r5\n\t"
+        "EOR	r4, r4, r5, ROR #25\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [sp, #48]\n\t"
+        "LDR	r6, [r12, #48]\n\t"
+        "ADD	r9, r9, r5\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [%[sha256], #16]\n\t"
+        "LDR	r6, [%[sha256], #20]\n\t"
+        "LDR	r7, [%[sha256], #24]\n\t"
+        "LDR	r8, [%[sha256], #28]\n\t"
+        "ROR	r4, r5, #2\n\t"
+        "EOR	r10, r5, r6\n\t"
+        "EOR	r4, r4, r5, ROR #13\n\t"
+        "AND	r11, r11, r10\n\t"
+        "EOR	r4, r4, r5, ROR #22\n\t"
+        "EOR	r11, r11, r6\n\t"
+        "ADD	r8, r8, r9\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r11\n\t"
+        "STR	r8, [%[sha256], #28]\n\t"
+        "STR	r9, [%[sha256], #12]\n\t"
+        "CMP	r3, #0x0\n\t"
+#if defined(__GNUC__)
+        "BEQ	L_SHA256_transform_len_blk_end_12_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BEQ.N	L_SHA256_transform_len_blk_end_12\n\t"
+#else
+        "BEQ.N	L_SHA256_transform_len_blk_end_12_%=\n\t"
+#endif
+        /* Calc new W[12] */
+        "LDR	r6, [sp, #40]\n\t"
+        "LDR	r7, [sp, #20]\n\t"
+        "LDR	r8, [sp, #52]\n\t"
+        "LDR	r9, [sp, #48]\n\t"
+        "ROR	r4, r6, #17\n\t"
+        "ROR	r5, r8, #7\n\t"
+        "EOR	r4, r4, r6, ROR #19\n\t"
+        "EOR	r5, r5, r8, ROR #18\n\t"
+        "EOR	r4, r4, r6, LSR #10\n\t"
+        "EOR	r5, r5, r8, LSR #3\n\t"
+        "ADD	r9, r9, r7\n\t"
+        "ADD	r4, r4, r5\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "STR	r9, [sp, #48]\n\t"
+        "\n"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_blk_end_12:\n\t"
+#else
+    "L_SHA256_transform_len_blk_end_12_%=:\n\t"
+#endif
+        /* Round 13 */
+        "LDR	r5, [%[sha256], #28]\n\t"
+        "LDR	r6, [%[sha256]]\n\t"
+        "LDR	r7, [%[sha256], #4]\n\t"
+        "LDR	r9, [%[sha256], #8]\n\t"
+        "ROR	r4, r5, #6\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "EOR	r4, r4, r5, ROR #11\n\t"
+        "AND	r6, r6, r5\n\t"
+        "EOR	r4, r4, r5, ROR #25\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [sp, #52]\n\t"
+        "LDR	r6, [r12, #52]\n\t"
+        "ADD	r9, r9, r5\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [%[sha256], #12]\n\t"
+        "LDR	r6, [%[sha256], #16]\n\t"
+        "LDR	r7, [%[sha256], #20]\n\t"
+        "LDR	r8, [%[sha256], #24]\n\t"
+        "ROR	r4, r5, #2\n\t"
+        "EOR	r11, r5, r6\n\t"
+        "EOR	r4, r4, r5, ROR #13\n\t"
+        "AND	r10, r10, r11\n\t"
+        "EOR	r4, r4, r5, ROR #22\n\t"
+        "EOR	r10, r10, r6\n\t"
+        "ADD	r8, r8, r9\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r10\n\t"
+        "STR	r8, [%[sha256], #24]\n\t"
+        "STR	r9, [%[sha256], #8]\n\t"
+        "CMP	r3, #0x0\n\t"
+#if defined(__GNUC__)
+        "BEQ	L_SHA256_transform_len_blk_end_13_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BEQ.N	L_SHA256_transform_len_blk_end_13\n\t"
+#else
+        "BEQ.N	L_SHA256_transform_len_blk_end_13_%=\n\t"
+#endif
+        /* Calc new W[13] */
+        "LDR	r6, [sp, #44]\n\t"
+        "LDR	r7, [sp, #24]\n\t"
+        "LDR	r8, [sp, #56]\n\t"
+        "LDR	r9, [sp, #52]\n\t"
+        "ROR	r4, r6, #17\n\t"
+        "ROR	r5, r8, #7\n\t"
+        "EOR	r4, r4, r6, ROR #19\n\t"
+        "EOR	r5, r5, r8, ROR #18\n\t"
+        "EOR	r4, r4, r6, LSR #10\n\t"
+        "EOR	r5, r5, r8, LSR #3\n\t"
+        "ADD	r9, r9, r7\n\t"
+        "ADD	r4, r4, r5\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "STR	r9, [sp, #52]\n\t"
+        "\n"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_blk_end_13:\n\t"
+#else
+    "L_SHA256_transform_len_blk_end_13_%=:\n\t"
+#endif
+        /* Round 14 */
+        "LDR	r5, [%[sha256], #24]\n\t"
+        "LDR	r6, [%[sha256], #28]\n\t"
+        "LDR	r7, [%[sha256]]\n\t"
+        "LDR	r9, [%[sha256], #4]\n\t"
+        "ROR	r4, r5, #6\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "EOR	r4, r4, r5, ROR #11\n\t"
+        "AND	r6, r6, r5\n\t"
+        "EOR	r4, r4, r5, ROR #25\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [sp, #56]\n\t"
+        "LDR	r6, [r12, #56]\n\t"
+        "ADD	r9, r9, r5\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [%[sha256], #8]\n\t"
+        "LDR	r6, [%[sha256], #12]\n\t"
+        "LDR	r7, [%[sha256], #16]\n\t"
+        "LDR	r8, [%[sha256], #20]\n\t"
+        "ROR	r4, r5, #2\n\t"
+        "EOR	r10, r5, r6\n\t"
+        "EOR	r4, r4, r5, ROR #13\n\t"
+        "AND	r11, r11, r10\n\t"
+        "EOR	r4, r4, r5, ROR #22\n\t"
+        "EOR	r11, r11, r6\n\t"
+        "ADD	r8, r8, r9\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r11\n\t"
+        "STR	r8, [%[sha256], #20]\n\t"
+        "STR	r9, [%[sha256], #4]\n\t"
+        "CMP	r3, #0x0\n\t"
+#if defined(__GNUC__)
+        "BEQ	L_SHA256_transform_len_blk_end_14_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BEQ.N	L_SHA256_transform_len_blk_end_14\n\t"
+#else
+        "BEQ.N	L_SHA256_transform_len_blk_end_14_%=\n\t"
+#endif
+        /* Calc new W[14] */
+        "LDR	r6, [sp, #48]\n\t"
+        "LDR	r7, [sp, #28]\n\t"
+        "LDR	r8, [sp, #60]\n\t"
+        "LDR	r9, [sp, #56]\n\t"
+        "ROR	r4, r6, #17\n\t"
+        "ROR	r5, r8, #7\n\t"
+        "EOR	r4, r4, r6, ROR #19\n\t"
+        "EOR	r5, r5, r8, ROR #18\n\t"
+        "EOR	r4, r4, r6, LSR #10\n\t"
+        "EOR	r5, r5, r8, LSR #3\n\t"
+        "ADD	r9, r9, r7\n\t"
+        "ADD	r4, r4, r5\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "STR	r9, [sp, #56]\n\t"
+        "\n"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_blk_end_14:\n\t"
+#else
+    "L_SHA256_transform_len_blk_end_14_%=:\n\t"
+#endif
+        /* Round 15 */
+        "LDR	r5, [%[sha256], #20]\n\t"
+        "LDR	r6, [%[sha256], #24]\n\t"
+        "LDR	r7, [%[sha256], #28]\n\t"
+        "LDR	r9, [%[sha256]]\n\t"
+        "ROR	r4, r5, #6\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "EOR	r4, r4, r5, ROR #11\n\t"
+        "AND	r6, r6, r5\n\t"
+        "EOR	r4, r4, r5, ROR #25\n\t"
+        "EOR	r6, r6, r7\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [sp, #60]\n\t"
+        "LDR	r6, [r12, #60]\n\t"
+        "ADD	r9, r9, r5\n\t"
+        "ADD	r9, r9, r6\n\t"
+        "LDR	r5, [%[sha256], #4]\n\t"
+        "LDR	r6, [%[sha256], #8]\n\t"
+        "LDR	r7, [%[sha256], #12]\n\t"
+        "LDR	r8, [%[sha256], #16]\n\t"
+        "ROR	r4, r5, #2\n\t"
+        "EOR	r11, r5, r6\n\t"
+        "EOR	r4, r4, r5, ROR #13\n\t"
+        "AND	r10, r10, r11\n\t"
+        "EOR	r4, r4, r5, ROR #22\n\t"
+        "EOR	r10, r10, r6\n\t"
+        "ADD	r8, r8, r9\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "ADD	r9, r9, r10\n\t"
+        "STR	r8, [%[sha256], #16]\n\t"
+        "STR	r9, [%[sha256]]\n\t"
+        "CMP	r3, #0x0\n\t"
+#if defined(__GNUC__)
+        "BEQ	L_SHA256_transform_len_blk_end_15_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BEQ.N	L_SHA256_transform_len_blk_end_15\n\t"
+#else
+        "BEQ.N	L_SHA256_transform_len_blk_end_15_%=\n\t"
+#endif
+        /* Calc new W[15] */
+        "LDR	r6, [sp, #52]\n\t"
+        "LDR	r7, [sp, #32]\n\t"
+        "LDR	r8, [sp]\n\t"
+        "LDR	r9, [sp, #60]\n\t"
+        "ROR	r4, r6, #17\n\t"
+        "ROR	r5, r8, #7\n\t"
+        "EOR	r4, r4, r6, ROR #19\n\t"
+        "EOR	r5, r5, r8, ROR #18\n\t"
+        "EOR	r4, r4, r6, LSR #10\n\t"
+        "EOR	r5, r5, r8, LSR #3\n\t"
+        "ADD	r9, r9, r7\n\t"
+        "ADD	r4, r4, r5\n\t"
+        "ADD	r9, r9, r4\n\t"
+        "STR	r9, [sp, #60]\n\t"
+        "\n"
+#if defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+    "L_SHA256_transform_len_blk_end_15:\n\t"
+#else
+    "L_SHA256_transform_len_blk_end_15_%=:\n\t"
+#endif
+        "CMP	r3, #0x0\n\t"
+        "ADD	r12, r12, #0x40\n\t"
+#if defined(__GNUC__)
+        "BNE	L_SHA256_transform_len_start_small_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BNE.W	L_SHA256_transform_len_start_small\n\t"
+#else
+        "BNE.W	L_SHA256_transform_len_start_small_%=\n\t"
+#endif
+#endif /* !WOLFSSL_ARMASM_SHA256_SMALL */
         /* Add in digest from start */
         "LDRD	r4, r5, [%[sha256]]\n\t"
         "LDRD	r6, r7, [%[sha256], #8]\n\t"
@@ -1440,29 +2454,31 @@ void Transform_Sha256_Len(wc_Sha256* sha256, const byte* data, word32 len)
         "STRD	r4, r5, [sp, #80]\n\t"
         "STRD	r6, r7, [sp, #88]\n\t"
         "SUBS	%[len], %[len], #0x40\n\t"
-        "SUB	r3, r3, #0xc0\n\t"
-        "ADD	%[data], %[data], #0x40\n\t"
-#ifdef __GNUC__
-        "BNE	L_SHA256_transform_len_begin%=\n\t"
+#ifndef WOLFSSL_ARMASM_SHA256_SMALL
+        "SUB	r12, r12, #0xc0\n\t"
 #else
-        "BNE.W	L_SHA256_transform_len_begin%=\n\t"
+        "SUB	r12, r12, #0x100\n\t"
+#endif /* !WOLFSSL_ARMASM_SHA256_SMALL */
+        "ADD	%[data], %[data], #0x40\n\t"
+#if defined(__GNUC__)
+        "BNE	L_SHA256_transform_len_begin_%=\n\t"
+#elif defined(__IAR_SYSTEMS_ICC__) && (__VER__ < 9000000)
+        "BNE.W	L_SHA256_transform_len_begin\n\t"
+#else
+        "BNE.W	L_SHA256_transform_len_begin_%=\n\t"
 #endif
         "ADD	sp, sp, #0xc0\n\t"
-#ifndef WOLFSSL_NO_VAR_ASSIGN_REG
         : [sha256] "+r" (sha256), [data] "+r" (data), [len] "+r" (len),
           [L_SHA256_transform_len_k] "+r" (L_SHA256_transform_len_k_c)
         :
-        : "memory", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12", "cc"
-#else
-        : [sha256] "+r" (sha256), [data] "+r" (data), [len] "+r" (len)
-        : [L_SHA256_transform_len_k] "r" (L_SHA256_transform_len_k)
-        : "memory", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12", "cc"
-#endif /* WOLFSSL_NO_VAR_ASSIGN_REG */
+        : "memory", "cc", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11",
+            "r12"
     );
 }
 
 #endif /* WOLFSSL_ARMASM_NO_NEON */
 #endif /* !NO_SHA256 */
-#endif /* !__aarch64__ && __thumb__ */
+#endif /* WOLFSSL_ARMASM_THUMB2 */
 #endif /* WOLFSSL_ARMASM */
+
 #endif /* WOLFSSL_ARMASM_INLINE */

@@ -1,15 +1,15 @@
-#include "Utilities/mutex.h"
 #include "Emu/Memory/vm_locking.h"
 #include "Emu/Memory/vm.h"
 
 #include "memory_viewer_panel.h"
+#include "hex_validator.h"
 
 #include "Emu/Cell/SPUThread.h"
 #include "Emu/CPU/CPUDisAsm.h"
-#include "Emu/Cell/SPUDisAsm.h"
 #include "Emu/RSX/RSXThread.h"
 #include "Emu/RSX/rsx_utils.h"
 #include "Emu/IdManager.h"
+#include "Emu/System.h"
 #include <QVBoxLayout>
 #include <QPushButton>
 #include <QSpinBox>
@@ -20,22 +20,21 @@
 #include <QWheelEvent>
 #include <QHoverEvent>
 #include <QMouseEvent>
+#include <QCloseEvent>
 #include <QTimer>
 #include <QThread>
 #include <QKeyEvent>
 
 #include "util/logs.hpp"
 #include "util/asm.hpp"
-#include "util/vm.hpp"
+#include "debugger_frame.h"
 
 LOG_CHANNEL(gui_log, "GUI");
-
-constexpr auto qstr = QString::fromStdString;
 
 memory_viewer_panel::memory_viewer_panel(QWidget* parent, std::shared_ptr<CPUDisAsm> disasm, u32 addr, std::function<cpu_thread*()> func)
 	: QDialog(parent)
 	, m_addr(addr)
-	, m_get_cpu(std::move(func))
+	, m_get_cpu(func ? std::move(func) : std::function<cpu_thread*()>(FN(nullptr)))
 	, m_type([&]()
 	{
 		const auto cpu = m_get_cpu();
@@ -67,7 +66,7 @@ memory_viewer_panel::memory_viewer_panel(QWidget* parent, std::shared_ptr<CPUDis
 	const auto cpu = m_get_cpu();
 
 	setWindowTitle(
-		cpu && m_type == thread_class::spu ? tr("Memory Viewer Of %0").arg(qstr(cpu->get_name())) :
+		cpu && m_type == thread_class::spu ? tr("Memory Viewer Of %0").arg(QString::fromStdString(cpu->get_name())) :
 		cpu && m_type == thread_class::rsx ? tr("Memory Viewer Of RSX[0x55555555]") :
 		tr("Memory Viewer"));
 
@@ -97,10 +96,10 @@ memory_viewer_panel::memory_viewer_panel(QWidget* parent, std::shared_ptr<CPUDis
 	m_addr_line = new QLineEdit(this);
 	m_addr_line->setPlaceholderText("00000000");
 	m_addr_line->setFont(mono);
-	m_addr_line->setMaxLength(18);
-	m_addr_line->setFixedWidth(75);
+	m_addr_line->setValidator(new HexValidator(m_addr_line));
+	m_addr_line->setFixedWidth(100);
 	m_addr_line->setFocus();
-	m_addr_line->setValidator(new QRegularExpressionValidator(QRegularExpression(m_type == thread_class::spu ? "^(0[xX])?0*[a-fA-F0-9]{0,5}$" : "^(0[xX])?0*[a-fA-F0-9]{0,8}$"), this));
+	m_addr_line->setAlignment(Qt::AlignCenter);
 	hbox_tools_mem_addr->addWidget(m_addr_line);
 	tools_mem_addr->setLayout(hbox_tools_mem_addr);
 
@@ -122,7 +121,7 @@ memory_viewer_panel::memory_viewer_panel(QWidget* parent, std::shared_ptr<CPUDis
 
 		QString textFromValue(int value) const override
 		{
-			return tr("%0").arg(1 << value);
+			return QString("%0").arg(1 << value);
 		}
 	};
 
@@ -290,6 +289,7 @@ memory_viewer_panel::memory_viewer_panel(QWidget* parent, std::shared_ptr<CPUDis
 	QGroupBox* group_search = new QGroupBox(tr("Memory Search"), this);
 	QPushButton* button_collapse_viewer = new QPushButton(reinterpret_cast<const char*>(u8"Ʌ"), group_search);
 	button_collapse_viewer->setFixedWidth(QLabel(button_collapse_viewer->text()).sizeHint().width() * 3);
+	button_collapse_viewer->setAutoDefault(false);
 
 	m_search_line = new QLineEdit(group_search);
 	m_search_line->setFixedWidth(QLabel(QString("This is the very length of the lineedit due to hidpi reasons.").chopped(4)).sizeHint().width());
@@ -328,7 +328,7 @@ memory_viewer_panel::memory_viewer_panel(QWidget* parent, std::shared_ptr<CPUDis
 		tooltip.append(tr("\nSPU Instruction: Search an SPU instruction contains the text of the string. For searching instructions within embedded SPU images.\nTip: SPU floats are commented along forming instructions."));
 	}
 
-	connect(m_cbox_input_mode, QOverload<int>::of(&QComboBox::currentIndexChanged), group_search, [this, button_search](int index)
+	connect(m_cbox_input_mode, &QComboBox::currentIndexChanged, group_search, [this, button_search](int index)
 	{
 		if (index < 1 || m_rsx)
 		{
@@ -361,11 +361,11 @@ memory_viewer_panel::memory_viewer_panel(QWidget* parent, std::shared_ptr<CPUDis
 		{
 			if (i & m_modes && count > 1)
 			{
-				m_cbox_input_mode->setItemText(std::countr_zero<u32>(i), qstr(fmt::format("* %s", search_mode{i})));
+				m_cbox_input_mode->setItemText(std::countr_zero<u32>(i), QString::fromStdString(fmt::format("* %s", search_mode{i})));
 			}
 			else
 			{
-				m_cbox_input_mode->setItemText(std::countr_zero<u32>(i), qstr(fmt::format("%s", search_mode{i})));
+				m_cbox_input_mode->setItemText(std::countr_zero<u32>(i), QString::fromStdString(fmt::format("%s", search_mode{i})));
 			}
 		}
 
@@ -424,26 +424,25 @@ memory_viewer_panel::memory_viewer_panel(QWidget* parent, std::shared_ptr<CPUDis
 	setLayout(vbox_panel);
 
 	// Events
-	connect(m_addr_line, &QLineEdit::returnPressed, [this]()
+	connect(m_addr_line, &QLineEdit::returnPressed, this, [this]()
 	{
 		bool ok = false;
-		const QString text = m_addr_line->text();
-		const u32 addr = (text.startsWith("0x", Qt::CaseInsensitive) ? text.right(text.size() - 2) : text).toULong(&ok, 16);
+		const u32 addr = normalize_hex_qstring(m_addr_line->text()).toULong(&ok, 16);
 		if (ok) m_addr = addr;
 
 		scroll(0); // Refresh
 	});
-	connect(sb_words, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), [=, this]()
+	connect(sb_words, &QSpinBox::valueChanged, this, [this](int value)
 	{
-		m_colcount = 1 << sb_words->value();
+		m_colcount = 1 << value;
 		ShowMemory();
 	});
 
-	connect(b_prev, &QAbstractButton::clicked, [this]() { scroll(-1); });
-	connect(b_next, &QAbstractButton::clicked, [this]() { scroll(1); });
-	connect(b_fprev, &QAbstractButton::clicked, [this]() { scroll(m_rowcount * -1); });
-	connect(b_fnext, &QAbstractButton::clicked, [this]() { scroll(m_rowcount); });
-	connect(b_img, &QAbstractButton::clicked, [=, this]()
+	connect(b_prev, &QAbstractButton::clicked, this, [this]() { scroll(-1); });
+	connect(b_next, &QAbstractButton::clicked, this, [this]() { scroll(1); });
+	connect(b_fprev, &QAbstractButton::clicked, this, [this]() { scroll(m_rowcount * -1); });
+	connect(b_fnext, &QAbstractButton::clicked, this, [this]() { scroll(m_rowcount); });
+	connect(b_img, &QAbstractButton::clicked, this, [=, this]()
 	{
 		const color_format format = cbox_img_mode->currentData().value<color_format>();
 		const int sizex = sb_img_size_x->value();
@@ -505,6 +504,8 @@ memory_viewer_panel::memory_viewer_panel(QWidget* parent, std::shared_ptr<CPUDis
 
 			m_search_thread = QThread::create([this, wstr, m_modes = m_modes]()
 			{
+				thread_base::set_name("MemViewerSearch");
+
 				gui_log.notice("Searching for %s (mode: %s)", wstr, m_modes);
 
 				u64 found = 0;
@@ -580,7 +581,7 @@ memory_viewer_panel::memory_viewer_panel(QWidget* parent, std::shared_ptr<CPUDis
 	const u32 id = idm::last_id();
 	auto handle_ptr = idm::get_unlocked<memory_viewer_handle>(id);
 
-	connect(this, &memory_viewer_panel::finished, [handle_ptr = std::move(handle_ptr), id, this](int)
+	connect(this, &memory_viewer_panel::finished, this, [handle_ptr = std::move(handle_ptr), id, this](int)
 	{
 		if (m_search_thread)
 		{
@@ -591,6 +592,24 @@ memory_viewer_panel::memory_viewer_panel(QWidget* parent, std::shared_ptr<CPUDis
 
 		idm::remove_verify<memory_viewer_handle>(id, handle_ptr);
 	});
+
+	if (!g_fxo->try_get<memory_viewer_fxo>())
+	{
+		g_fxo->init<memory_viewer_fxo>();
+	}
+
+	auto& fxo = g_fxo->get<memory_viewer_fxo>();
+	fxo.last_opened[m_type] = this;
+
+	connect(this, &memory_viewer_panel::destroyed, this, [this]()
+	{
+		if (auto fxo = g_fxo->try_get<memory_viewer_fxo>())
+		{
+			auto it = fxo->last_opened.find(m_type);
+			if (it != fxo->last_opened.end() && it->second == this)
+				fxo->last_opened.erase(it);
+		}
+	});
 }
 
 memory_viewer_panel::~memory_viewer_panel()
@@ -599,7 +618,7 @@ memory_viewer_panel::~memory_viewer_panel()
 
 void memory_viewer_panel::wheelEvent(QWheelEvent *event)
 {
-	// Set some scrollspeed modifiers:
+	// Set some scroll speed modifiers:
 	u32 step_size = 1;
 	if (event->modifiers().testFlag(Qt::ControlModifier))
 		step_size *= m_rowcount;
@@ -615,7 +634,7 @@ void memory_viewer_panel::scroll(s32 steps)
 	m_addr &= m_addr_mask; // Mask it
 	m_addr -= m_addr % (m_colcount * 4); // Align by amount of bytes in a row
 
-	m_addr_line->setText(qstr(fmt::format("%08x", m_addr)));
+	m_addr_line->setText(QString::fromStdString(fmt::format("%08x", m_addr)));
 
 	ShowMemory();
 }
@@ -660,11 +679,11 @@ std::string memory_viewer_panel::getHeaderAtAddr(u32 addr) const
 
 	if (spu_boundary <= addr + m_colcount * 4 - 1)
 	{
-		std::shared_ptr<named_thread<spu_thread>> spu;
+		shared_ptr<named_thread<spu_thread>> spu;
 
 		if (const u32 raw_spu_index = (spu_boundary - RAW_SPU_BASE_ADDR) / SPU_LS_SIZE; raw_spu_index < 5)
 		{
-			spu = idm::get<named_thread<spu_thread>>(spu_thread::find_raw_spu(raw_spu_index));
+			spu = idm::get_unlocked<named_thread<spu_thread>>(spu_thread::find_raw_spu(raw_spu_index));
 
 			if (spu && spu->get_type() == spu_type::threaded)
 			{
@@ -673,7 +692,7 @@ std::string memory_viewer_panel::getHeaderAtAddr(u32 addr) const
 		}
 		else if (const u32 spu_index = (spu_boundary - SPU_FAKE_BASE_ADDR) / SPU_LS_SIZE; spu_index < spu_thread::id_count)
 		{
-			spu = idm::get<named_thread<spu_thread>>(spu_thread::id_base | spu_index);
+			spu = idm::get_unlocked<named_thread<spu_thread>>(spu_thread::id_base | spu_index);
 
 			if (spu && spu->get_type() != spu_type::threaded)
 			{
@@ -716,7 +735,7 @@ void* memory_viewer_panel::to_ptr(u32 addr, u32 size) const
 	}
 	case thread_class::spu:
 	{
-		if (size <= SPU_LS_SIZE && SPU_LS_SIZE - size >= (addr % SPU_LS_SIZE))
+		if (m_spu_shm && size <= SPU_LS_SIZE && SPU_LS_SIZE - size >= (addr % SPU_LS_SIZE))
 		{
 			return m_spu_shm->map_self() + (addr % SPU_LS_SIZE);
 		}
@@ -800,7 +819,7 @@ void memory_viewer_panel::ShowMemory()
 
 				for (u32 i = 0; i < 3; i++)
 				{
-					t_mem_addr_str += qstr(fmt::format("%08x", addr));
+					t_mem_addr_str += QString::fromStdString(fmt::format("%08x", addr));
 
 					std::string str(i == 1 ? header : "");
 
@@ -810,7 +829,7 @@ void memory_viewer_panel::ShowMemory()
 					str.resize(expected_str_size);
 					std::replace(str.begin(), str.end(), '\0', i == 1 ? ' ' : '=');
 
-					t_mem_hex_str += qstr(str);
+					t_mem_hex_str += QString::fromStdString(str);
 
 					spu_passed++;
 					row++;
@@ -832,7 +851,7 @@ void memory_viewer_panel::ShowMemory()
 				}
 			}
 
-			t_mem_addr_str += qstr(fmt::format("%08x", (m_addr + (row - spu_passed) * m_colcount * 4) & m_addr_mask));
+			t_mem_addr_str += QString::fromStdString(fmt::format("%08x", (m_addr + (row - spu_passed) * m_colcount * 4) & m_addr_mask));
 		}
 
 		for (u32 col = 0; col < m_colcount; col++)
@@ -847,7 +866,7 @@ void memory_viewer_panel::ShowMemory()
 			if (const auto ptr = this->to_ptr(addr))
 			{
 				const be_t<u32> rmem = read_from_ptr<be_t<u32>>(static_cast<const u8*>(ptr));
-				t_mem_hex_str += qstr(fmt::format("%02x %02x %02x %02x",
+				t_mem_hex_str += QString::fromStdString(fmt::format("%02x %02x %02x %02x",
 					static_cast<u8>(rmem >> 24),
 					static_cast<u8>(rmem >> 16),
 					static_cast<u8>(rmem >> 8),
@@ -860,7 +879,7 @@ void memory_viewer_panel::ShowMemory()
 					if (!std::isprint(static_cast<u8>(ch))) ch = '.';
 				}
 
-				t_mem_ascii_str += qstr(std::move(str));
+				t_mem_ascii_str += QString::fromStdString(std::move(str));
 			}
 			else
 			{
@@ -945,6 +964,14 @@ void memory_viewer_panel::keyPressEvent(QKeyEvent* event)
 	QDialog::keyPressEvent(event);
 }
 
+void memory_viewer_panel::closeEvent(QCloseEvent* event)
+{
+	event->accept();
+	m_spu_shm.reset();
+	m_disasm.reset();
+	m_get_cpu = [](){ return std::add_pointer_t<cpu_thread>{}; };
+}
+
 void memory_viewer_panel::ShowImage(QWidget* parent, u32 addr, color_format format, u32 width, u32 height, bool flipv) const
 {
 	u32 texel_bytes = 4;
@@ -968,6 +995,7 @@ void memory_viewer_panel::ShowImage(QWidget* parent, u32 addr, color_format form
 	const u32 memsize = utils::mul_saturate<u32>(utils::mul_saturate<u32>(texel_bytes, width), height);
 	if (memsize == 0)
 	{
+		gui_log.error("Can not show image. memsize is 0 (texel_bytes=%d, width=%d, height=%d)", texel_bytes, width, height);
 		return;
 	}
 
@@ -975,6 +1003,7 @@ void memory_viewer_panel::ShowImage(QWidget* parent, u32 addr, color_format form
 
 	if (!originalBuffer)
 	{
+		gui_log.error("Can not show image. originalBuffer is null (addr=%d, memsize=%d)", addr, memsize);
 		return;
 	}
 
@@ -983,6 +1012,7 @@ void memory_viewer_panel::ShowImage(QWidget* parent, u32 addr, color_format form
 	if (!convertedBuffer)
 	{
 		// OOM or invalid memory address, give up
+		gui_log.error("Can not show image. convertedBuffer is null (addr=%d, memsize=%d)", addr, memsize);
 		return;
 	}
 
@@ -996,7 +1026,7 @@ void memory_viewer_panel::ShowImage(QWidget* parent, u32 addr, color_format form
 		{
 			const u32 offset = y * pitch;
 			const u32 offset_new = y * pitch_new;
-			for (u32 x = 0, x_new = 0; x < pitch; x += 3, x_new += 4)
+			for (u32 x = 0, x_new = 0; x < pitch && x_new < pitch_new; x += 3, x_new += 4)
 			{
 				convertedBuffer[offset_new + x_new + 0] = originalBuffer[offset + x + 2];
 				convertedBuffer[offset_new + x_new + 1] = originalBuffer[offset + x + 1];
@@ -1098,19 +1128,20 @@ void memory_viewer_panel::ShowImage(QWidget* parent, u32 addr, color_format form
 	}
 
 	// Flip vertically
-	if (flipv && height > 1 && memsize > 1)
+	if (flipv && width > 0 && height > 1 && memsize > 1)
 	{
 		const u32 pitch = width * 4;
+		std::vector<u8> tmp_row(pitch);
+
 		for (u32 y = 0; y < height / 2; y++)
 		{
-			const u32 offset = y * pitch;
-			const u32 flip_offset = (height - y - 1) * pitch;
-			for (u32 x = 0; x < pitch; x++)
-			{
-				const u8 tmp = convertedBuffer[offset + x];
-				convertedBuffer[offset + x] = convertedBuffer[flip_offset + x];
-				convertedBuffer[flip_offset + x] = tmp;
-			}
+			u8* row_top = &convertedBuffer[y * pitch];
+			u8* row_bottom = &convertedBuffer[(height - y - 1) * pitch];
+
+			// Swap rows
+			std::memcpy(tmp_row.data(), row_top, pitch);
+			std::memcpy(row_top, row_bottom, pitch);
+			std::memcpy(row_bottom, tmp_row.data(), pitch);
 		}
 	}
 
@@ -1168,7 +1199,7 @@ void memory_viewer_panel::ShowImage(QWidget* parent, u32 addr, color_format form
 				QLineEdit* addr_line = static_cast<memory_viewer_panel*>(parent())->m_addr_line;
 
 				const QPointF xy = static_cast<QMouseEvent*>(event)->position() / m_canvas_scale;
-				addr_line->setText(qstr(fmt::format("%08x", get_pointed_addr(xy.x(), xy.y()))));
+				addr_line->setText(QString::fromStdString(fmt::format("%08x", get_pointed_addr(xy.x(), xy.y()))));
 				Q_EMIT addr_line->returnPressed();
 				close();
 				return false;
@@ -1186,11 +1217,11 @@ void memory_viewer_panel::ShowImage(QWidget* parent, u32 addr, color_format form
 		{
 			if (x < 0 || y < 0)
 			{
-				m_image_title->setText(qstr(fmt::format("[-, -]: NA")));
+				m_image_title->setText(QString::fromStdString(fmt::format("[-, -]: NA")));
 				return;
 			}
 
-			m_image_title->setText(qstr(fmt::format("[x:%d, y:%d]: 0x%x", x, y, get_pointed_addr(x, y))));
+			m_image_title->setText(QString::fromStdString(fmt::format("[x:%d, y:%d]: 0x%x", x, y, get_pointed_addr(x, y))));
 		}
 
 		void keyPressEvent(QKeyEvent* event) override
@@ -1235,7 +1266,7 @@ void memory_viewer_panel::ShowImage(QWidget* parent, u32 addr, color_format form
 
 	image_viewer* f_image_viewer = new image_viewer(parent, canvas, image_title, std::move(image), addr, texel_bytes, width, width, height);
 	canvas->installEventFilter(f_image_viewer);
-	f_image_viewer->setWindowTitle(qstr(fmt::format("Raw Image @ 0x%x", addr)));
+	f_image_viewer->setWindowTitle(QString::fromStdString(fmt::format("Raw Image @ 0x%x", addr)));
 	f_image_viewer->setLayout(layout);
 	f_image_viewer->setAttribute(Qt::WA_DeleteOnClose);
 	f_image_viewer->show();
@@ -1245,4 +1276,44 @@ void memory_viewer_panel::ShowImage(QWidget* parent, u32 addr, color_format form
 		// sizeHint() evaluates properly after events have been processed
 		f_image_viewer->setFixedSize(f_image_viewer->sizeHint());
 	});
+}
+
+void memory_viewer_panel::ShowAtPC(u32 pc, std::function<cpu_thread*()> func)
+{
+	if (Emu.IsStopped())
+		return;
+
+	cpu_thread* cpu = func ? func() : nullptr;
+	thread_class type = cpu ? cpu->get_class() : thread_class::ppu;
+
+	if (type == thread_class::spu)
+	{
+		idm::make<memory_viewer_handle>(nullptr, nullptr, pc, std::move(func));
+		return;
+	}
+
+	if (const auto* fxo = g_fxo->try_get<memory_viewer_fxo>())
+	{
+		auto it = fxo->last_opened.find(type);
+
+		if (it != fxo->last_opened.end())
+		{
+			memory_viewer_panel* panel = it->second;
+
+			if (panel)
+			{
+				panel->SetPC(pc);
+				panel->scroll(0);
+
+				if (!panel->isVisible())
+					panel->show();
+
+				panel->raise();
+
+				return;
+			}
+		}
+	}
+
+	idm::make<memory_viewer_handle>(nullptr, nullptr, pc, std::move(func));
 }

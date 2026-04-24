@@ -1,9 +1,9 @@
 #include "memory_viewer_panel.h"
 #include "Emu/Memory/vm.h"
+
 #include "Emu/Memory/vm_reservation.h"
 #include "Emu/CPU/CPUDisAsm.h"
 #include "Emu/Cell/SPUDisAsm.h"
-#include "Emu/IdManager.h"
 
 #include "Utilities/Thread.h"
 #include "Utilities/StrUtil.h"
@@ -11,7 +11,6 @@
 #include <QCheckBox>
 
 #include <charconv>
-#include <unordered_map>
 #include <regex>
 
 #include "util/logs.hpp"
@@ -116,11 +115,7 @@ u64 memory_viewer_panel::OnSearch(std::string wstr, u32 mode)
 		}
 
 		// Concat strings
-		wstr.clear();
-		for (const std::string& part : parts)
-		{
-			wstr += part;
-		}
+		wstr = fmt::merge(parts, {});
 
 		if (const usz pos = wstr.find_first_not_of(hex_chars); pos != umax)
 		{

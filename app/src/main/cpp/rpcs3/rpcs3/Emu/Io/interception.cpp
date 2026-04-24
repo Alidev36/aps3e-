@@ -59,9 +59,6 @@ namespace input
 
 	static void show_mouse_and_keyboard_overlay()
 	{
-#ifdef __ANDROID__
-        return;
-#else
 		if (!g_cfg.misc.show_mouse_and_keyboard_toggle_hint)
 			return;
 
@@ -69,7 +66,6 @@ namespace input
 			? localized_string_id::RSX_OVERLAYS_MOUSE_AND_KEYBOARD_EMULATED
 			: localized_string_id::RSX_OVERLAYS_MOUSE_AND_KEYBOARD_PAD;
 		rsx::overlays::queue_message(get_localized_string(id), 3'000'000);
-#endif
 	}
 
 	void set_mouse_and_keyboard(active_mouse_and_keyboard device)

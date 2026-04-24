@@ -23,6 +23,9 @@
 #
 ###########################################################################
 
+use strict;
+use warnings;
+
 my %filelevel= ('file' => 1,
                 'service' => 1);
 
@@ -38,6 +41,8 @@ sub submit {
         undef $$jref{$k} if(!$filelevel{$k});
     }
 }
+
+my %job;
 
 sub githubactions {
     my ($tag)=@_;
@@ -85,7 +90,7 @@ sub githubactions {
                 $m = 0;
                 $j = 0;
             }
-            elsif($_ =~ /^    - run: .* apt-get install (.*)/) {
+            elsif($_ =~ /^    - run: .* apt-get .* install (.*)/) {
                 $job{'install'} = $1;
             }
             elsif($m >= 0) {
@@ -93,7 +98,7 @@ sub githubactions {
                     # matrix job
                     #print "name: $1\n";
                     $job{'name'} = $1;
-                    $j += ($m?$m:1);
+                    $j += ($m ? $m : 1);
                 }
                 elsif($_ =~ /install: (.*)/) {
                     $job{'install'} = $1;
@@ -253,22 +258,22 @@ sub appveyor {
             $job{'config'} = $1;
         }
         elsif($_ =~ /^      OPENSSL: \'(.*)\'/) {
-            $job{'openssl'} = $1 eq "ON" ? "true": "false";
+            $job{'openssl'} = $1 eq "ON" ? "true" : "false";
         }
         elsif($_ =~ /^      SCHANNEL: \'(.*)\'/) {
-            $job{'schannel'} = $1 eq "ON" ? "true": "false";
+            $job{'schannel'} = $1 eq "ON" ? "true" : "false";
         }
         elsif($_ =~ /^      ENABLE_UNICODE: \'(.*)\'/) {
-            $job{'unicode'} = $1 eq "ON" ? "true": "false";
+            $job{'unicode'} = $1 eq "ON" ? "true" : "false";
         }
         elsif($_ =~ /^      HTTP_ONLY: \'(.*)\'/) {
-            $job{'http-only'} = $1 eq "ON" ? "true": "false";
+            $job{'http-only'} = $1 eq "ON" ? "true" : "false";
         }
         elsif($_ =~ /^      TESTING: \'(.*)\'/) {
-            $job{'testing'} = $1 eq "ON" ? "true": "false";
+            $job{'testing'} = $1 eq "ON" ? "true" : "false";
         }
         elsif($_ =~ /^      SHARED: \'(.*)\'/) {
-            $job{'shared'} = $1 eq "ON" ? "true": "false";
+            $job{'shared'} = $1 eq "ON" ? "true" : "false";
         }
         elsif($_ =~ /^      TARGET: \'-A (.*)\'/) {
             $job{'target'} = $1;
@@ -341,6 +346,8 @@ sub circle {
     my $cmds;
     my $jobs;
     my $workflow;
+    my $cmdname;
+    my $jobname;
     $job{'file'} = ".circleci/config.yml";
     $job{'service'} = "circleci";
     while(<G>) {
@@ -408,6 +415,10 @@ sub zuul {
     my %job;
     my $line=0;
     my $type;
+    my $jobmode;
+    my $apt = 0;
+    my $env = 0;
+    my $envcont;
     $job{'file'} = "zuul.d/jobs.yaml";
     $job{'service'} = "zuul";
     while(<G>) {
@@ -453,7 +464,7 @@ sub zuul {
                         $var = "compiler";
                     }
                     elsif($var eq "CHECKSRC") {
-                        $job{'checksrc'} = $value ? "true": "false";
+                        $job{'checksrc'} = $value ? "true" : "false";
                         $var = "";
                     }
                     else {

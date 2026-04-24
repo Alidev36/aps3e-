@@ -51,7 +51,7 @@ static jboolean j_install_pkg(JNIEnv* env,jobject self,jint pkg_fd){
 }
 
 static jboolean j_install_edat(JNIEnv* env,jobject self,jint edat_fd){
-    fs::file edat_f=fs::file::from_fd(edat_fd);
+    fs::file edat_f=fs::file::from_native_handle(edat_fd);
     return ae::install_edat(edat_f);
 }
 
@@ -147,24 +147,14 @@ static jobject j_meta_info_from_iso(JNIEnv* env,jobject self,jint fd,jstring jis
     jfieldID  fid_MetaInfo_resolution=env->GetFieldID(cls_MetaInfo,"resolution","I");
     jfieldID  fid_MetaInfo_sound_format=env->GetFieldID(cls_MetaInfo,"sound_format","I");
 
-    std::unique_ptr<iso_fs> iso=iso_fs::from_fd(fd);
-    if(!iso->load()) {
-        LOGW("Failed to load iso");
-        return NULL;
-    }
+    iso_archive iso(fd,-1);
 
-    if(!iso->exists(":PS3_GAME/USRDIR/EBOOT.BIN")) {
+    if(!iso.exists("PS3_GAME/USRDIR/EBOOT.BIN")) {
         LOGW("EBOOT.BIN not found");
         return NULL;
     }
 
-    std::vector<uint8_t> psf_data=iso->get_data_tiny(":PS3_GAME/PARAM.SFO");
-    if(psf_data.empty()) {
-        LOGW("Failed to load PARAM.SFO");
-        return NULL;
-    }
-
-    psf::registry psf=psf::load_object(fs::file(psf_data.data(),psf_data.size()),"PS3_GAME/PARAM.SFO"sv);
+    psf::registry psf=iso.open_psf("PS3_GAME/PARAM.SFO");
 
     jobject meta_info=env->NewObject(cls_MetaInfo,mid_MetaInfo_ctor);
     env->SetObjectField(meta_info,fid_MetaInfo_iso_uri,jiso_uri_path);
@@ -176,15 +166,18 @@ static jobject j_meta_info_from_iso(JNIEnv* env,jobject self,jint fd,jstring jis
     env->SetIntField(meta_info,fid_MetaInfo_resolution,psf::get_integer(psf,"RESOLUTION",0));
     env->SetIntField(meta_info,fid_MetaInfo_sound_format,psf::get_integer(psf,"SOUND_FORMAT",0));
 
-    std::vector<uint8_t> icon_data=iso->get_data_tiny(":PS3_GAME/ICON0.PNG");
-    if(!icon_data.empty()) {
+    if(iso.exists("PS3_GAME/ICON0.PNG")) {
+
+        iso_file icon_file=iso.open("PS3_GAME/ICON0.PNG");
+        std::vector<u8> icon_data(icon_file.size());
+        icon_file.read(icon_data.data(),icon_data.size());
         jbyteArray icon_array=env->NewByteArray(icon_data.size());
         env->SetByteArrayRegion(icon_array,0,icon_data.size(),reinterpret_cast<const jbyte*>(icon_data.data()));
         env->SetObjectField(meta_info,fid_MetaInfo_icon,icon_array);
     }
 
-    env->SetBooleanField(meta_info,fid_MetaInfo_decrypt,ae::allow_eboot_decrypt(fs::file(*iso,":PS3_GAME/USRDIR/EBOOT.BIN")));
-
+    //env->SetBooleanField(meta_info,fid_MetaInfo_decrypt,ae::allow_eboot_decrypt(fs::file(*iso,":PS3_GAME/USRDIR/EBOOT.BIN")));
+    env->SetBooleanField(meta_info,fid_MetaInfo_decrypt,true);
     return meta_info;
 }
 static void j_setup_game_id(JNIEnv* env,jobject self,jstring id){
@@ -620,7 +613,7 @@ static bool gen_is_parent(const std::string& parent_name){
 #define LIST_PREF_TAG "aenu.preference.ListPreference"
 
 static jstring generate_config_xml(JNIEnv* env,jobject self){
-
+#if 0
     auto gen_one_preference=[&](const std::string parent_name,cfg::_base* node)->std::string{
         std::stringstream out;
 
@@ -736,6 +729,8 @@ static jstring generate_config_xml(JNIEnv* env,jobject self){
     out<<"</PreferenceScreen>\n";
 
     return env->NewStringUTF(out.str().c_str());
+#endif
+    return env->NewStringUTF("");
 }
 #undef SEEKBAR_PREF_TAG
 #undef CHECKBOX_PREF_TAG

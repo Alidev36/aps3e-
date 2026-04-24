@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "OpenGL.h"
 
-#if defined(HAVE_WAYLAND)||defined(__ANDROID__)
+#if defined(HAVE_WAYLAND)
 #include <EGL/egl.h>
 #endif
 
@@ -36,13 +36,8 @@ void gl::init()
 #undef OPENGL_PROC2
 #endif
 #ifdef __unix__
-#ifndef __ANDROID__
 	glewExperimental = true;
 	glewInit();
-#endif
-#ifdef HAVE_X11
-	glxewInit();
-#endif
 #endif
 }
 
@@ -50,11 +45,6 @@ void gl::set_swapinterval(int interval)
 {
 #ifdef _WIN32
 	wglSwapIntervalEXT(interval);
-#elif defined(__ANDROID__)
-    if (auto egl_display = eglGetCurrentDisplay(); egl_display != EGL_NO_DISPLAY)
-    {
-        eglSwapInterval(egl_display, interval);
-    }
 #elif defined(HAVE_X11)
 	if (glXSwapIntervalEXT)
 	{

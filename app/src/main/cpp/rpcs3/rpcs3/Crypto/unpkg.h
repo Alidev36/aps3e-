@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Loader/PSF.h"
-#include "Loader/iso.h"
 #include "util/endian.hpp"
 #include "util/types.hpp"
 #include "Utilities/File.h"
@@ -333,9 +332,7 @@ class package_reader
 	};
 
 public:
-	package_reader(const std::string& path);
-    package_reader(fs::file&& file);
-    package_reader(iso_fs& iso_fs, const std::string& entry_path);
+	package_reader(const std::string& path, fs::file file = {});
 	~package_reader();
 
 	enum result
@@ -350,6 +347,7 @@ public:
 	};
 
 	bool is_valid() const { return m_is_valid; }
+	const PKGHeader& get_header() const { return m_header; }
 	package_install_result check_target_app_version() const;
 	static package_install_result extract_data(std::deque<package_reader>& readers, std::deque<std::string>& bootable_paths);
 	const psf::registry& get_psf() const { return m_psf; }
@@ -358,6 +356,11 @@ public:
 	int get_progress(int maximum = 100) const;
 
 	void abort_extract();
+
+	fs::file &file()
+	{
+		return m_file;
+	}
 
 private:
 	bool read_header();
@@ -387,7 +390,6 @@ private:
 	bool m_is_valid = false;
 	result m_result = result::not_started;
 
-    iso_fs* m_iso_fs = nullptr;
 	std::string m_path{};
 	std::string m_install_dir{};
 	fs::file m_file{};

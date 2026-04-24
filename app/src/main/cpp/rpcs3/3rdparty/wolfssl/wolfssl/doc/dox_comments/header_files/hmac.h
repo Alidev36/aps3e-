@@ -8,9 +8,9 @@
     \return BAD_FUNC_ARG Returned if the input type is invalid (see type param)
     \return MEMORY_E Returned if there is an error allocating memory for the
     structure to use for hashing
-    \return HMAC_MIN_KEYLEN_E May be returned when using a FIPS implementation
+    \return HMAC_MIN_KEYLEN_E Returned when using a FIPS implementation
     and the key length specified is shorter than the minimum acceptable
-    FIPS standard
+    FIPS standard of 14 bytes
 
     \param hmac pointer to the Hmac object to initialize
     \param type type specifying which encryption method the Hmac object
@@ -534,8 +534,7 @@ int wc_Tls13_HKDF_Expand_Label_ex(
     \ingroup HMAC
 
     \brief Expand data using HMAC, salt and label and info. TLS v1.3 defines
-    this function for key derivation. This is the _ex version adding heap hint
-    and device identifier.
+    this function for key derivation.
 
     \return 0 Returned upon successfully generating a key with the given inputs
     \return BAD_FUNC_ARG Returned if an invalid hash type is given (see type param)

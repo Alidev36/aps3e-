@@ -23,6 +23,14 @@
 #
 ###########################################################################
 
+use strict;
+use warnings;
+
+my %with;
+my %without;
+my %used;
+my %avail;
+
 # these options are enabled by default in the sense that they will attempt to
 # check for and use this feature without the configure flag
 my %defaulton = (
@@ -100,7 +108,6 @@ my %defaulton = (
 
     );
 
-
 sub configureopts {
     my ($opts)=@_;
     my %thisin;
@@ -163,26 +170,25 @@ scanjobs();
 print "Used configure options (with / without)\n";
 for my $w (sort keys %used) {
     printf "  %s: %d %d%s\n", $w, $with{$w}, $without{$w},
-        $defaulton{$w} ? " (auto)":"";
+        $defaulton{$w} ? " (auto)" : "";
 }
 
 print "Never used configure options\n";
 for my $w (sort keys %avail) {
     if(!$used{$w}) {
         printf "  %s%s\n", $w,
-            $defaulton{$w} ? " (auto)":"";
+            $defaulton{$w} ? " (auto)" : "";
     }
 }
 
-print "Never ENABLED configure options that aren't on by default\n";
+print "Never ENABLED configure options that are not on by default\n";
 for my $w (sort keys %avail) {
     if(!$with{$w} && !$defaulton{$w}) {
         printf "  %s\n", $w;
     }
 }
 
-
-print "ENABLED configure options that aren't available\n";
+print "ENABLED configure options that are not available\n";
 for my $w (sort keys %with) {
     if(!$avail{$w}) {
         printf "  %s\n", $w;

@@ -1,12 +1,12 @@
 /* options.h.in
  *
- * Copyright (C) 2006-2024 wolfSSL Inc.
+ * Copyright (C) 2006-2026 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
  * wolfSSL is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * wolfSSL is distributed in the hope that it will be useful,
@@ -22,7 +22,9 @@
 
 /* cmake template for options.h */
 
-#ifndef WOLFSSL_OPTIONS_H
+#ifdef WOLFSSL_NO_OPTIONS_H
+/* options.h inhibited by configuration */
+#elif !defined(WOLFSSL_OPTIONS_H)
 #define WOLFSSL_OPTIONS_H
 
 
@@ -65,7 +67,7 @@ extern "C" {
 #undef GCM_WORD32
 #cmakedefine GCM_WORD32
 #undef HAVE___UINT128_T
-#cmakedefine HAVE___UINT128_T
+#cmakedefine HAVE___UINT128_T 1
 #undef HAVE_AES_KEYWRAP
 #cmakedefine HAVE_AES_KEYWRAP
 #undef HAVE_AESCCM
@@ -86,12 +88,16 @@ extern "C" {
 #cmakedefine HAVE_CRL
 #undef HAVE_CRL_IO
 #cmakedefine HAVE_CRL_IO
+#undef WOLFSSL_CUSTOM_CURVES
+#cmakedefine WOLFSSL_CUSTOM_CURVES
 #undef HAVE_CURVE25519
 #cmakedefine HAVE_CURVE25519
 #undef HAVE_CURVE448
 #cmakedefine HAVE_CURVE448
 #undef HAVE_DH_DEFAULT_PARAMS
 #cmakedefine HAVE_DH_DEFAULT_PARAMS
+#undef HAVE_DILITHIUM
+#cmakedefine HAVE_DILITHIUM
 #undef HAVE_ECC
 #cmakedefine HAVE_ECC
 #undef HAVE_ECH
@@ -129,7 +135,7 @@ extern "C" {
 #undef HAVE_POLY1305
 #cmakedefine HAVE_POLY1305
 #undef HAVE_PTHREAD
-#cmakedefine HAVE_PTHREAD
+#cmakedefine HAVE_PTHREAD 1
 #undef HAVE_REPRODUCIBLE_BUILD
 #cmakedefine HAVE_REPRODUCIBLE_BUILD
 #undef HAVE_SESSION_TICKET
@@ -264,6 +270,10 @@ extern "C" {
 #cmakedefine WOLFSSL_AES_OFB
 #undef WOLFSSL_AES_SIV
 #cmakedefine WOLFSSL_AES_SIV
+#undef HAVE_AES_ECB
+#cmakedefine HAVE_AES_ECB
+#undef WOLFSSL_AES_CTS
+#cmakedefine WOLFSSL_AES_CTS
 #undef WOLFSSL_ALT_CERT_CHAINS
 #cmakedefine WOLFSSL_ALT_CERT_CHAINS
 #undef WOLFSSL_APPLE_NATIVE_CERT_VALIDATION
@@ -296,6 +306,8 @@ extern "C" {
 #cmakedefine WOLFSSL_DTLS_CID
 #undef WOLFSSL_DTLS13
 #cmakedefine WOLFSSL_DTLS13
+#undef WOLFSSL_DTLS_CH_FRAG
+#cmakedefine WOLFSSL_DTLS_CH_FRAG
 #undef WOLFSSL_EITHER_SIDE
 #cmakedefine WOLFSSL_EITHER_SIDE
 #undef WOLFSSL_ENCRYPTED_KEYS
@@ -350,6 +362,8 @@ extern "C" {
 #cmakedefine WOLFSSL_TLS13
 #undef WOLFSSL_USE_ALIGN
 #cmakedefine WOLFSSL_USE_ALIGN
+#undef WOLFSSL_USER_SETTINGS
+#cmakedefine WOLFSSL_USER_SETTINGS
 #undef WOLFSSL_USER_SETTINGS_ASM
 #cmakedefine WOLFSSL_USER_SETTINGS_ASM
 #undef WOLFSSL_W64_WRAPPER
@@ -362,12 +376,44 @@ extern "C" {
 #cmakedefine NO_DES3_TLS_SUITES
 #undef WOLFSSL_EXPERIMENTAL_SETTINGS
 #cmakedefine WOLFSSL_EXPERIMENTAL_SETTINGS
-#undef WOLFSSL_HAVE_KYBER
-#cmakedefine WOLFSSL_HAVE_KYBER
-#undef WOLFSSL_WC_KYBER
-#cmakedefine WOLFSSL_WC_KYBER
+#undef WOLFSSL_HAVE_MLKEM
+#cmakedefine WOLFSSL_HAVE_MLKEM
+#undef WOLFSSL_WC_MLKEM
+#cmakedefine WOLFSSL_WC_MLKEM
+#undef WOLFSSL_WC_DILITHIUM
+#cmakedefine WOLFSSL_WC_DILITHIUM
 #undef NO_WOLFSSL_STUB
 #cmakedefine NO_WOLFSSL_STUB
+#undef HAVE_ECC_SECPR2
+#cmakedefine HAVE_ECC_SECPR2
+#undef HAVE_ECC_SECPR3
+#cmakedefine HAVE_ECC_SECPR3
+#undef HAVE_ECC_BRAINPOOL
+#cmakedefine HAVE_ECC_BRAINPOOL
+#undef HAVE_ECC_KOBLITZ
+#cmakedefine HAVE_ECC_KOBLITZ
+#undef HAVE_ECC_CDH
+#cmakedefine HAVE_ECC_CDH
+#undef WOLFSSL_HAVE_LMS
+#cmakedefine WOLFSSL_HAVE_LMS
+#undef WOLFSSL_WC_LMS
+#cmakedefine WOLFSSL_WC_LMS
+#undef  WOLFSSL_LMS_SHA256_192
+#cmakedefine WOLFSSL_LMS_SHA256_192
+#undef  WOLFSSL_NO_LMS_SHA256_256
+#cmakedefine WOLFSSL_NO_LMS_SHA256_256
+#undef WOLFSSL_HAVE_XMSS
+#cmakedefine WOLFSSL_HAVE_XMSS
+#undef WOLFSSL_WC_XMSS
+#cmakedefine WOLFSSL_WC_XMSS
+#undef HAVE_SECRET_CALLBACK
+#cmakedefine HAVE_SECRET_CALLBACK
+#undef WC_RSA_DIRECT
+#cmakedefine WC_RSA_DIRECT
+#undef WOLFSSL_HAVE_SLHDSA
+#cmakedefine WOLFSSL_HAVE_SLHDSA
+#undef WOLFSSL_WC_SLHDSA
+#cmakedefine WOLFSSL_WC_SLHDSA
 
 #ifdef __cplusplus
 }

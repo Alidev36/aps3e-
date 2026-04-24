@@ -274,7 +274,7 @@ std::optional<s32> lv2_socket_p2p::sendto(s32 flags, const std::vector<u8>& buf,
 	}
 
 	ensure(opt_sn_addr);
-	ensure(socket);                              // ensures it has been bound
+	ensure(native_socket); // ensures it has been bound
 	ensure(buf.size() <= static_cast<usz>(65535 - VPORT_P2P_HEADER_SIZE)); // catch games using full payload for future fragmentation implementation if necessary
 	const u16 p2p_port  = reinterpret_cast<const sys_net_sockaddr_in*>(&*opt_sn_addr)->sin_port;
 	const u16 p2p_vport = reinterpret_cast<const sys_net_sockaddr_in_p2p*>(&*opt_sn_addr)->sin_vport;
@@ -364,7 +364,7 @@ s32 lv2_socket_p2p::shutdown([[maybe_unused]] s32 how)
 	return CELL_OK;
 }
 
-s32 lv2_socket_p2p::poll(sys_net_pollfd& sn_pfd, [[maybe_unused]] pollfd& native_pfd)
+void lv2_socket_p2p::poll(sys_net_pollfd& sn_pfd, [[maybe_unused]] pollfd& native_pfd)
 {
 	std::lock_guard lock(mutex);
 	ensure(vport);
@@ -381,8 +381,6 @@ s32 lv2_socket_p2p::poll(sys_net_pollfd& sn_pfd, [[maybe_unused]] pollfd& native
 	{
 		sn_pfd.revents |= SYS_NET_POLLOUT;
 	}
-
-	return sn_pfd.revents ? 1 : 0;
 }
 
 std::tuple<bool, bool, bool> lv2_socket_p2p::select(bs_t<lv2_socket::poll_t> selected, [[maybe_unused]] pollfd& native_pfd)

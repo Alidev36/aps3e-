@@ -1,12 +1,12 @@
 /* keys.c
  *
- * Copyright (C) 2006-2023 wolfSSL Inc.
+ * Copyright (C) 2006-2026 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
  * wolfSSL is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * wolfSSL is distributed in the hope that it will be useful,
@@ -22,13 +22,9 @@
 
 /* Name change compatibility layer no longer needs to be included here */
 
-#ifdef HAVE_CONFIG_H
-    #include <config.h>
-#endif
+#include <wolfssl/wolfcrypt/libwolfssl_sources.h>
 
-#include <wolfssl/wolfcrypt/settings.h>
-
-#ifndef WOLFCRYPT_ONLY
+#if !defined(WOLFCRYPT_ONLY) && !defined(NO_TLS)
 
 #include <wolfssl/internal.h>
 #include <wolfssl/error-ssl.h>
@@ -36,6 +32,12 @@
     #ifndef NO_STDIO_FILESYSTEM
         #include <stdio.h>
     #endif
+#endif
+#ifdef NO_INLINE
+    #include <wolfssl/wolfcrypt/misc.h>
+#else
+    #define WOLFSSL_MISC_INCLUDED
+    #include <wolfcrypt/src/misc.c>
 #endif
 
 #if defined(WOLFSSL_RENESAS_FSPSM_TLS) || defined(WOLFSSL_RENESAS_TSIP_TLS)
@@ -48,6 +50,20 @@ int SetCipherSpecs(WOLFSSL* ssl)
                                 ssl->options.cipherSuite, &ssl->specs,
                                 &ssl->options);
     if (ret == 0) {
+    #ifdef WOLFSSL_ALLOW_SSLV3
+         /* SSLv3 (RFC 6101) defines MAC algorithms as MD5 and SHA-1. SHA-256
+          * was introduced in TLS 1.2 (RFC 5246). SSL_hmac for old SSLv3
+          * connections can not handle newer cipher suites that use digest sizes
+          * larger than SHA-1 */
+        if (ssl->version.major == SSLv3_MAJOR &&
+                    ssl->version.minor == SSLv3_MINOR &&
+                    ssl->specs.hash_size > WC_SHA_DIGEST_SIZE) {
+                WOLFSSL_MSG("SSLv3 does not support SHA-256 or higher MAC");
+                WOLFSSL_ERROR_VERBOSE(UNSUPPORTED_SUITE);
+                return UNSUPPORTED_SUITE;
+        }
+    #endif /* WOLFSSL_ALLOW_SSLV3 */
+
         /* set TLS if it hasn't been turned off */
         if (ssl->version.major == SSLv3_MAJOR &&
                 ssl->version.minor >= TLSv1_MINOR) {
@@ -127,6 +143,9 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         }
     }
 #endif /* NO_WOLFSSL_CLIENT */
+
+    /* Initialize specs */
+    XMEMSET(specs, 0, sizeof(CipherSpecs));
 
     /* Chacha extensions, 0xcc */
     if (cipherSuite0 == CHACHA_BYTE) {
@@ -341,7 +360,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
         specs->iv_size               = AES_IV_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
 
         break;
 #endif
@@ -358,7 +377,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
         specs->iv_size               = AES_IV_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
 
         break;
 #endif
@@ -374,7 +393,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         break;
@@ -431,7 +450,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         break;
@@ -448,7 +467,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESGCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -466,7 +485,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESGCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -503,7 +522,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         if (opts != NULL)
@@ -530,7 +549,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
         specs->iv_size               = AES_IV_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
 
         break;
 #endif
@@ -547,7 +566,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
         specs->iv_size               = AES_IV_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
 
         break;
 #endif
@@ -601,7 +620,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         break;
@@ -618,7 +637,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         break;
@@ -635,7 +654,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESGCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -653,7 +672,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESGCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -671,7 +690,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESCCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_CCM_16_AUTH_SZ;
 
@@ -689,7 +708,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESCCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_CCM_8_AUTH_SZ;
 
@@ -707,7 +726,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESCCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_CCM_8_AUTH_SZ;
 
@@ -747,7 +766,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->static_ecdh           = 1;
         specs->key_size              = AES_128_KEY_SIZE;
         specs->iv_size               = AES_IV_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
 
         break;
 #endif
@@ -764,7 +783,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->static_ecdh           = 1;
         specs->key_size              = AES_128_KEY_SIZE;
         specs->iv_size               = AES_IV_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
 
         break;
 #endif
@@ -781,7 +800,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->static_ecdh           = 1;
         specs->key_size              = AES_256_KEY_SIZE;
         specs->iv_size               = AES_IV_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
 
         break;
 #endif
@@ -798,7 +817,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->static_ecdh           = 1;
         specs->key_size              = AES_256_KEY_SIZE;
         specs->iv_size               = AES_IV_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
 
         break;
 #endif
@@ -814,7 +833,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 1;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         break;
@@ -907,7 +926,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 1;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         break;
@@ -924,7 +943,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 1;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         break;
@@ -941,7 +960,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 1;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         break;
@@ -958,7 +977,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 1;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESGCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -976,7 +995,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 1;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESGCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -994,7 +1013,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 1;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESGCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -1012,7 +1031,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 1;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESGCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -1068,7 +1087,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESCCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_CCM_8_AUTH_SZ;
 
@@ -1086,7 +1105,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESCCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_CCM_8_AUTH_SZ;
 
@@ -1104,7 +1123,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESCCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_CCM_8_AUTH_SZ;
 
@@ -1124,7 +1143,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESCCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_CCM_8_AUTH_SZ;
 
@@ -1144,7 +1163,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESCCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_CCM_16_AUTH_SZ;
 
@@ -1164,7 +1183,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESCCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_CCM_16_AUTH_SZ;
 
@@ -1184,7 +1203,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESCCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_CCM_16_AUTH_SZ;
 
@@ -1204,7 +1223,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESCCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_CCM_16_AUTH_SZ;
 
@@ -1219,14 +1238,14 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->bulk_cipher_algorithm = wolfssl_cipher_null;
         specs->cipher_type           = aead;
         specs->mac_algorithm         = sha256_mac;
-        specs->kea                   = 0;
-        specs->sig_algo              = 0;
+        specs->kea                   = any_kea;
+        specs->sig_algo              = any_sa_algo;
         specs->hash_size             = WC_SHA256_DIGEST_SIZE;
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = WC_SHA256_DIGEST_SIZE;
         specs->block_size            = 0;
-        specs->iv_size               = HMAC_NONCE_SZ;
+        specs->iv_size               = WC_SHA256_DIGEST_SIZE;
         specs->aead_mac_size         = WC_SHA256_DIGEST_SIZE;
 
         break;
@@ -1237,14 +1256,14 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->bulk_cipher_algorithm = wolfssl_cipher_null;
         specs->cipher_type           = aead;
         specs->mac_algorithm         = sha384_mac;
-        specs->kea                   = 0;
-        specs->sig_algo              = 0;
+        specs->kea                   = any_kea;
+        specs->sig_algo              = any_sa_algo;
         specs->hash_size             = WC_SHA384_DIGEST_SIZE;
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = WC_SHA384_DIGEST_SIZE;
         specs->block_size            = 0;
-        specs->iv_size               = HMAC_NONCE_SZ;
+        specs->iv_size               = WC_SHA384_DIGEST_SIZE;
         specs->aead_mac_size         = WC_SHA384_DIGEST_SIZE;
 
         break;
@@ -1267,13 +1286,13 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
             specs->bulk_cipher_algorithm = wolfssl_aes_gcm;
             specs->cipher_type           = aead;
             specs->mac_algorithm         = sha256_mac;
-            specs->kea                   = 0;
-            specs->sig_algo              = 0;
+            specs->kea                   = any_kea;
+            specs->sig_algo              = any_sa_algo;
             specs->hash_size             = WC_SHA256_DIGEST_SIZE;
             specs->pad_size              = PAD_SHA;
             specs->static_ecdh           = 0;
             specs->key_size              = AES_128_KEY_SIZE;
-            specs->block_size            = AES_BLOCK_SIZE;
+            specs->block_size            = WC_AES_BLOCK_SIZE;
             specs->iv_size               = AESGCM_NONCE_SZ;
             specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -1285,13 +1304,13 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
             specs->bulk_cipher_algorithm = wolfssl_aes_gcm;
             specs->cipher_type           = aead;
             specs->mac_algorithm         = sha384_mac;
-            specs->kea                   = 0;
-            specs->sig_algo              = 0;
+            specs->kea                   = any_kea;
+            specs->sig_algo              = any_sa_algo;
             specs->hash_size             = WC_SHA384_DIGEST_SIZE;
             specs->pad_size              = PAD_SHA;
             specs->static_ecdh           = 0;
             specs->key_size              = AES_256_KEY_SIZE;
-            specs->block_size            = AES_BLOCK_SIZE;
+            specs->block_size            = WC_AES_BLOCK_SIZE;
             specs->iv_size               = AESGCM_NONCE_SZ;
             specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -1303,8 +1322,8 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
             specs->bulk_cipher_algorithm = wolfssl_chacha;
             specs->cipher_type           = aead;
             specs->mac_algorithm         = sha256_mac;
-            specs->kea                   = 0;
-            specs->sig_algo              = 0;
+            specs->kea                   = any_kea;
+            specs->sig_algo              = any_sa_algo;
             specs->hash_size             = WC_SHA256_DIGEST_SIZE;
             specs->pad_size              = PAD_SHA;
             specs->static_ecdh           = 0;
@@ -1323,13 +1342,13 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
             specs->bulk_cipher_algorithm = wolfssl_aes_ccm;
             specs->cipher_type           = aead;
             specs->mac_algorithm         = sha256_mac;
-            specs->kea                   = 0;
-            specs->sig_algo              = 0;
+            specs->kea                   = any_kea;
+            specs->sig_algo              = any_sa_algo;
             specs->hash_size             = WC_SHA256_DIGEST_SIZE;
             specs->pad_size              = PAD_SHA;
             specs->static_ecdh           = 0;
             specs->key_size              = AES_128_KEY_SIZE;
-            specs->block_size            = AES_BLOCK_SIZE;
+            specs->block_size            = WC_AES_BLOCK_SIZE;
             specs->iv_size               = AESCCM_NONCE_SZ;
             specs->aead_mac_size         = AES_CCM_16_AUTH_SZ;
 
@@ -1341,13 +1360,13 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
             specs->bulk_cipher_algorithm = wolfssl_aes_ccm;
             specs->cipher_type           = aead;
             specs->mac_algorithm         = sha256_mac;
-            specs->kea                   = 0;
-            specs->sig_algo              = 0;
+            specs->kea                   = any_kea;
+            specs->sig_algo              = any_sa_algo;
             specs->hash_size             = WC_SHA256_DIGEST_SIZE;
             specs->pad_size              = PAD_SHA;
             specs->static_ecdh           = 0;
             specs->key_size              = AES_128_KEY_SIZE;
-            specs->block_size            = AES_BLOCK_SIZE;
+            specs->block_size            = WC_AES_BLOCK_SIZE;
             specs->iv_size               = AESCCM_NONCE_SZ;
             specs->aead_mac_size         = AES_CCM_8_AUTH_SZ;
 
@@ -1375,7 +1394,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESGCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -1467,8 +1486,8 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->bulk_cipher_algorithm = wolfssl_sm4_gcm;
         specs->cipher_type           = aead;
         specs->mac_algorithm         = sm3_mac;
-        specs->kea                   = 0;
-        specs->sig_algo              = 0;
+        specs->kea                   = any_kea;
+        specs->sig_algo              = any_sa_algo;
         specs->hash_size             = WC_SM3_DIGEST_SIZE;
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
@@ -1485,8 +1504,8 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->bulk_cipher_algorithm = wolfssl_sm4_ccm;
         specs->cipher_type           = aead;
         specs->mac_algorithm         = sm3_mac;
-        specs->kea                   = 0;
-        specs->sig_algo              = 0;
+        specs->kea                   = any_kea;
+        specs->sig_algo              = any_sa_algo;
         specs->hash_size             = WC_SM3_DIGEST_SIZE;
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
@@ -1564,7 +1583,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         break;
@@ -1581,7 +1600,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         break;
@@ -1649,7 +1668,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         break;
@@ -1666,7 +1685,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         break;
@@ -1683,7 +1702,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESGCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -1703,7 +1722,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESGCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -1723,7 +1742,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESGCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -1743,7 +1762,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESGCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -1763,7 +1782,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESGCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -1783,7 +1802,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         if (opts != NULL)
@@ -1802,7 +1821,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         if (opts != NULL)
@@ -1821,7 +1840,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         if (opts != NULL)
@@ -1840,7 +1859,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         if (opts != NULL)
@@ -1859,7 +1878,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         if (opts != NULL)
@@ -1878,7 +1897,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         if (opts != NULL)
@@ -1992,7 +2011,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         break;
@@ -2026,7 +2045,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         break;
@@ -2043,7 +2062,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         break;
@@ -2060,7 +2079,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         break;
@@ -2077,7 +2096,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESGCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -2095,7 +2114,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESGCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -2113,7 +2132,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESGCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -2131,7 +2150,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_256_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AESGCM_IMP_IV_SZ;
         specs->aead_mac_size         = AES_GCM_AUTH_SZ;
 
@@ -2149,7 +2168,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = CAMELLIA_128_KEY_SIZE;
-        specs->block_size            = CAMELLIA_BLOCK_SIZE;
+        specs->block_size            = WC_CAMELLIA_BLOCK_SIZE;
         specs->iv_size               = CAMELLIA_IV_SIZE;
 
         break;
@@ -2166,7 +2185,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = CAMELLIA_256_KEY_SIZE;
-        specs->block_size            = CAMELLIA_BLOCK_SIZE;
+        specs->block_size            = WC_CAMELLIA_BLOCK_SIZE;
         specs->iv_size               = CAMELLIA_IV_SIZE;
 
         break;
@@ -2183,7 +2202,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = CAMELLIA_128_KEY_SIZE;
-        specs->block_size            = CAMELLIA_BLOCK_SIZE;
+        specs->block_size            = WC_CAMELLIA_BLOCK_SIZE;
         specs->iv_size               = CAMELLIA_IV_SIZE;
 
         break;
@@ -2200,7 +2219,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = CAMELLIA_256_KEY_SIZE;
-        specs->block_size            = CAMELLIA_BLOCK_SIZE;
+        specs->block_size            = WC_CAMELLIA_BLOCK_SIZE;
         specs->iv_size               = CAMELLIA_IV_SIZE;
 
         break;
@@ -2217,7 +2236,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = CAMELLIA_128_KEY_SIZE;
-        specs->block_size            = CAMELLIA_BLOCK_SIZE;
+        specs->block_size            = WC_CAMELLIA_BLOCK_SIZE;
         specs->iv_size               = CAMELLIA_IV_SIZE;
 
         break;
@@ -2234,7 +2253,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = CAMELLIA_256_KEY_SIZE;
-        specs->block_size            = CAMELLIA_BLOCK_SIZE;
+        specs->block_size            = WC_CAMELLIA_BLOCK_SIZE;
         specs->iv_size               = CAMELLIA_IV_SIZE;
 
         break;
@@ -2251,7 +2270,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = CAMELLIA_128_KEY_SIZE;
-        specs->block_size            = CAMELLIA_BLOCK_SIZE;
+        specs->block_size            = WC_CAMELLIA_BLOCK_SIZE;
         specs->iv_size               = CAMELLIA_IV_SIZE;
 
         break;
@@ -2268,7 +2287,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = CAMELLIA_256_KEY_SIZE;
-        specs->block_size            = CAMELLIA_BLOCK_SIZE;
+        specs->block_size            = WC_CAMELLIA_BLOCK_SIZE;
         specs->iv_size               = CAMELLIA_IV_SIZE;
 
         break;
@@ -2285,7 +2304,7 @@ int GetCipherSpec(word16 side, byte cipherSuite0, byte cipherSuite,
         specs->pad_size              = PAD_SHA;
         specs->static_ecdh           = 0;
         specs->key_size              = AES_128_KEY_SIZE;
-        specs->block_size            = AES_BLOCK_SIZE;
+        specs->block_size            = WC_AES_BLOCK_SIZE;
         specs->iv_size               = AES_IV_SIZE;
 
         if (opts != NULL)
@@ -2371,7 +2390,7 @@ static int SetPrefix(byte* sha_input, int idx)
 #endif
 
 
-static int SetKeys(Ciphers* enc, Ciphers* dec, Keys* keys, CipherSpecs* specs,
+int SetKeys(Ciphers* enc, Ciphers* dec, Keys* keys, CipherSpecs* specs,
                    int side, void* heap, int devId, WC_RNG* rng, int tls13)
 {
     (void)rng;
@@ -2814,7 +2833,7 @@ static int SetKeys(Ciphers* enc, Ciphers* dec, Keys* keys, CipherSpecs* specs,
     (defined(HAVE_FIPS_VERSION) && (HAVE_FIPS_VERSION >= 2)))
                 if (!tls13) {
                     CcmRet = wc_AesCcmSetNonce(enc->aes, keys->client_write_IV,
-                            AEAD_MAX_IMP_SZ);
+                            AEAD_NONCE_SZ);
                     if (CcmRet != 0) return CcmRet;
                 }
 #endif
@@ -2843,7 +2862,7 @@ static int SetKeys(Ciphers* enc, Ciphers* dec, Keys* keys, CipherSpecs* specs,
     (defined(HAVE_FIPS_VERSION) && (HAVE_FIPS_VERSION >= 2)))
                 if (!tls13) {
                     CcmRet = wc_AesCcmSetNonce(enc->aes, keys->server_write_IV,
-                            AEAD_MAX_IMP_SZ);
+                            AEAD_NONCE_SZ);
                     if (CcmRet != 0) return CcmRet;
                 }
 #endif
@@ -2976,13 +2995,13 @@ static int SetKeys(Ciphers* enc, Ciphers* dec, Keys* keys, CipherSpecs* specs,
 
         if (enc && enc->cam == NULL)
             enc->cam =
-                (Camellia*)XMALLOC(sizeof(Camellia), heap, DYNAMIC_TYPE_CIPHER);
+                (wc_Camellia*)XMALLOC(sizeof(wc_Camellia), heap, DYNAMIC_TYPE_CIPHER);
         if (enc && enc->cam == NULL)
             return MEMORY_E;
 
         if (dec && dec->cam == NULL)
             dec->cam =
-                (Camellia*)XMALLOC(sizeof(Camellia), heap, DYNAMIC_TYPE_CIPHER);
+                (wc_Camellia*)XMALLOC(sizeof(wc_Camellia), heap, DYNAMIC_TYPE_CIPHER);
         if (dec && dec->cam == NULL)
             return MEMORY_E;
 
@@ -3318,9 +3337,7 @@ static int SetKeys(Ciphers* enc, Ciphers* dec, Keys* keys, CipherSpecs* specs,
                                                            DYNAMIC_TYPE_CIPHER);
                 if (enc->hmac == NULL)
                     return MEMORY_E;
-            }
 
-            if (enc) {
                 if (wc_HmacInit(enc->hmac, heap, devId) != 0) {
                     WOLFSSL_MSG("HmacInit failed in SetKeys");
                     XFREE(enc->hmac, heap, DYNAMIC_TYPE_CIPHER);
@@ -3334,9 +3351,7 @@ static int SetKeys(Ciphers* enc, Ciphers* dec, Keys* keys, CipherSpecs* specs,
                                                            DYNAMIC_TYPE_CIPHER);
                 if (dec->hmac == NULL)
                     return MEMORY_E;
-            }
 
-            if (dec) {
                 if (wc_HmacInit(dec->hmac, heap, devId) != 0) {
                     WOLFSSL_MSG("HmacInit failed in SetKeys");
                     XFREE(dec->hmac, heap, DYNAMIC_TYPE_CIPHER);
@@ -3348,14 +3363,14 @@ static int SetKeys(Ciphers* enc, Ciphers* dec, Keys* keys, CipherSpecs* specs,
             if (side == WOLFSSL_CLIENT_END) {
                 if (enc) {
                     XMEMCPY(keys->aead_enc_imp_IV, keys->client_write_IV,
-                            HMAC_NONCE_SZ);
+                            specs->iv_size);
                     hmacRet = wc_HmacSetKey(enc->hmac, hashType,
                                        keys->client_write_key, specs->key_size);
                     if (hmacRet != 0) return hmacRet;
                 }
                 if (dec) {
                     XMEMCPY(keys->aead_dec_imp_IV, keys->server_write_IV,
-                            HMAC_NONCE_SZ);
+                            specs->iv_size);
                     hmacRet = wc_HmacSetKey(dec->hmac, hashType,
                                        keys->server_write_key, specs->key_size);
                     if (hmacRet != 0) return hmacRet;
@@ -3364,14 +3379,14 @@ static int SetKeys(Ciphers* enc, Ciphers* dec, Keys* keys, CipherSpecs* specs,
             else {
                 if (enc) {
                     XMEMCPY(keys->aead_enc_imp_IV, keys->server_write_IV,
-                            HMAC_NONCE_SZ);
+                            specs->iv_size);
                     hmacRet = wc_HmacSetKey(enc->hmac, hashType,
                                        keys->server_write_key, specs->key_size);
                     if (hmacRet != 0) return hmacRet;
                 }
                 if (dec) {
                     XMEMCPY(keys->aead_dec_imp_IV, keys->client_write_IV,
-                            HMAC_NONCE_SZ);
+                            specs->iv_size);
                     hmacRet = wc_HmacSetKey(dec->hmac, hashType,
                                        keys->client_write_key, specs->key_size);
                     if (hmacRet != 0) return hmacRet;
@@ -3559,6 +3574,13 @@ int SetKeysSide(WOLFSSL* ssl, enum encrypt_side side)
     ret = PROTOCOLCB_UNAVAILABLE;
     if (ssl->ctx->EncryptKeysCb) {
         void* ctx = wolfSSL_GetEncryptKeysCtx(ssl);
+        #if defined(WOLFSSL_RENESAS_FSPSM_TLS)
+            FSPSM_ST* cbInfo = (FSPSM_ST*)ctx;
+            cbInfo->internal->side = side;
+        #elif defined(WOLFSSL_RENESAS_TSIP_TLS)
+            TsipUserCtx* cbInfo = (TsipUserCtx*)ctx;
+            cbInfo->internal->key_side = side;
+        #endif
         ret = ssl->ctx->EncryptKeysCb(ssl, ctx);
     }
     if (!ssl->ctx->EncryptKeysCb ||
@@ -3876,16 +3898,17 @@ int DeriveKeys(WOLFSSL* ssl)
 
     if (shaOutput == NULL || md5Input == NULL || shaInput == NULL ||
         keyData   == NULL || md5      == NULL || sha      == NULL) {
-        if (shaOutput) XFREE(shaOutput, NULL, DYNAMIC_TYPE_TMP_BUFFER);
-        if (md5Input)  XFREE(md5Input,  NULL, DYNAMIC_TYPE_TMP_BUFFER);
-        if (shaInput)  XFREE(shaInput,  NULL, DYNAMIC_TYPE_TMP_BUFFER);
-        if (keyData)   XFREE(keyData,   NULL, DYNAMIC_TYPE_TMP_BUFFER);
-        if (md5)       XFREE(md5,       NULL, DYNAMIC_TYPE_TMP_BUFFER);
-        if (sha)       XFREE(sha,       NULL, DYNAMIC_TYPE_TMP_BUFFER);
+        XFREE(shaOutput, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+        XFREE(md5Input, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+        XFREE(shaInput, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+        XFREE(keyData, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+        XFREE(md5, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+        XFREE(sha, NULL, DYNAMIC_TYPE_TMP_BUFFER);
 
         return MEMORY_E;
     }
 #endif
+
     XMEMSET(shaOutput, 0, WC_SHA_DIGEST_SIZE);
     ret = wc_InitMd5(md5);
     if (ret == 0) {
@@ -3912,7 +3935,8 @@ int DeriveKeys(WOLFSSL* ssl)
             XMEMCPY(shaInput + idx, ssl->arrays->clientRandom, RAN_LEN);
             if (ret == 0) {
                 ret = wc_ShaUpdate(sha, shaInput,
-                    (KEY_PREFIX + SECRET_LEN + 2 * RAN_LEN) - KEY_PREFIX + j);
+                    (KEY_PREFIX + SECRET_LEN + 2 * RAN_LEN) - KEY_PREFIX +
+                        (word32)(j));
             }
             if (ret == 0) {
                 ret = wc_ShaFinal(sha, shaOutput);
@@ -3931,38 +3955,55 @@ int DeriveKeys(WOLFSSL* ssl)
             ret = StoreKeys(ssl, keyData, PROVISION_CLIENT_SERVER);
     }
 
-#ifdef WOLFSSL_SMALL_STACK
-    XFREE(shaOutput, NULL, DYNAMIC_TYPE_TMP_BUFFER);
-    XFREE(md5Input,  NULL, DYNAMIC_TYPE_TMP_BUFFER);
-    XFREE(shaInput,  NULL, DYNAMIC_TYPE_TMP_BUFFER);
-    XFREE(keyData,   NULL, DYNAMIC_TYPE_TMP_BUFFER);
-    XFREE(md5,       NULL, DYNAMIC_TYPE_TMP_BUFFER);
-    XFREE(sha,       NULL, DYNAMIC_TYPE_TMP_BUFFER);
+#ifdef WOLFSSL_CHECK_MEM_ZERO
+    wc_MemZero_Add("DeriveKeys shaOutput", shaOutput, WC_SHA_DIGEST_SIZE);
+    wc_MemZero_Add("DeriveKeys md5Input", md5Input,
+                   SECRET_LEN + WC_SHA_DIGEST_SIZE);
+    wc_MemZero_Add("DeriveKeys shaInput", shaInput,
+                   KEY_PREFIX + SECRET_LEN + 2 * RAN_LEN);
+    wc_MemZero_Add("DeriveKeys keyData", keyData,
+                   KEY_PREFIX * WC_MD5_DIGEST_SIZE);
 #endif
+    ForceZero(shaOutput, WC_SHA_DIGEST_SIZE);
+    ForceZero(md5Input, SECRET_LEN + WC_SHA_DIGEST_SIZE);
+    ForceZero(shaInput, KEY_PREFIX + SECRET_LEN + 2 * RAN_LEN);
+    ForceZero(keyData, KEY_PREFIX * WC_MD5_DIGEST_SIZE);
+#ifdef WOLFSSL_CHECK_MEM_ZERO
+    wc_MemZero_Check(shaOutput, WC_SHA_DIGEST_SIZE);
+    wc_MemZero_Check(md5Input, SECRET_LEN + WC_SHA_DIGEST_SIZE);
+    wc_MemZero_Check(shaInput, KEY_PREFIX + SECRET_LEN + 2 * RAN_LEN);
+    wc_MemZero_Check(keyData, KEY_PREFIX * WC_MD5_DIGEST_SIZE);
+#endif
+
+    WC_FREE_VAR_EX(shaOutput, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    WC_FREE_VAR_EX(md5Input, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    WC_FREE_VAR_EX(shaInput, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    WC_FREE_VAR_EX(keyData, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    WC_FREE_VAR_EX(md5, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    WC_FREE_VAR_EX(sha, NULL, DYNAMIC_TYPE_TMP_BUFFER);
 
     return ret;
 }
 
 
-static int CleanPreMaster(WOLFSSL* ssl)
+static void CleanPreMaster(WOLFSSL* ssl)
 {
-    int i, ret, sz = ssl->arrays->preMasterSz;
+    int sz = (int)(ssl->arrays->preMasterSz);
 
-    for (i = 0; i < sz; i++)
-        ssl->arrays->preMasterSecret[i] = 0;
+#ifdef WOLFSSL_CHECK_MEM_ZERO
+    wc_MemZero_Add("CleanPreMaster preMasterSecret",
+                   ssl->arrays->preMasterSecret, sz);
+#endif
 
-    ret = wc_RNG_GenerateBlock(ssl->rng, ssl->arrays->preMasterSecret, sz);
-    if (ret != 0)
-        return ret;
+    ForceZero(ssl->arrays->preMasterSecret, sz);
 
-    for (i = 0; i < sz; i++)
-        ssl->arrays->preMasterSecret[i] = 0;
+#ifdef WOLFSSL_CHECK_MEM_ZERO
+    wc_MemZero_Check(ssl->arrays->preMasterSecret, sz);
+#endif
 
     XFREE(ssl->arrays->preMasterSecret, ssl->heap, DYNAMIC_TYPE_SECRET);
     ssl->arrays->preMasterSecret = NULL;
     ssl->arrays->preMasterSz = 0;
-
-    return 0;
 }
 
 
@@ -4013,15 +4054,22 @@ static int MakeSslMasterSecret(WOLFSSL* ssl)
 
     if (shaOutput == NULL || md5Input == NULL || shaInput == NULL ||
                              md5      == NULL || sha      == NULL) {
-        if (shaOutput) XFREE(shaOutput, NULL, DYNAMIC_TYPE_TMP_BUFFER);
-        if (md5Input)  XFREE(md5Input,  NULL, DYNAMIC_TYPE_TMP_BUFFER);
-        if (shaInput)  XFREE(shaInput,  NULL, DYNAMIC_TYPE_TMP_BUFFER);
-        if (md5)       XFREE(md5,       NULL, DYNAMIC_TYPE_TMP_BUFFER);
-        if (sha)       XFREE(sha,       NULL, DYNAMIC_TYPE_TMP_BUFFER);
+        XFREE(shaOutput, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+        XFREE(md5Input, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+        XFREE(shaInput, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+        XFREE(md5, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+        XFREE(sha, NULL, DYNAMIC_TYPE_TMP_BUFFER);
 
         return MEMORY_E;
     }
 #endif
+#ifdef WOLFSSL_CHECK_MEM_ZERO
+    wc_MemZero_Add("MakeSslMasterSecret md5Input", md5Input,
+                   ENCRYPT_LEN + WC_SHA_DIGEST_SIZE);
+    wc_MemZero_Add("MakeSslMasterSecret shaInput", shaInput,
+                   PREFIX + ENCRYPT_LEN + 2 * RAN_LEN);
+#endif
+
     XMEMSET(shaOutput, 0, WC_SHA_DIGEST_SIZE);
 
     ret = wc_InitMd5(md5);
@@ -4039,8 +4087,8 @@ static int MakeSslMasterSecret(WOLFSSL* ssl)
             }
 
             idx = 0;
-            XMEMCPY(shaInput, prefix, i + 1);
-            idx += i + 1;
+            XMEMCPY(shaInput, prefix, (size_t)(i + 1));
+            idx += (word32)(i + 1);
 
             XMEMCPY(shaInput + idx, ssl->arrays->preMasterSecret, pmsSz);
             idx += pmsSz;
@@ -4080,18 +4128,20 @@ static int MakeSslMasterSecret(WOLFSSL* ssl)
             ret = DeriveKeys(ssl);
     }
 
-#ifdef WOLFSSL_SMALL_STACK
-    XFREE(shaOutput, NULL, DYNAMIC_TYPE_TMP_BUFFER);
-    XFREE(md5Input,  NULL, DYNAMIC_TYPE_TMP_BUFFER);
-    XFREE(shaInput,  NULL, DYNAMIC_TYPE_TMP_BUFFER);
-    XFREE(md5,       NULL, DYNAMIC_TYPE_TMP_BUFFER);
-    XFREE(sha,       NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    ForceZero(md5Input, ENCRYPT_LEN + WC_SHA_DIGEST_SIZE);
+    ForceZero(shaInput, PREFIX + ENCRYPT_LEN + 2 * RAN_LEN);
+#ifdef WOLFSSL_CHECK_MEM_ZERO
+    wc_MemZero_Check(md5Input, ENCRYPT_LEN + WC_SHA_DIGEST_SIZE);
+    wc_MemZero_Check(shaInput, PREFIX + ENCRYPT_LEN + 2 * RAN_LEN);
 #endif
 
-    if (ret == 0)
-        ret = CleanPreMaster(ssl);
-    else
-        CleanPreMaster(ssl);
+    WC_FREE_VAR_EX(shaOutput, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    WC_FREE_VAR_EX(md5Input, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    WC_FREE_VAR_EX(shaInput, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    WC_FREE_VAR_EX(md5, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    WC_FREE_VAR_EX(sha, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+
+    CleanPreMaster(ssl);
 
     return ret;
 }
@@ -4113,4 +4163,4 @@ int MakeMasterSecret(WOLFSSL* ssl)
 #endif
 }
 
-#endif /* WOLFCRYPT_ONLY */
+#endif /* !WOLFCRYPT_ONLY && !NO_TLS */

@@ -15,7 +15,6 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 #endif
-#include <errno.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -24,7 +23,6 @@
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include <fcntl.h>
 #include <poll.h>
 #ifdef __clang__
 #pragma GCC diagnostic pop
@@ -33,9 +31,7 @@
 
 #include "Emu/NP/np_handler.h"
 #include "Emu/NP/np_helpers.h"
-#include "Emu/NP/np_dnshook.h"
-
-#include <chrono>
+#include "Emu/Cell/timers.hpp"
 #include <shared_mutex>
 
 #include "sys_net/network_context.h"
@@ -293,7 +289,7 @@ std::function<void(void*)> lv2_socket::load(utils::serial& ar)
 		sock_lv2->bind(sock_lv2->last_bound_addr);
 	}
 
-	return [ptr = sock_lv2](void* storage) { *static_cast<shared_ptr<lv2_socket>*>(storage) = ptr; };;
+	return [ptr = sock_lv2](void* storage) { *static_cast<atomic_ptr<lv2_socket>*>(storage) = ptr; };;
 }
 
 void lv2_socket::save(utils::serial& ar, bool save_only_this_class)
@@ -567,37 +563,34 @@ error_code sys_net_bnet_connect(ppu_thread& ppu, s32 s, vm::ptr<sys_net_sockaddr
 		return not_an_error(result);
 	}
 
-	if (!sock.ret)
+	while (auto state = ppu.state.fetch_sub(cpu_flag::signal))
 	{
-		while (auto state = ppu.state.fetch_sub(cpu_flag::signal))
+		if (is_stopped(state))
 		{
-			if (is_stopped(state))
-			{
-				return {};
-			}
-
-			if (state & cpu_flag::signal)
-			{
-				break;
-			}
-
-			ppu.state.wait(state);
+			return {};
 		}
 
-		if (ppu.gpr[3] == static_cast<u64>(-SYS_NET_EINTR))
+		if (state & cpu_flag::signal)
 		{
-			return -SYS_NET_EINTR;
+			break;
 		}
 
-		if (result)
-		{
-			if (result < 0)
-			{
-				return sys_net_error{result};
-			}
+		ppu.state.wait(state);
+	}
 
-			return not_an_error(result);
+	if (ppu.gpr[3] == static_cast<u64>(-SYS_NET_EINTR))
+	{
+		return -SYS_NET_EINTR;
+	}
+
+	if (result)
+	{
+		if (result < 0)
+		{
+			return sys_net_error{result};
 		}
+
+		return not_an_error(result);
 	}
 
 	return CELL_OK;
@@ -996,7 +989,7 @@ error_code sys_net_bnet_sendto(ppu_thread& ppu, s32 s, vm::cptr<void> buf, u32 l
 		fmt::throw_exception("sys_net_bnet_sendto(s=%d): unknown flags (0x%x)", flags);
 	}
 
-	if (addr && addrlen < 8)
+	if (addr && addrlen < sizeof(sys_net_sockaddr))
 	{
 		sys_net.error("sys_net_bnet_sendto(s=%d): bad addrlen (%u)", s, addrlen);
 		return -SYS_NET_EINVAL;
@@ -1299,7 +1292,7 @@ error_code sys_net_bnet_poll(ppu_thread& ppu, vm::ptr<sys_net_pollfd> fds, s32 n
 
 			if (auto sock = idm::check_unlocked<lv2_socket>(fds_buf[i].fd))
 			{
-				signaled += sock->poll(fds_buf[i], _fds[i]);
+				sock->poll(fds_buf[i], _fds[i]);
 #ifdef _WIN32
 				connecting[i] = sock->is_connecting();
 #endif
@@ -1307,7 +1300,6 @@ error_code sys_net_bnet_poll(ppu_thread& ppu, vm::ptr<sys_net_pollfd> fds, s32 n
 			else
 			{
 				fds_buf[i].revents |= SYS_NET_POLLNVAL;
-				signaled++;
 			}
 		}
 
@@ -1540,9 +1532,9 @@ error_code sys_net_bnet_select(ppu_thread& ppu, s32 nfds, vm::ptr<sys_net_fd_set
 		for (s32 i = 0; i < nfds; i++)
 		{
 			bool sig = false;
-			if (_fds[i].revents & (POLLIN | POLLHUP | POLLERR))
+			if ((_fds[i].revents & (POLLIN | POLLHUP | POLLERR)) && _readfds.bit(i))
 				sig = true, rread.set(i);
-			if (_fds[i].revents & (POLLOUT | POLLERR))
+			if ((_fds[i].revents & (POLLOUT | POLLERR)) && _writefds.bit(i))
 				sig = true, rwrite.set(i);
 
 			if (sig)

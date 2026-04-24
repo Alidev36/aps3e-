@@ -6,19 +6,26 @@ Tool for performing cryptographic algorithm benchmarking.
 
 * Symmetric algorithms like AES and ChaCha20 are measured in Killobytes (KB) or Megabytes (MB) per second.
 * Asymmetric algorithms like RSA and ECC are measured using Operations Per Second (Ops) per second.
+* When built with `--enable-memory --enable-trackmemory=verbose --enable-stacksize=verbose`, each result also reports peak heap bytes/allocations and peak stack bytes consumed during the timed run.
 
 ## Compile Options
 
 Compile with the following options for fixed units. Otherwise the units will auto-scale. See `-base10` parameter option, below.
 
-`-DWOLFSSL_BENCHMARK_FIXED_UNITS_GB` for GB/GiB  
-`-DWOLFSSL_BENCHMARK_FIXED_UNITS_MB` for MB/MiB  
-`-DWOLFSSL_BENCHMARK_FIXED_UNITS_KB` for KB/KiB  
+`-DWOLFSSL_BENCHMARK_FIXED_UNITS_GB` for GB/GiB
+`-DWOLFSSL_BENCHMARK_FIXED_UNITS_MB` for MB/MiB
+`-DWOLFSSL_BENCHMARK_FIXED_UNITS_KB` for KB/KiB
 `-DWOLFSSL_BENCHMARK_FIXED_UNITS_B` for Bytes
 
 To set the output to always be CSV:
 
 `-DWOLFSSL_BENCHMARK_FIXED_CSV`
+
+To track per-algorithm heap and stack usage in the output, configure wolfSSL with:
+
+```
+./configure --enable-memory --enable-trackmemory=verbose --enable-stacksize=verbose
+```
 
 ## Usage
 

@@ -78,6 +78,9 @@ CLEANFILES+= ecc-key.der \
              pkcs7encryptedDataDES3.der \
              pkcs7encryptedDataDES.der \
              pkcs7envelopedDataAES256CBC_ECDH.der \
+             cmake/wolfssl-config.cmake \
+             cmake/wolfssl-config-version.cmake \
+             cmake/wolfssl-targets.cmake \
              pkcs7envelopedDataAES128CBC_ECDH_SHA1KDF.der \
              pkcs7envelopedDataAES256CBC_ECDH_SHA256KDF.der \
              pkcs7envelopedDataAES256CBC_ECDH_SHA512KDF.der \
@@ -141,12 +144,14 @@ ACLOCAL_AMFLAGS= -I m4
 EXTRA_DIST+= .cyignore
 EXTRA_DIST+= wolfssl.vcproj
 EXTRA_DIST+= wolfssl.vcxproj
+EXTRA_DIST+= wolfssl-VS2022.vcxproj
 EXTRA_DIST+= wolfssl64.sln
 EXTRA_DIST+= valgrind-error.sh
 EXTRA_DIST+= valgrind-bash.supp
 EXTRA_DIST+= fips-hash.sh
 EXTRA_DIST+= gencertbuf.pl
 EXTRA_DIST+= README.md
+EXTRA_DIST+= README-async.md
 EXTRA_DIST+= README
 EXTRA_DIST+= ChangeLog.md
 EXTRA_DIST+= LICENSING
@@ -155,6 +160,8 @@ EXTRA_DIST+= LPCExpresso.cproject
 EXTRA_DIST+= LPCExpresso.project
 EXTRA_DIST+= resource.h wolfssl.rc
 EXTRA_DIST+= CMakeLists.txt
+EXTRA_DIST+= CMakePresets.json
+EXTRA_DIST+= CMakeSettings.json
 EXTRA_DIST+= m4/ax_atomic.m4
 
 include cmake/include.am
@@ -176,6 +183,7 @@ include sslSniffer/sslSnifferTest/include.am
 include debian/include.am
 include rpm/include.am
 include linuxkm/include.am
+include bsdkm/include.am
 include zephyr/include.am
 include RTOS/nuttx/include.am
 
@@ -207,18 +215,30 @@ if BUILD_LINUXKM
     SUBDIRS_OPT += linuxkm
     DIST_SUBDIRS_OPT += linuxkm
 
-    export KERNEL_ROOT KERNEL_ARCH KERNEL_EXTRA_CFLAGS \
+    export build_triplet host_triplet CC AS LD \
+        KERNEL_ROOT KERNEL_ARCH KERNEL_EXTRA_CFLAGS \
         EXTRA_CFLAGS EXTRA_CPPFLAGS EXTRA_CCASFLAGS EXTRA_LDFLAGS \
 	AM_CPPFLAGS CPPFLAGS AM_CFLAGS CFLAGS \
         AM_CCASFLAGS CCASFLAGS \
-        src_libwolfssl_la_OBJECTS ENABLED_CRYPT_TESTS ENABLED_LINUXKM_PIE ENABLED_ASM \
+        src_libwolfssl_la_OBJECTS ENABLED_CRYPT_TESTS ENABLED_LINUXKM_LKCAPI_REGISTER \
+        ENABLED_LINUXKM_PIE ENABLED_ASM \
         CFLAGS_FPU_DISABLE CFLAGS_FPU_ENABLE CFLAGS_SIMD_DISABLE CFLAGS_SIMD_ENABLE \
         CFLAGS_AUTO_VECTORIZE_DISABLE CFLAGS_AUTO_VECTORIZE_ENABLE \
         ASFLAGS_FPU_DISABLE_SIMD_ENABLE ASFLAGS_FPU_ENABLE_SIMD_DISABLE \
-        ASFLAGS_FPUSIMD_DISABLE ASFLAGS_FPUSIMD_ENABLE ENABLED_LINUXKM_BENCHMARKS
+        ASFLAGS_FPUSIMD_DISABLE ASFLAGS_FPUSIMD_ENABLE ENABLED_KERNEL_BENCHMARKS \
+        FIPS_FLAVOR
 
 module:
-	+$(MAKE) -C linuxkm libwolfssl.ko
+	+$(MAKE) -C linuxkm module
+
+module-update-fips-hash:
+	+$(MAKE) -C linuxkm module-update-fips-hash
+
+module-with-matching-fips-hash:
+	+$(MAKE) -C linuxkm module-with-matching-fips-hash
+
+module-with-matching-fips-hash-no-sign:
+	+$(MAKE) -C linuxkm module-with-matching-fips-hash-no-sign
 
 clean_module:
 	+$(MAKE) -C linuxkm clean
@@ -227,6 +247,21 @@ install_module modules_install:
 	+$(MAKE) -C linuxkm modules_install
 
 endif
+
+if BUILD_BSDKM
+    SUBDIRS_OPT += bsdkm
+    DIST_SUBDIRS_OPT += bsdkm
+
+.MAKE.EXPORTED = build_triplet host_triplet CC AS LD \
+        KERNEL_ROOT BSDKM_EXPORT_SYMS KERNEL_EXTRA_CFLAGS \
+        EXTRA_CFLAGS EXTRA_CPPFLAGS EXTRA_CCASFLAGS EXTRA_LDFLAGS \
+        AM_CPPFLAGS CPPFLAGS AM_CFLAGS CFLAGS \
+        AM_CCASFLAGS CCASFLAGS \
+        src_libwolfssl_la_OBJECTS ENABLED_CRYPT_TESTS ENABLED_BSDKM_REGISTER \
+        ENABLED_ASM ENABLED_INTELASM ENABLED_AESNI ENABLED_AESNI_WITH_AVX \
+        ENABLED_KERNEL_BENCHMARKS
+endif
+
 
 if USE_VALGRIND
 TESTS_ENVIRONMENT=./valgrind-error.sh

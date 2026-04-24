@@ -6,17 +6,17 @@
 #include "util/v128.hpp"
 #include "util/simd.hpp"
 
+#if !defined(_MSC_VER)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#endif
+
 #if defined(ARCH_ARM64)
 #if !defined(_MSC_VER)
 #pragma GCC diagnostic ignored "-Wstrict-aliasing"
 #endif
 #undef FORCE_INLINE
 #include "Emu/CPU/sse2neon.h"
-#endif
-
-#if !defined(_MSC_VER)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wold-style-cast"
 #endif
 
 #if defined(_MSC_VER) || !defined(__SSE2__)
@@ -176,15 +176,13 @@ namespace
 #endif
 }
 
-// Copy and swap data in 32-bit units
-extern void copy_data_swap_u32(u32* dst, const u32* src, u32 count){
-    return copy_data_swap_u32_naive<false>(dst, src, count);
-}
-
-// Copy and swap data in 32-bit units, return true if changed
-extern bool copy_data_swap_u32_cmp(u32* dst, const u32* src, u32 count){
-    return copy_data_swap_u32_naive<true>(dst, src, count);
-}
+#if defined(ARCH_X64)
+DECLARE(copy_data_swap_u32) = build_function_asm<void(*)(u32*, const u32*, u32), asmjit::simd_builder>("copy_data_swap_u32", &build_copy_data_swap_u32<false>);
+DECLARE(copy_data_swap_u32_cmp) = build_function_asm<bool(*)(u32*, const u32*, u32), asmjit::simd_builder>("copy_data_swap_u32_cmp", &build_copy_data_swap_u32<true>);
+#else
+DECLARE(copy_data_swap_u32) = copy_data_swap_u32_naive<false>;
+DECLARE(copy_data_swap_u32_cmp) = copy_data_swap_u32_naive<true>;
+#endif
 
 namespace
 {

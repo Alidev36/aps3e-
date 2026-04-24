@@ -3,123 +3,6 @@
 
 namespace gl
 {
-#ifdef USE_GLES
-	void ring_buffer::recreate(GLsizeiptr size, const void* data)
-	{
-		if (m_id)
-			remove();
-
-		buffer::create();
-		buffer::data(size, data, GL_DYNAMIC_DRAW);
-
-		m_memory_type = memory_type::host_visible;
-		m_memory_mapping = nullptr;
-		m_data_loc = 0;
-		m_size = ::narrow<u32>(size);
-	}
-
-	void ring_buffer::create(target target_, GLsizeiptr size, const void* data_)
-	{
-		m_target = target_;
-		recreate(size, data_);
-	}
-
-	void ring_buffer::reserve_storage_on_heap(u32 alloc_size)
-	{
-		ensure(m_memory_mapping == nullptr);
-
-		u32 offset = m_data_loc;
-		if (m_data_loc)
-			offset = utils::align(offset, 256);
-
-		const u32 block_size = utils::align(alloc_size + 16, 256); // Overallocate just in case we need to realign base
-
-		if ((offset + block_size) > m_size)
-		{
-			buffer::data(m_size, nullptr, GL_DYNAMIC_DRAW);
-			m_data_loc = 0;
-		}
-
-		glBindBuffer(GL_ARRAY_BUFFER, m_id);
-		m_memory_mapping = glMapBufferRange(GL_ARRAY_BUFFER, m_data_loc, block_size, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_RANGE_BIT | GL_MAP_UNSYNCHRONIZED_BIT);
-
-		m_mapped_bytes = block_size;
-		m_mapping_offset = m_data_loc;
-		m_alignment_offset = 0;
-
-		// When using debugging tools, the mapped base might not be aligned as expected
-		const u64 mapped_address_base = reinterpret_cast<u64>(m_memory_mapping);
-		if (mapped_address_base & 0xF)
-		{
-			// Unaligned result was returned. We have to modify the base address a bit
-			// We lose some memory here, but the 16 byte overallocation above makes up for it
-			const u64 new_base = (mapped_address_base & ~0xF) + 16;
-			const u64 diff_bytes = new_base - mapped_address_base;
-
-			m_memory_mapping = reinterpret_cast<void*>(new_base);
-			m_mapped_bytes -= ::narrow<u32>(diff_bytes);
-			m_alignment_offset = ::narrow<u32>(diff_bytes);
-		}
-
-		ensure(m_mapped_bytes >= alloc_size);
-	}
-
-	std::pair<void*, u32> ring_buffer::alloc_from_heap(u32 alloc_size, u16 alignment)
-	{
-		u32 offset = m_data_loc;
-		if (m_data_loc)
-			offset = utils::align(offset, alignment);
-
-		u32 padding = (offset - m_data_loc);
-		u32 real_size = utils::align(padding + alloc_size, alignment); // Ensures we leave the loc pointer aligned after we exit
-
-		if (real_size > m_mapped_bytes)
-		{
-			// Missed allocation. We take a performance hit on doing this.
-			// Overallocate slightly for the next allocation if requested size is too small
-			unmap();
-			reserve_storage_on_heap(std::max(real_size, 4096U));
-
-			offset = m_data_loc;
-			if (m_data_loc)
-				offset = utils::align(offset, alignment);
-
-			padding = (offset - m_data_loc);
-			real_size = utils::align(padding + alloc_size, alignment);
-		}
-
-		m_data_loc = offset + real_size;
-		m_mapped_bytes -= real_size;
-
-		u32 local_offset = (offset - m_mapping_offset);
-		return std::make_pair(static_cast<char*>(m_memory_mapping) + local_offset, offset + m_alignment_offset);
-	}
-
-	void ring_buffer::remove()
-	{
-		if (m_memory_mapping)
-		{
-			buffer::unmap();
-
-			m_memory_mapping = nullptr;
-			m_data_loc = 0;
-			m_size = 0;
-		}
-
-		buffer::remove();
-		m_mapped_bytes = 0;
-	}
-
-	void ring_buffer::unmap()
-	{
-		buffer::unmap();
-
-		m_memory_mapping = nullptr;
-		m_mapped_bytes = 0;
-		m_mapping_offset = 0;
-	}
-
-	#else
 	void ring_buffer::recreate(GLsizeiptr size, const void* data)
 	{
 		if (m_id)
@@ -233,7 +116,6 @@ namespace gl
 		}
 
 		m_memory_mapping = DSA_CALL2_RET(MapNamedBufferRange, m_id, m_data_loc, block_size, GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_RANGE_BIT | GL_MAP_UNSYNCHRONIZED_BIT);
-
 		m_mapped_bytes = block_size;
 		m_mapping_offset = m_data_loc;
 		m_alignment_offset = 0;
@@ -305,9 +187,7 @@ namespace gl
 		flush();
 
 		dirty = true;
-
 		return DSA_CALL2_RET(MapNamedBufferRange, m_id, offset, length, GL_MAP_WRITE_BIT | GL_MAP_UNSYNCHRONIZED_BIT);
-
 	}
 
 	void transient_ring_buffer::bind()
@@ -326,7 +206,6 @@ namespace gl
 
 		buffer::create();
 		save_binding_state save(current_target(), *this);
-
 		DSA_CALL2(NamedBufferStorage, m_id, size, data, GL_MAP_WRITE_BIT);
 
 		m_data_loc = 0;
@@ -354,7 +233,7 @@ namespace gl
 	{
 		flush();
 	}
-	#endif
+
 	scratch_ring_buffer::~scratch_ring_buffer()
 	{
 		if (m_storage)
@@ -401,7 +280,7 @@ namespace gl
 
 	void scratch_ring_buffer::pop_barrier(u32 start, u32 length)
 	{
-		const auto range = utils::address_range::start_length(start, length);
+		const auto range = utils::address_range32::start_length(start, length);
 		m_barriers.erase(std::remove_if(m_barriers.begin(), m_barriers.end(), [&range](auto& barrier_)
 		{
 			if (barrier_.range.overlaps(range))
@@ -423,7 +302,7 @@ namespace gl
 		}
 
 		barrier barrier_;
-		barrier_.range = utils::address_range::start_length(start, length);
+		barrier_.range = utils::address_range32::start_length(start, length);
 		barrier_.signal.create();
 		m_barriers.emplace_back(barrier_);
 	}

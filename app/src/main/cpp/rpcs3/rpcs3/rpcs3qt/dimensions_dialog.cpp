@@ -3,10 +3,6 @@
 #include "dimensions_dialog.h"
 #include "Emu/Io/Dimensions.h"
 
-#include "util/asm.hpp"
-
-#include <locale>
-
 #include <QLabel>
 #include <QGroupBox>
 #include <QFileDialog>
@@ -437,7 +433,7 @@ minifig_creator_dialog::minifig_creator_dialog(QWidget* parent)
 
 	setLayout(vbox_panel);
 
-	connect(combo_figlist, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](int index)
+	connect(combo_figlist, &QComboBox::currentIndexChanged, [=](int index)
 		{
 			const u16 fig_info = combo_figlist->itemData(index).toUInt();
 			if (fig_info != 0xFFFF)
@@ -490,7 +486,7 @@ minifig_creator_dialog::minifig_creator_dialog(QWidget* parent)
 
 	connect(btn_cancel, &QAbstractButton::clicked, this, &QDialog::reject);
 
-	connect(co_compl, QOverload<const QString&>::of(&QCompleter::activated), [=](const QString& text)
+	connect(co_compl, qOverload<const QString&>(&QCompleter::activated), [=](const QString& text)
 		{
 			combo_figlist->setCurrentIndex(combo_figlist->findText(text));
 		});
@@ -724,6 +720,7 @@ void dimensions_dialog::move_figure(u8 pad, u8 index)
 {
 	ensure(index < figure_slots.size());
 	minifig_move_dialog move_dlg(this, index);
+	g_dimensionstoypad.temp_remove(index);
 	if (move_dlg.exec() == Accepted)
 	{
 		g_dimensionstoypad.move_figure(move_dlg.get_new_pad(), move_dlg.get_new_index(), pad, index);
@@ -734,6 +731,10 @@ void dimensions_dialog::move_figure(u8 pad, u8 index)
 			figure_slots[index] = std::nullopt;
 			m_edit_figures[index]->setText(tr("None"));
 		}
+	}
+	else
+	{
+		g_dimensionstoypad.cancel_remove(index);
 	}
 }
 
@@ -772,7 +773,7 @@ void dimensions_dialog::load_figure_path(u8 pad, u8 index, const QString& path)
 		}
 		else
 		{
-			m_edit_figures[index]->setText(tr("Blank Tag"));
+			m_edit_figures[index]->setText("Blank Tag");
 		}
 	}
 }

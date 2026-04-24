@@ -51,15 +51,17 @@ jobs:
             matrix: macos
             emoji: 🍎
             runs-on:
-              arm: [macos-14]
-              intel: [macos-latest]
+              arm: [macos-latest]
+              intel: [macos-13]
+              universal2: [macos-13]
             macosx-deployment-target:
-              arm: 11.0
-              intel: 10.14
+              arm: 13.0
+              intel: 13.00
+              universal2: 13.0
             cibw-archs:
-              # TODO: do we need universal2?
               arm: arm64
               intel: x86_64
+              universal2: universal2
           - name: Linux
             file-name: linux
             matrix: linux
@@ -79,18 +81,6 @@ jobs:
             cibw-archs:
               intel: x86_64
         python:
-          - major-dot-minor: '3.7'
-            cibw-build: 'cp37-*'
-            manylinux:
-              arm: manylinux2014
-              intel: manylinux2010
-            matrix: '3.7'
-          - major-dot-minor: '3.8'
-            cibw-build: 'cp38-*'
-            manylinux:
-              arm: manylinux2014
-              intel: manylinux2010
-            matrix: '3.8'
           - major-dot-minor: '3.9'
             cibw-build: 'cp39-*'
             manylinux:
@@ -115,16 +105,31 @@ jobs:
               arm: manylinux2014
               intel: manylinux2014
             matrix: '3.12'
+          - major-dot-minor: '3.13'
+            cibw-build: 'cp313-*'
+            manylinux:
+              arm: manylinux2014
+              intel: manylinux2014
+            matrix: '3.13'
         arch:
           - name: ARM
             file-name: arm
             matrix: arm
-            cibw: aarch64
           - name: Intel
             file-name: intel
             matrix: intel
-            cibw: x86_64
+          - name: Universal2
+            file-name: universal2
+            matrix: universal2
         exclude:
+          - os:
+              matrix: linux
+            arch:
+              matrix: universal2
+          - os:
+              matrix: windows
+            arch:
+              matrix: universal2
           - os:  # excluding windows entirely as that is presently handled in AppVeyor
               matrix: windows
           - os:
@@ -135,6 +140,12 @@ jobs:
               matrix: macos
             arch:
               matrix: arm
+            python:
+              matrix: '3.7'
+          - os:
+              matrix: macos
+            arch:
+              matrix: universal2
             python:
               matrix: '3.7'
           - os:
@@ -191,7 +202,7 @@ jobs:
       - name: Build and test
         if: matrix.os.matrix != 'windows'
         run: |
-          pip install 'cibuildwheel==2.13.1; python_version < "3.8"' 'cibuildwheel==2.16.5; python_version >= "3.8"'
+          pip install cibuildwheel==2.23.0
           cibuildwheel source --output-dir dist
 
       - name: Build (Windows)
@@ -205,6 +216,11 @@ jobs:
           mkdir ../dist
           cp dist/*.whl ../dist
 
+      - name: check wheel
+        run: |
+          python -m pip install twine
+          twine check dist/*
+        
       - uses: ./cloned/.github/actions/create-venv
         id: create-test-venv
 
@@ -228,3 +244,30 @@ jobs:
           name: wheel-${{ env.FILE_NAME }}
           path: ./dist
           if-no-files-found: error
+
+  upload:
+    name: 🚀 Upload
+    runs-on: ubuntu-latest
+    environment: pypi
+    needs: build
+
+    steps:
+      - name: Download results
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          pattern: wheel-*
+          path: dist/
+
+      - name: List artifacts
+        run: |
+          ls -la dist/
+
+      - name: Publish to PyPI
+        if: startsWith(github.ref, 'refs/tags')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          print-hash: true
+          skip-existing: true
+          verbose: true

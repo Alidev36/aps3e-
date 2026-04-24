@@ -177,7 +177,7 @@ Note str_to_note(const std::string_view name)
 
 std::optional<std::pair<Id, Note>> parse_midi_override(const std::string_view config)
 {
-	auto split = fmt::split(config, {"="});
+	const auto split = fmt::split_sv(config, {"="});
 	if (split.size() != 2)
 	{
 		return {};
@@ -236,8 +236,9 @@ std::unordered_map<Id, Note> create_id_to_note_mapping()
 	};
 
 	// Apply configured overrides.
-	const std::vector<std::string> segments = fmt::split(g_cfg_rb3drums.midi_overrides.to_string(), {","});
-	for (const std::string& segment : segments)
+	const std::string midi_overrides = g_cfg_rb3drums.midi_overrides.to_string();
+	const std::vector<std::string_view> segments = fmt::split_sv(midi_overrides, {","});
+	for (const std::string_view& segment : segments)
 	{
 		if (const auto midi_override = parse_midi_override(segment))
 		{
@@ -259,7 +260,7 @@ std::vector<u8> parse_combo(const std::string_view name, const std::string_view 
 		return {};
 	}
 	std::vector<u8> notes;
-	const auto& note_names = fmt::split(csv, {","});
+	const auto note_names = fmt::split_sv(csv, {","});
 	for (const auto& note_name : note_names)
 	{
 		const auto note = str_to_note(note_name);
@@ -413,7 +414,7 @@ usb_device_rb3_midi_drums::usb_device_rb3_midi_drums(const std::array<u8, 7>& lo
 
 usb_device_rb3_midi_drums::~usb_device_rb3_midi_drums()
 {
-	
+
 #if !defined(__ANDROID__)
 	rtmidi_in_free(midi_in);
 #endif
@@ -539,7 +540,7 @@ void usb_device_rb3_midi_drums::interrupt_transfer(u32 buf_size, u8* buf, u32 /*
 
 		// This returns a double as some sort of delta time, with -1.0
 		// being used to signal an error.
-		
+
 #if !defined(__ANDROID__)
 		if (rtmidi_in_get_message(midi_in, midi_msg, &size) == -1.0)
 		{

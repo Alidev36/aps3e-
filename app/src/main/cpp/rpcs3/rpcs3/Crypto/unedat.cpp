@@ -4,13 +4,11 @@
 #include "sha1.h"
 #include "lz.h"
 #include "ec.h"
+#include "utils.h"
 
-#include "Utilities/mutex.h"
 #include "Emu/system_utils.hpp"
-#include <cmath>
 
 #include "util/asm.hpp"
-
 #include <algorithm>
 #include <span>
 
@@ -676,7 +674,7 @@ u128 GetEdatRifKeyFromRapFile(const fs::file& rap_file)
 
 	rap_file.read<u128>(rapkey);
 
-	rap_to_rif(reinterpret_cast<uchar*>(&rapkey), reinterpret_cast<uchar*>(&rifkey));
+	rap_to_rif(reinterpret_cast<const uchar*>(&rapkey), reinterpret_cast<uchar*>(&rifkey));
 
 	return rifkey;
 }
@@ -711,12 +709,9 @@ bool VerifyEDATHeaderWithKLicense(const fs::file& input, const std::string& inpu
 		return false;
 	}
 
-	std::string_view sv{NPD.content_id, std::size(NPD.content_id)};
-	sv = sv.substr(0, sv.find_first_of('\0'));
-
 	if (npd_out)
 	{
-		memcpy(npd_out, &NPD, sizeof(NPD_HEADER));
+		*npd_out = NPD;
 	}
 
 	return true;

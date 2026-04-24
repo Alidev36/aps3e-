@@ -99,11 +99,35 @@ namespace ae{
         pthread_mutex_lock(&key_event_mutex);
         {
             auto* pad_thr=g_fxo->try_get<named_thread<pad_thread>>();
-            if(pad_thr){
-                auto xx=pad_thr->get_handlers().at(pad_handler::keyboard);
-                std::shared_ptr<AndroidVirtualPadHandler> padh=std::dynamic_pointer_cast<AndroidVirtualPadHandler>(xx);
-                padh->Key(static_cast<u32>(key_code), static_cast<bool>(pressed),value);
+            if(!pad_thr){
+                LOGW("key_event: pad_thread not initialized");
+                pthread_mutex_unlock(&key_event_mutex);
+                return;
             }
+            
+            auto handlers = pad_thr->get_handlers();
+            auto it = handlers.find(pad_handler::keyboard);
+            if(it == handlers.end()){
+                LOGW("key_event: keyboard handler not found");
+                pthread_mutex_unlock(&key_event_mutex);
+                return;
+            }
+            
+            auto xx = it->second;
+            if(!xx){
+                LOGW("key_event: keyboard handler is null");
+                pthread_mutex_unlock(&key_event_mutex);
+                return;
+            }
+            
+            std::shared_ptr<AndroidVirtualPadHandler> padh = std::dynamic_pointer_cast<AndroidVirtualPadHandler>(xx);
+            if(!padh){
+                LOGW("key_event: failed to cast to AndroidVirtualPadHandler");
+                pthread_mutex_unlock(&key_event_mutex);
+                return;
+            }
+            
+            padh->Key(static_cast<u32>(key_code), static_cast<bool>(pressed), value);
         }
         pthread_mutex_unlock(&key_event_mutex);
     }
@@ -281,7 +305,7 @@ namespace ae{
         {
             PRE("on_install_pkgs");
             bool result=true;
-            if(pkgs[0][0]==':') {
+            /*if(pkgs[0][0]==':') {
                 for(const auto& pkg : pkgs){
                     if(!ae::install_pkg(*Emu.GetIsoFs(),pkg)){
                         result=false;
@@ -295,7 +319,7 @@ namespace ae{
                         result=false;
                     }
                 }
-            }
+            }*/
             return result;
         };
 
@@ -347,6 +371,10 @@ namespace ae{
                     break;
                 }
             }
+        };
+
+        callbacks.close_gs_frame=[]() {
+            PRE("close_gs_frame");
         };
 
         callbacks.get_camera_handler = []() -> std::shared_ptr<camera_handler_base>
@@ -438,14 +466,40 @@ namespace ae{
         /*callbacks.get_localized_u32string = [](localized_string_id, const char*) -> std::u32string {
             PRE("get_localized_u32string");
             return {}; };*/
+        callbacks.get_localized_setting=[](const cfg::_base* setting, u32 index) -> std::string {
+            PRE("get_localized_setting");
+            return "";
+        };
 
-        callbacks.play_sound = [](const std::string&){
+        callbacks.get_photo_path = [](std::string_view path) -> std::string {
+            PRE("get_photo_path");
+            return "";
+        };
+
+        callbacks.play_sound = [](const std::string&, std::optional<f32>){
             PRE("play_sound");
 
         };
         callbacks.add_breakpoint = [](u32 /*addr*/){
             PRE("add_breakpoint");
 
+        };
+        callbacks.display_sleep_control_supported = []() -> bool {
+            PRE("display_sleep_control_supported");
+            return false;
+        };
+        callbacks.enable_display_sleep = [](bool) {
+            PRE("enable_display_sleep");
+        };
+        callbacks.check_microphone_permissions = []() {
+            PRE("check_microphone_permissions");
+        };
+        callbacks.make_video_source = []() -> std::unique_ptr<video_source> {
+            PRE("make_video_source");
+            return std::make_unique<dummy_video_source>();
+        };
+        callbacks.enable_gamemode = [](bool) {
+            PRE("enable_gamemode");
         };
 
         return callbacks;
@@ -516,7 +570,7 @@ namespace ae{
 
             aps3e_log.warning("iso_fd: %d",boot_game_fd);
             const game_boot_result error =boot_type==BOOT_TYPE_WITH_PATH? Emu.BootGame(boot_game_path, game_id, true, config_mode, config_path?:"")
-                                                             :Emu.BootISO(":PS3_GAME/USRDIR/EBOOT.BIN",game_id,boot_game_fd,config_mode, config_path?:"");
+                                                             :Emu.BootISO("",game_id,boot_game_fd,config_mode, config_path?:"");
             LOGW("game_boot_result %d",error);
             return error==game_boot_result::no_errors;
         }//);
@@ -526,7 +580,7 @@ namespace ae{
     //util
 
     bool install_firmware(int fd){
-        fs::file pup_f=fs::file::from_fd(fd);
+        fs::file pup_f=fs::file::from_native_handle(fd);
         if (!pup_f)
         {
             //LOGE("Error opening PUP file %s (%s)", path);
@@ -697,7 +751,7 @@ namespace ae{
         LOGW("install_firmware ok");
         return true;
     }
-
+#if 0
     bool install_pkg(iso_fs& iso_fs, const std::string& path){
 
         std::deque<package_reader> readers;
@@ -709,7 +763,7 @@ namespace ae{
         LOGW("install_pkg %d %s %s",result.error,result.version.expected.c_str(),result.version.found.c_str());
         return result.error == package_install_result::error_type::no_error;
     }
-
+#endif
     bool install_pkg(const char* path){
         std::deque<package_reader> readers;
         readers.emplace_back(std::string(path));
@@ -723,13 +777,14 @@ namespace ae{
     }
     bool install_pkg(int pkg_fd){
         std::deque<package_reader> readers;
-        readers.emplace_back(fs::file::from_fd(pkg_fd));
+        readers.emplace_back("a.pkg",fs::file::from_native_handle(pkg_fd));
 
         std::deque<std::string> bootable_paths;
 
         package_install_result result = package_reader::extract_data(readers, bootable_paths);
         LOGW("install_pkg %d %s %s",result.error,result.version.expected.c_str(),result.version.found.c_str());
         return result.error == package_install_result::error_type::no_error;
+        return true;
 
     }
 
@@ -801,14 +856,15 @@ namespace ae{
     bool precompile_ppu_cache(const std::string& path,std::optional<int> fd) {
 
         //setenv("APS3E_ENABLE_LOG","true",1);
-        ae::init();
+        /*ae::init();
         EmuCallbacks cbs=Emu.GetCallbacks();
 
         cbs.get_msg_dialog=[]()->std::shared_ptr<class MsgDialogBase>{
             return std::make_shared<NotifyMsg>();
         };
         Emu.SetCallbacks(std::move(cbs));
-        return Emu.PrecompilePPUCache(path, fd);
+        return Emu.PrecompilePPUCache(path, fd);*/
+        return true;
     }
 
     std::pair<std::string,bool> vk_lib_info(){

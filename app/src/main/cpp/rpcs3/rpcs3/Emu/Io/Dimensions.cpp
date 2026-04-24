@@ -2,11 +2,6 @@
 #include "Dimensions.h"
 
 #include <bit>
-#include <thread>
-
-#include "Crypto/aes.h"
-#include "Crypto/sha1.h"
-#include "util/asm.hpp"
 
 #include "Emu/Cell/lv2/sys_usbd.h"
 
@@ -222,7 +217,7 @@ u32 dimensions_toypad::scramble(const std::array<u8, 7>& uid, u8 count)
 	return read_from_ptr<be_t<u32>>(dimensions_randomize(to_scramble, count).data());
 }
 
-std::array<u8, 4> dimensions_toypad::dimensions_randomize(const std::vector<u8> key, u8 count)
+std::array<u8, 4> dimensions_toypad::dimensions_randomize(const std::vector<u8>& key, u8 count)
 {
 	u32 scrambled = 0;
 	for (u8 i = 0; i < count; i++)
@@ -259,9 +254,9 @@ dimensions_figure& dimensions_toypad::get_figure_by_index(u8 index)
 void dimensions_toypad::random_uid(u8* uid_buffer)
 {
 	uid_buffer[0] = 0x04;
-	uid_buffer[6] = 0x80;
+	uid_buffer[7] = 0x80;
 
-	for (u8 i = 1; i < 6; i++)
+	for (u8 i = 1; i < 7; i++)
 	{
 		u8 random = rand() % 255;
 		uid_buffer[i] = random;
@@ -384,10 +379,10 @@ u32 dimensions_toypad::load_figure(const std::array<u8, 0x2D * 0x04>& buf, fs::f
 	std::memcpy(figure.data.data(), buf.data(), buf.size());
 	// When a figure is added to the toypad, respond to the game with the pad they were added to, their index,
 	// the direction (0x00 in byte 6 for added) and their UID
-	std::array<u8, 32> figure_change_response = {0x56, 0x0b, figure.pad, 0x00, figure.index, 0x00};
-	std::memcpy(&figure_change_response[6], buf.data(), 7);
+	std::array<u8, 32> figure_change_response = {0x56, 0x0b, figure.pad, 0x00, figure.index, 0x00,
+		buf[0], buf[1], buf[2], buf[4], buf[5], buf[6], buf[7]};
 	figure_change_response[13] = generate_checksum(figure_change_response, 13);
-	m_figure_added_removed_responses.push(figure_change_response);
+	m_figure_added_removed_responses.push(std::move(figure_change_response));
 
 	if (lock)
 	{
@@ -396,7 +391,7 @@ u32 dimensions_toypad::load_figure(const std::array<u8, 0x2D * 0x04>& buf, fs::f
 	return id;
 }
 
-bool dimensions_toypad::remove_figure(u8 pad, u8 index, bool save, bool lock)
+bool dimensions_toypad::remove_figure(u8 pad, u8 index, bool full_remove, bool lock)
 {
 	dimensions_figure& figure = get_figure_by_index(index);
 	if (figure.index == 255)
@@ -411,17 +406,20 @@ bool dimensions_toypad::remove_figure(u8 pad, u8 index, bool save, bool lock)
 
 	// When a figure is removed from the toypad, respond to the game with the pad they were removed from, their index,
 	// the direction (0x01 in byte 6 for removed) and their UID
-	std::array<u8, 32> figure_change_response = {0x56, 0x0b, pad, 0x00, figure.index, 0x01};
-	std::memcpy(&figure_change_response[6], figure.data.data(), 7);
-	if (save)
+	if (full_remove)
 	{
+		std::array<u8, 32> figure_change_response = {0x56, 0x0b, pad, 0x00, figure.index, 0x01,
+			figure.data[0], figure.data[1], figure.data[2],
+			figure.data[4], figure.data[5], figure.data[6], figure.data[7]};
+		figure_change_response[13] = generate_checksum(figure_change_response, 13);
+		m_figure_added_removed_responses.push(std::move(figure_change_response));
 		figure.save();
 		figure.dim_file.close();
 	}
+
 	figure.index = 255;
 	figure.pad = 255;
-	figure_change_response[13] = generate_checksum(figure_change_response, 13);
-	m_figure_added_removed_responses.push(figure_change_response);
+	figure.id = 0;
 
 	if (lock)
 	{
@@ -430,22 +428,55 @@ bool dimensions_toypad::remove_figure(u8 pad, u8 index, bool save, bool lock)
 	return true;
 }
 
-bool dimensions_toypad::move_figure(u8 pad, u8 index, u8 old_pad, u8 old_index)
+bool dimensions_toypad::temp_remove(u8 index)
 {
 	std::lock_guard lock(m_dimensions_mutex);
 
+	const dimensions_figure& figure = get_figure_by_index(index);
+	if (figure.index == 255)
+		return false;
+
+	// Send a response to the game that the figure has been "Picked up" from existing slot,
+	// until either the movement is cancelled, or user chooses a space to move to
+	std::array<u8, 32> figure_change_response = {0x56, 0x0b, figure.pad, 0x00, figure.index, 0x01,
+		figure.data[0], figure.data[1], figure.data[2],
+		figure.data[4], figure.data[5], figure.data[6], figure.data[7]};
+
+	figure_change_response[13] = generate_checksum(figure_change_response, 13);
+	m_figure_added_removed_responses.push(std::move(figure_change_response));
+
+	return true;
+}
+
+bool dimensions_toypad::cancel_remove(u8 index)
+{
+	std::lock_guard lock(m_dimensions_mutex);
+
+	dimensions_figure& figure = get_figure_by_index(index);
+	if (figure.index == 255)
+		return false;
+
+	// Cancel the previous movement of the figure
+	std::array<u8, 32> figure_change_response = {0x56, 0x0b, figure.pad, 0x00, figure.index, 0x00,
+		figure.data[0], figure.data[1], figure.data[2],
+		figure.data[4], figure.data[5], figure.data[6], figure.data[7]};
+
+	figure_change_response[13] = generate_checksum(figure_change_response, 13);
+	m_figure_added_removed_responses.push(std::move(figure_change_response));
+
+	return true;
+}
+
+bool dimensions_toypad::move_figure(u8 pad, u8 index, u8 old_pad, u8 old_index)
+{
 	if (old_index == index)
 	{
 		// Don't bother removing and loading again, just send response to the game
-		const dimensions_figure& figure = get_figure_by_index(old_index);
-		std::array<u8, 32> figure_remove_response = {0x56, 0x0b, pad, 0x00, figure.index, 0x01};
-		figure_remove_response[13] = generate_checksum(figure_remove_response, 13);
-		std::array<u8, 32> figure_add_response = {0x56, 0x0b, pad, 0x00, figure.index, 0x00};
-		figure_add_response[13] = generate_checksum(figure_add_response, 13);
-		m_figure_added_removed_responses.push(std::move(figure_remove_response));
-		m_figure_added_removed_responses.push(std::move(figure_add_response));
+		cancel_remove(index);
 		return true;
 	}
+
+	std::lock_guard lock(m_dimensions_mutex);
 
 	// When moving figures between spaces on the toypad, remove any figure from the space they are moving to,
 	// then remove them from their current space, then load them to the space they are moving to
@@ -465,14 +496,16 @@ bool dimensions_toypad::move_figure(u8 pad, u8 index, u8 old_pad, u8 old_index)
 bool dimensions_toypad::create_blank_character(std::array<u8, 0x2D * 0x04>& buf, u16 id)
 {
 	random_uid(buf.data());
-	buf[7] = id & 0xFF;
-	std::array<u8, 7> uid = {buf[0], buf[1], buf[2], buf[4], buf[5], buf[6], buf[7]};
+	buf[3] = id & 0xFF;
 
 	// Only characters are created with their ID encrypted and stored in pages 36 and 37,
 	// as well as a password stored in page 43. Blank tags have their information populated
 	// by the game when it calls the write_block command.
 	if (id != 0)
 	{
+		// LEGO Dimensions figures use NTAG213 tag types, and the UID for these is stored in
+		// bytes 0, 1, 2, 4, 5, 6 and 7 (out of 180 bytes)
+		std::array<u8, 7> uid = {buf[0], buf[1], buf[2], buf[4], buf[5], buf[6], buf[7]};
 		const std::array<u8, 16> figure_key = generate_figure_key(buf);
 
 		std::array<u8, 8> value_to_encrypt = {};
@@ -511,9 +544,7 @@ std::optional<std::array<u8, 32>> dimensions_toypad::pop_added_removed_response(
 	std::lock_guard lock(m_dimensions_mutex);
 
 	if (m_figure_added_removed_responses.empty())
-	{
 		return std::nullopt;
-	}
 
 	std::array<u8, 32> response = m_figure_added_removed_responses.front();
 	m_figure_added_removed_responses.pop();
@@ -535,6 +566,16 @@ usb_device_dimensions::~usb_device_dimensions()
 {
 }
 
+std::shared_ptr<usb_device> usb_device_dimensions::make_instance(u32, const std::array<u8, 7>& location)
+{
+	return std::make_shared<usb_device_dimensions>(location);
+}
+
+u16 usb_device_dimensions::get_num_emu_devices()
+{
+	return 1;
+}
+
 void usb_device_dimensions::control_transfer(u8 bmRequestType, u8 bRequest, u16 wValue, u16 wIndex, u16 wLength, u32 buf_size, u8* buf, UsbTransfer* transfer)
 {
 	usb_device_emulated::control_transfer(bmRequestType, bRequest, wValue, wIndex, wLength, buf_size, buf, transfer);
@@ -554,7 +595,6 @@ void usb_device_dimensions::interrupt_transfer(u32 buf_size, u8* buf, u32 endpoi
 	{
 		// Read Endpoint, if a request has not been sent via the write endpoint, set expected result as
 		// EHCI_CC_HALTED so the game doesn't report the Toypad as being disconnected.
-		std::lock_guard lock(m_query_mutex);
 		std::optional<std::array<u8, 32>> response = g_dimensionstoypad.pop_added_removed_response();
 		if (response)
 		{
@@ -653,16 +693,10 @@ void usb_device_dimensions::interrupt_transfer(u32 buf_size, u8* buf, u32 endpoi
 			break;
 		}
 		}
-		std::lock_guard lock(m_query_mutex);
 		m_queries.push(q_result);
 		break;
 	}
 	default:
 		break;
 	}
-}
-
-void usb_device_dimensions::isochronous_transfer(UsbTransfer* transfer)
-{
-	usb_device_emulated::isochronous_transfer(transfer);
 }

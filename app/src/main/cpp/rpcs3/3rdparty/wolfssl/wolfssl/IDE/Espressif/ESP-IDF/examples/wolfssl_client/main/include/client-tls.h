@@ -1,12 +1,12 @@
 /* client-tls.h
  *
- * Copyright (C) 2006-2024 wolfSSL Inc.
+ * Copyright (C) 2006-2026 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
  * wolfSSL is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * wolfSSL is distributed in the hope that it will be useful,
@@ -21,17 +21,32 @@
 #ifndef _CLIENT_TLS_H_
 #define _CLIENT_TLS_H_
 
-/* Local project, auto-generated configuration */
-#include "sdkconfig.h"
+/* This example uses wolfssl test certificates */
+#if 1
+    /* See wolfssl/certs_test.h */
+    #if defined(CONFIG_IDF_TARGET_ESP32C2) || \
+        defined(CONFIG_IDF_TARGET_ESP8684) || \
+        defined(CONFIG_IDF_TARGET_ESP8266)
+        /* Use smaller certs for low-memory devices */
+        #define USE_CERT_BUFFERS_1024
+    #else
+        #define USE_CERT_BUFFERS_2048
+    #endif
+
+    /* always include smallest testing 32 byte RSA/ECC keys */
+    #define USE_CERT_BUFFERS_256
+#else
+    /* define your own certificate macros; see user_settings.h */
+#endif
 
 #include <wolfssl/wolfcrypt/settings.h>
 #include <wolfssl/ssl.h>
 
 /* See main/Kconfig.projbuild for default configuration settings */
 #ifdef CONFIG_WOLFSSL_TARGET_HOST
-    #define TLS_SMP_TARGET_HOST         "192.168.1.36"
+    #define TLS_SMP_TARGET_HOST         CONFIG_WOLFSSL_TARGET_HOST
 #else
-    #define TLS_SMP_TARGET_HOST         "192.168.1.41"
+    #define TLS_SMP_TARGET_HOST         "192.168.1.37"
 #endif
 
 #ifdef CONFIG_WOLFSSL_TARGET_PORT
@@ -44,7 +59,7 @@
 
 /* Reminder: Vanilla FreeRTOS is words, Espressif is bytes. */
 #if defined(WOLFSSL_ESP8266)
-    #if defined(WOLFSSL_HAVE_KYBER)
+    #if defined(WOLFSSL_HAVE_MLKEM)
         /* Minimum ESP8266 stack size = 10K with Kyber.
          * Note there's a maximum not far away as Kyber needs heap
          * and the total DRAM is typically only 80KB total. */
@@ -54,12 +69,12 @@
         #define TLS_SMP_CLIENT_TASK_BYTES (6 * 1024)
     #endif
 #else
-    #if defined(WOLFSSL_HAVE_KYBER)
+    #if defined(WOLFSSL_HAVE_MLKEM)
         /* Minimum ESP32 stack size = 12K with Kyber enabled. */
         #define TLS_SMP_CLIENT_TASK_BYTES (12 * 1024)
     #else
         /* Minimum ESP32 stack size = 8K without Kyber */
-        #define TLS_SMP_CLIENT_TASK_BYTES (8 * 1024)
+        #define TLS_SMP_CLIENT_TASK_BYTES (10 * 1024)
     #endif
 #endif
 
@@ -87,7 +102,7 @@ WOLFSSL_ESP_TASK tls_smp_client_task(void* args);
 
 /* init will create an RTOS task, otherwise server is simply function call. */
 #if defined(SINGLE_THREADED)
-    /* no init neded */
+    /* no init needed */
 #else
     WOLFSSL_ESP_TASK tls_smp_client_init(void* args);
 #endif

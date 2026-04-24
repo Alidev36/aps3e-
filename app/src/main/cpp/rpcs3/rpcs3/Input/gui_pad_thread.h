@@ -6,8 +6,7 @@
 #include "Emu/Io/pad_config.h"
 #include "Emu/Io/pad_config_types.h"
 #include "Utilities/Timer.h"
-
-#include <thread>
+#include "Utilities/Thread.h"
 
 class PadHandlerBase;
 class gui_settings;
@@ -20,14 +19,13 @@ public:
 
 	void update_settings(const std::shared_ptr<gui_settings>& settings);
 
-	static std::shared_ptr<PadHandlerBase> GetHandler(pad_handler type);
-	static void InitPadConfig(cfg_pad& cfg, pad_handler type, std::shared_ptr<PadHandlerBase>& handler);
+	static std::shared_ptr<PadHandlerBase> get_handler(pad_handler type);
+	static void init_pad_config(cfg_pad& cfg, pad_handler type, std::shared_ptr<PadHandlerBase>& handler);
 
-protected:
-	bool init();
-	void run();
-
-	void process_input();
+	static void reset()
+	{
+		m_reset = true;
+	}
 
 	enum class mouse_button
 	{
@@ -44,6 +42,12 @@ protected:
 		horizontal
 	};
 
+protected:
+	bool init();
+	void run();
+
+	void process_input();
+
 	void send_key_event(u32 key, bool pressed);
 	void send_mouse_button_event(mouse_button btn, bool pressed);
 	void send_mouse_wheel_event(mouse_wheel wheel, int delta);
@@ -57,11 +61,11 @@ protected:
 	std::shared_ptr<PadHandlerBase> m_handler;
 	std::shared_ptr<Pad> m_pad;
 
-	std::unique_ptr<std::thread> m_thread;
-	atomic_t<bool> m_terminate = false;
+	std::unique_ptr<named_thread<std::function<void()>>> m_thread;
 	atomic_t<bool> m_allow_global_input = false;
+	static atomic_t<bool> m_reset;
 
-	std::array<bool, static_cast<u32>(pad_button::pad_button_max_enum)> m_last_button_state{};
+	std::map<pad_button, bool> m_last_button_state{};
 
 	steady_clock::time_point m_timestamp;
 	steady_clock::time_point m_initial_timestamp;
@@ -69,7 +73,7 @@ protected:
 
 	static constexpr u64 auto_repeat_ms_interval_default = 200;
 	pad_button m_last_auto_repeat_button = pad_button::pad_button_max_enum;
-	std::map<pad_button, u64> m_auto_repeat_buttons = {
+	const std::map<pad_button, u64> m_auto_repeat_buttons = {
 		{ pad_button::dpad_up, auto_repeat_ms_interval_default },
 		{ pad_button::dpad_down, auto_repeat_ms_interval_default },
 		{ pad_button::dpad_left, auto_repeat_ms_interval_default },
@@ -81,7 +85,7 @@ protected:
 	};
 
 	// Mouse movement should just work without delays
-	std::map<pad_button, u64> m_mouse_move_buttons = {
+	const std::map<pad_button, u64> m_mouse_move_buttons = {
 		{ pad_button::ls_up, 1 },
 		{ pad_button::ls_down, 1 },
 		{ pad_button::ls_left, 1 },

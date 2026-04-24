@@ -1,12 +1,12 @@
 /* esp-sdk-lib.h
  *
- * Copyright (C) 2006-2024 wolfSSL Inc.
+ * Copyright (C) 2006-2026 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
  * wolfSSL is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * wolfSSL is distributed in the hope that it will be useful,
@@ -31,7 +31,7 @@
 /* WOLFSSL_USER_SETTINGS must be defined, typically in the CMakeLists.txt: */
 /*    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DWOLFSSL_USER_SETTINGS")        */
 #ifndef WOLFSSL_USER_SETTINGS
-    #error  "WOLFSSL_USER_SETTINGS must be defined for Espressif targts"
+    #error  "WOLFSSL_USER_SETTINGS must be defined for Espressif targets"
 #endif
 
 /* FreeRTOS */
@@ -116,7 +116,7 @@
     ** the config you want - ie #define EXAMPLE_WIFI_SSID "mywifissid"
     */
     #if defined(CONFIG_ESP_WIFI_SSID)
-        /* tyically from ESP32 with ESP-IDF v4 ot v5 */
+        /* tyically from ESP32 with ESP-IDF v4 or v5 */
         #define EXAMPLE_ESP_WIFI_SSID CONFIG_ESP_WIFI_SSID
     #elif defined(CONFIG_EXAMPLE_WIFI_SSID)
         /* typically from ESP8266 rtos-sdk/v3.4 */
@@ -148,9 +148,13 @@ WOLFSSL_LOCAL esp_err_t sdk_var_whereis(const char* v_name, void* v);
 
 WOLFSSL_LOCAL intptr_t esp_sdk_stack_pointer(void);
 
+#if defined(USE_WOLFSSL_ESP_SDK_TIME)
+
 /******************************************************************************
 * Time helpers
 ******************************************************************************/
+WOLFSSL_LOCAL esp_err_t esp_sdk_time_mem_init(void);
+
 WOLFSSL_LOCAL esp_err_t esp_sdk_time_lib_init(void);
 
 /* a function to show the current data and time */
@@ -168,8 +172,9 @@ WOLFSSL_LOCAL esp_err_t set_time(void);
 
 /* wait NTP_RETRY_COUNT seconds before giving up on NTP time */
 WOLFSSL_LOCAL esp_err_t set_time_wait_for_ntp(void);
+#endif
 
-#ifndef NO_ESP_SDK_WIFI
+#if defined(USE_WOLFSSL_ESP_SDK_WIFI)
 
 /******************************************************************************
 * WiFi helpers
@@ -201,15 +206,29 @@ WOLFSSL_LOCAL esp_err_t esp_sdk_wifi_init_sta(void);
 
 WOLFSSL_LOCAL esp_err_t esp_sdk_wifi_show_ip(void);
 
-#endif /* !NO_ESP_SDK_WIFI */
-
+#endif /* USE_WOLFSSL_ESP_SDK_WIFI */
 
 /******************************************************************************
 * Debug helpers
 ******************************************************************************/
 WOLFSSL_LOCAL esp_err_t sdk_init_meminfo(void);
+
+#if defined(DEBUG_WOLFSSL_MALLOC) || defined(DEBUG_WOLFSSL)
 WOLFSSL_LOCAL void* wc_debug_pvPortMalloc(size_t size,
                                 const char* file, int line, const char* fname);
+WOLFSSL_LOCAL void wc_debug_pvPortFree(void *ptr,
+                                const char* file, int line, const char* fname);
+#ifndef WOLFSSL_NO_REALLOC
+WOLFSSL_LOCAL void* wc_debug_pvPortRealloc(void* ptr, size_t size,
+                                const char* file, int line, const char* fname);
+#endif
+#else
+WOLFSSL_LOCAL void* wc_pvPortMalloc(size_t size);
+WOLFSSL_LOCAL void wc_pvPortFree(void *ptr);
+#ifndef WOLFSSL_NO_REALLOC
+WOLFSSL_LOCAL void* wc_pvPortRealloc(void* ptr, size_t size);
+#endif
+#endif /*DEBUG_WOLFSSL_MALLOC || DEBUG_WOLFSSL */
 
 #ifdef __cplusplus
 } /* extern "C" */

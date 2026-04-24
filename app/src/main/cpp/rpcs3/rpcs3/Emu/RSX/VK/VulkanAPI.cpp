@@ -33,8 +33,8 @@ void save_msg(const std::string& path,const std::string& tag,int64_t v){
 
 namespace vk
 {
-	void init_base_pfn()
-	{
+    void init_base_pfn()
+    {
         static void* vk_lib_handle=nullptr;
         if(vk_lib_handle){
             dlclose(vk_lib_handle);
@@ -50,10 +50,10 @@ namespace vk
             std::string custom_lib_name=custom_lib_path.substr(custom_lib_path.find_last_of('/')+1);
 
             vk_lib_handle= adrenotools_open_libvulkan(RTLD_NOW,ADRENOTOOLS_DRIVER_CUSTOM,nullptr
-            ,hook_dir.c_str()
-            ,custom_lib_dir.c_str()
-            ,custom_lib_name.c_str()
-            ,nullptr,nullptr);
+                    ,hook_dir.c_str()
+                    ,custom_lib_dir.c_str()
+                    ,custom_lib_name.c_str()
+                    ,nullptr,nullptr);
             if(!vk_lib_handle){
                 rsx_log.error("#### Failed to load custom driver: %s",g_cfg.video.vk.custom_driver_lib_path.to_string().c_str());
             }
@@ -72,23 +72,24 @@ namespace vk
 #include "VKPFNTable.h"
 #undef LOAD_VK_FUNCTION
         }
-	}
+    }
 
 
     void init_instance_pfn(VkInstance instance){
-        #define INSTANCE_VK_FUNCTION
-        #define VK_FUNC(func) _##func = reinterpret_cast<PFN_##func>(_vkGetInstanceProcAddr(instance, #func))
-		#include "VKPFNTableEXT.h"
+#define INSTANCE_VK_FUNCTION
+#define VK_FUNC(func) _##func = reinterpret_cast<PFN_##func>(_vkGetInstanceProcAddr(instance, #func))
+#include "VKPFNTableEXT.h"
 
 #undef INSTANCE_VK_FUNCTION
 #undef VK_FUNC
     }
-	void init_device_pfn(VkDevice device){
-        #define DEVICE_VK_FUNCTION
-        #define VK_FUNC(func) _##func = reinterpret_cast<PFN_##func>(_vkGetDeviceProcAddr(device, #func))
-		#include "VKPFNTableEXT.h"
+    void init_device_pfn(VkDevice device){
+#define DEVICE_VK_FUNCTION
+#define VK_FUNC(func) _##func = reinterpret_cast<PFN_##func>(_vkGetDeviceProcAddr(device, #func))
+#include "VKPFNTableEXT.h"
 
 #undef DEVICE_VK_FUNCTION
 #undef VK_FUNC
     }
 }
+

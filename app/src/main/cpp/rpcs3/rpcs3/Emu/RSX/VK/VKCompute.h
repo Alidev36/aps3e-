@@ -19,12 +19,6 @@ namespace vk
 		std::unique_ptr<vk::glsl::program> m_program;
 		std::unique_ptr<vk::buffer> m_param_buffer;
 
-		vk::descriptor_pool m_descriptor_pool;
-		descriptor_set m_descriptor_set;
-		VkDescriptorSetLayout m_descriptor_layout = nullptr;
-		VkPipelineLayout m_pipeline_layout = nullptr;
-		u32 m_used_descriptors = 0;
-
 		bool initialized = false;
 		bool unroll_loops = true;
 		bool use_push_constants = false;
@@ -37,15 +31,11 @@ namespace vk
 		compute_task() = default;
 		virtual ~compute_task() { destroy(); }
 
-		virtual std::vector<std::pair<VkDescriptorType, u8>> get_descriptor_layout();
-
-		void init_descriptors();
-
 		void create();
 		void destroy();
 
-		virtual void bind_resources() {}
-		virtual void declare_inputs() {}
+		virtual std::vector<glsl::program_input> get_inputs();
+		virtual void bind_resources(const vk::command_buffer& /*cmd*/) {}
 
 		void load_program(const vk::command_buffer& cmd);
 
@@ -60,6 +50,8 @@ namespace vk
 		u32 m_data_length = 0;
 		u32 kernel_size = 1;
 
+		rsx::simple_array<u32> m_params;
+
 		std::string variables, work_kernel, loop_advance, suffix;
 		std::string method_declarations;
 
@@ -67,9 +59,9 @@ namespace vk
 
 		void build(const char* function_name, u32 _kernel_size = 0);
 
-		void bind_resources() override;
+		void bind_resources(const vk::command_buffer& cmd) override;
 
-		void set_parameters(const vk::command_buffer& cmd, const u32* params, u8 count);
+		void set_parameters(const vk::command_buffer& cmd);
 
 		void run(const vk::command_buffer& cmd, const vk::buffer* data, u32 data_length, u32 data_offset = 0);
 	};
@@ -100,30 +92,6 @@ namespace vk
 			cs_shuffle_base::build("bswap_u16_u32");
 		}
 	};
-
-    struct cs_shuffle_ror8 : cs_shuffle_base
-    {
-        cs_shuffle_ror8()
-        {
-            cs_shuffle_base::build("ror8_u32");
-        }
-    };
-
-    struct cs_shuffle_rol8 : cs_shuffle_base
-    {
-        cs_shuffle_rol8()
-        {
-            cs_shuffle_base::build("rol8_u32");
-        }
-    };
-
-    struct cs_shuffle_swap_rb : cs_shuffle_base
-    {
-        cs_shuffle_swap_rb()
-        {
-            cs_shuffle_base::build("swap_rb");
-        }
-    };
 
 	struct cs_shuffle_d24x8_f32 : cs_shuffle_base
 	{
@@ -159,7 +127,7 @@ namespace vk
 
 		cs_interleave_task();
 
-		void bind_resources() override;
+		void bind_resources(const vk::command_buffer& cmd) override;
 
 		void run(const vk::command_buffer& cmd, const vk::buffer* data, u32 data_offset, u32 data_length, u32 zeta_offset, u32 stencil_offset);
 	};
@@ -376,9 +344,10 @@ namespace vk
 			cs_shuffle_base::build("");
 		}
 
-		void bind_resources() override
+		void bind_resources(const vk::command_buffer& cmd) override
 		{
-			m_program->bind_buffer({ m_data->value, m_data_offset, m_ssbo_length }, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, m_descriptor_set);
+			set_parameters(cmd);
+			m_program->bind_uniform({ *m_data, m_data_offset, m_ssbo_length }, 0, 0);
 		}
 
 		void run(const vk::command_buffer& cmd, const vk::buffer* data, u32 src_offset, u32 src_length, u32 dst_offset)
@@ -395,37 +364,18 @@ namespace vk
 				data_offset = src_offset;
 			}
 
-			u32 parameters[4] = { src_length, src_offset - data_offset, dst_offset - data_offset, 0 };
-			set_parameters(cmd, parameters, 4);
+			m_params = { src_length, src_offset - data_offset, dst_offset - data_offset, 0 };
 			cs_shuffle_base::run(cmd, data, src_length, data_offset);
 		}
 	};
 
-    struct cs_bc_decode_base: compute_task
-	{
-        virtual void run(const vk::command_buffer& cmd, const vk::buffer* dst, u32 out_offset, const vk::buffer* src, u32 in_offset, u32 data_length, u32 width, u32 height, u32 depth, u32 mipmaps) = 0;
-	};
-
-#if 0
-    template <int bc_ver>
-    struct cs_bc_decode_task: cs_bc_decode_base{
-
-    };
-#endif
 	// Reverse morton-order block arrangement
 	struct cs_deswizzle_base : compute_task
 	{
 		virtual void run(const vk::command_buffer& cmd, const vk::buffer* dst, u32 out_offset, const vk::buffer* src, u32 in_offset, u32 data_length, u32 width, u32 height, u32 depth, u32 mipmaps) = 0;
 	};
 
-    enum cs_deswizzle_3d_data_proc_mth:u32{
-        none,
-        swap_u16,
-        swap_u32,
-        ror8_u32
-    };
-
-	template <typename _BlockType, typename _BaseType, cs_deswizzle_3d_data_proc_mth data_proc_mth>
+	template <typename _BlockType, typename _BaseType, bool _SwapBytes>
 	struct cs_deswizzle_3d : cs_deswizzle_base
 	{
 		union params_t
@@ -453,8 +403,6 @@ namespace vk
 
 		cs_deswizzle_3d()
 		{
-			ensure((sizeof(_BlockType) & 3) == 0); // "Unsupported block type"
-
 			ssbo_count = 2;
 			use_push_constants = true;
 			push_constants_size = 28;
@@ -466,23 +414,21 @@ namespace vk
 			;
 
 			std::string transform;
-
-            if constexpr (data_proc_mth == swap_u16)
-            {
-                transform = "bswap_u16";
-            }
-            else if constexpr (data_proc_mth == swap_u32)
-            {
-                transform = "bswap_u32";
-            }
-            else if constexpr (data_proc_mth == ror8_u32)
-            {
-                transform = "ror8_u32";
-            }
-            else if constexpr (data_proc_mth != none)
-            {
-                fmt::throw_exception("Unreachable");
-            }
+			if constexpr (_SwapBytes)
+			{
+				if constexpr (sizeof(_BaseType) == 4)
+				{
+					transform = "bswap_u32";
+				}
+				else if constexpr (sizeof(_BaseType) == 2)
+				{
+					transform = "bswap_u16";
+				}
+				else
+				{
+					fmt::throw_exception("Unreachable");
+				}
+			}
 
 			const std::pair<std::string_view, std::string> syntax_replace[] =
 			{
@@ -490,22 +436,26 @@ namespace vk
 				{ "%set", "set = 0" },
 				{ "%push_block", "push_constant" },
 				{ "%ws", std::to_string(optimal_group_size) },
-				{ "%_wordcount", std::to_string(sizeof(_BlockType) / 4) },
-				{ "%f", transform }
+				{ "%_wordcount", std::to_string(std::max<u32>(sizeof(_BlockType) / 4u, 1u)) },
+				{ "%f", transform },
+				{ "%_8bit", sizeof(_BlockType) == 1 ? "1" : "0" },
+				{ "%_16bit", sizeof(_BlockType) == 2 ? "1" : "0" },
 			};
 
 			m_src = fmt::replace_all(m_src, syntax_replace);
 		}
 
-		void bind_resources() override
+		void bind_resources(const vk::command_buffer& cmd) override
 		{
-			m_program->bind_buffer({ src_buffer->value, in_offset, block_length }, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, m_descriptor_set);
-			m_program->bind_buffer({ dst_buffer->value, out_offset, block_length }, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, m_descriptor_set);
+			set_parameters(cmd);
+
+			m_program->bind_uniform({ *src_buffer, in_offset, block_length }, 0, 0);
+			m_program->bind_uniform({ *dst_buffer, out_offset, block_length }, 0, 1);
 		}
 
 		void set_parameters(const vk::command_buffer& cmd)
 		{
-			_vkCmdPushConstants(cmd, m_pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, push_constants_size, params.data);
+			_vkCmdPushConstants(cmd, m_program->layout(), VK_SHADER_STAGE_COMPUTE_BIT, 0, push_constants_size, params.data);
 		}
 
 		void run(const vk::command_buffer& cmd, const vk::buffer* dst, u32 out_offset, const vk::buffer* src, u32 in_offset, u32 data_length, u32 width, u32 height, u32 depth, u32 mipmaps) override
@@ -524,11 +474,11 @@ namespace vk
 			params.logw = rsx::ceil_log2(width);
 			params.logh = rsx::ceil_log2(height);
 			params.logd = rsx::ceil_log2(depth);
-			set_parameters(cmd);
 
-			const u32 num_bytes_per_invocation = (sizeof(_BlockType) * optimal_group_size);
-			const u32 linear_invocations = utils::aligned_div(data_length, num_bytes_per_invocation);
-			compute_task::run(cmd, linear_invocations);
+			const u32 word_count_per_invocation = std::max<u32>(sizeof(_BlockType) / 4u, 1u);
+			const u32 num_bytes_per_invocation = (word_count_per_invocation * 4u * optimal_group_size);
+			const u32 workgroup_invocations = utils::aligned_div(data_length, num_bytes_per_invocation);
+			compute_task::run(cmd, workgroup_invocations);
 		}
 	};
 
@@ -541,7 +491,7 @@ namespace vk
 
 		cs_aggregator();
 
-		void bind_resources() override;
+		void bind_resources(const vk::command_buffer& cmd) override;
 
 		void run(const vk::command_buffer& cmd, const vk::buffer* dst, const vk::buffer* src, u32 num_words);
 	};
@@ -625,16 +575,18 @@ namespace vk
 			m_src = fmt::replace_all(m_src, syntax_replace);
 		}
 
-		void bind_resources() override
+		void bind_resources(const vk::command_buffer& cmd) override
 		{
-			const auto op = static_cast<int>(Op);
-			m_program->bind_buffer({ src_buffer->value, in_offset, in_block_length }, 0 ^ op, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, m_descriptor_set);
-			m_program->bind_buffer({ dst_buffer->value, out_offset, out_block_length }, 1 ^ op, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, m_descriptor_set);
+			set_parameters(cmd);
+
+			const auto op = static_cast<u32>(Op);
+			m_program->bind_uniform({ *src_buffer, in_offset, in_block_length }, 0u, 0u ^ op);
+			m_program->bind_uniform({ *dst_buffer, out_offset, out_block_length }, 0u, 1u ^ op);
 		}
 
 		void set_parameters(const vk::command_buffer& cmd)
 		{
-			_vkCmdPushConstants(cmd, m_pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, push_constants_size, &params);
+			_vkCmdPushConstants(cmd, m_program->layout(), VK_SHADER_STAGE_COMPUTE_BIT, 0, push_constants_size, &params);
 		}
 
 		void run(const vk::command_buffer& cmd, const RSX_detiler_config& config)
@@ -697,7 +649,6 @@ namespace vk
 			params.image_height = (Op == RSX_detiler_op::decode) ? tile_aligned_height : config.image_height;
 			params.image_pitch = config.image_pitch;
 			params.image_bpp = config.image_bpp;
-			set_parameters(cmd);
 
 			const u32 subtexels_per_invocation = (config.image_bpp < 4) ? (4 / config.image_bpp) : 1;
 			const u32 virtual_width = config.image_width / subtexels_per_invocation;

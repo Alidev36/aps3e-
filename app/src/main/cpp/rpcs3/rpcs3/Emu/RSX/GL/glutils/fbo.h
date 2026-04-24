@@ -129,24 +129,13 @@ namespace gl
 					rhs.get_target() == texture::target::texture2DMS);
 
 				m_parent.m_resource_bindings[m_id] = rhs.id();
-#ifdef USE_GLES
-                glBindFramebuffer(GL_FRAMEBUFFER, m_parent.id());
-				glFramebufferTexture(GL_FRAMEBUFFER, m_id, rhs.id(), 0);
-
-				#else
 				DSA_CALL2(NamedFramebufferTexture, m_parent.id(), m_id, rhs.id(), 0);
-#endif
 			}
 
 			void operator = (const GLuint rhs)
 			{
 				m_parent.m_resource_bindings[m_id] = rhs;
-#ifdef USE_GLES
-                glBindFramebuffer(GL_FRAMEBUFFER, m_parent.id());
-                glFramebufferTexture(GL_FRAMEBUFFER, m_id, rhs, 0);
-				#else
-                DSA_CALL2(NamedFramebufferTexture, m_parent.id(), m_id, rhs, 0);
-#endif
+				DSA_CALL2(NamedFramebufferTexture, m_parent.id(), m_id, rhs, 0);
 			}
 		};
 

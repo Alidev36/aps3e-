@@ -1,4 +1,17 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+[ ! -x ./examples/client/client ] && printf '\n\n%s\n' "Client doesn't exist" \
+                                  && exit 1
+
+if ./examples/client/client -? 2>&1 | grep "Client not compiled in!" ; then
+    echo 'skipping crl-revoked.test because client not compiled in.' 1>&2
+    exit 77
+fi
+
+if ./examples/server/server -? 2>&1 | grep "Server not compiled in!" ; then
+    echo 'skipping crl-revoked.test because server not compiled in.' 1>&2
+    exit 77
+fi
 
 #crl.test
 # if we can, isolate the network namespace to eliminate port collisions.
@@ -217,8 +230,14 @@ else
    exit_hash_dir_code=0
 fi
 
-# run the test
-run_test
+# Check that server is enabled
+./examples/server/server -? 2>&1 | grep -- 'Create Ready file'
+if [ $? -eq 0 ]; then
+    # run the test
+    run_test
+else
+    exit_code=0
+fi
 
 # If we get to this exit, exit_code will be a 1 signaling failure
 echo "exiting with $exit_code certificate was not revoked"

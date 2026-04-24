@@ -1,8 +1,10 @@
 #pragma once
 
-#include "gui_settings.h"
+#include "gui_save.h"
 
 #include <QKeySequence>
+
+class gui_settings;
 
 namespace gui
 {
@@ -32,11 +34,19 @@ namespace gui
 			gw_toggle_recording,
 			gw_pause_play,
 			gw_savestate,
+			gw_savestate_1,
+			gw_savestate_2,
+			gw_savestate_3,
+			gw_savestate_4,
 			gw_restart,
 			gw_rsx_capture,
 			gw_frame_limit,
 			gw_toggle_mouse_and_keyboard,
 			gw_home_menu,
+			gw_mute_unmute,
+			gw_volume_up,
+			gw_volume_down,
+			gw_toggle_mouse_gyro,
 
 			count
 		};
@@ -49,6 +59,7 @@ struct shortcut_info
 	QString localized_name;
 	QString key_sequence;
 	gui::shortcuts::shortcut_handler_id handler_id{};
+	bool allow_auto_repeat = false;
 };
 
 class shortcut_settings : public QObject

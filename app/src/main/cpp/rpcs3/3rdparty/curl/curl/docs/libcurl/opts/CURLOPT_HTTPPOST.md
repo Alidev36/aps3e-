@@ -61,7 +61,7 @@ int main(void)
   struct curl_httppost *lastptr;
 
   /* Fill in the file upload field. This makes libcurl load data from
-     the given file name when curl_easy_perform() is called. */
+     the given filename when curl_easy_perform() is called. */
   curl_formadd(&formpost,
                &lastptr,
                CURLFORM_COPYNAME, "sendfile",
@@ -100,4 +100,7 @@ Deprecated in 7.56.0.
 
 # RETURN VALUE
 
-Returns CURLE_OK if HTTP is enabled, and CURLE_UNKNOWN_OPTION if not.
+curl_easy_setopt(3) returns a CURLcode indicating success or error.
+
+CURLE_OK (0) means everything was OK, non-zero means an error occurred, see
+libcurl-errors(3).

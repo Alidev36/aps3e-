@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "vfs_config.h"
 #include "Utilities/StrUtil.h"
-#include "Utilities/StrFmt.h"
 
 LOG_CHANNEL(vfs_log, "VFS");
 
@@ -37,7 +36,7 @@ std::string cfg_vfs::get(const std::string& _cfg, const std::string& def, std::s
 
 		if (_emu_dir.empty())
 		{
-			_emu_dir = fs::get_config_dir() ;//+ '/';
+			_emu_dir = fs::get_config_dir() + '/';
 		}
 		// Check if path does not end with a delimiter
 		else if (_emu_dir.back() != fs::delim[0] && _emu_dir.back() != fs::delim[1])
@@ -115,7 +114,7 @@ void cfg_vfs::load()
 void cfg_vfs::save() const
 {
 #ifdef _WIN32
-	const std::string path_to_cfg = fs::get_config_dir() + "config/";
+	const std::string path_to_cfg = fs::get_config_dir(true);
 	if (!fs::create_path(path_to_cfg))
 	{
 		vfs_log.error("Could not create path: %s", path_to_cfg);
@@ -140,9 +139,5 @@ void cfg_vfs::save() const
 
 std::string cfg_vfs::get_path()
 {
-#ifdef _WIN32
-	return fs::get_config_dir() + "config/vfs.yml";
-#else
-	return fs::get_config_dir() + "vfs.yml";
-#endif
+	return fs::get_config_dir(true) + "vfs.yml";
 }

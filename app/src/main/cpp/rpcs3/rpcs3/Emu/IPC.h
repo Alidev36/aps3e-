@@ -1,6 +1,5 @@
 #pragma once
 
-#include <memory>
 #include <unordered_map>
 
 #include "Utilities/mutex.h"
@@ -11,7 +10,7 @@
 template <typename T, typename K>
 class ipc_manager final
 {
-	std::unordered_map<K, stx::shared_ptr<T>> m_map;
+	std::unordered_map<K, shared_ptr<T>> m_map;
 
 	mutable shared_mutex m_mutex;
 
@@ -19,12 +18,12 @@ public:
 	// Add new object if specified ipc_key is not used
 	// .first: added new object?, .second: what's at m_map[key] after this function if (peek_ptr || added new object) is true
 	template <typename F>
-	std::pair<bool, stx::shared_ptr<T>> add(const K& ipc_key, F&& provider, bool peek_ptr = true)
+	std::pair<bool, shared_ptr<T>> add(const K& ipc_key, F&& provider, bool peek_ptr = true)
 	{
 		std::lock_guard lock(m_mutex);
 
 		// Get object location
-		stx::shared_ptr<T>& ptr = m_map[ipc_key];
+		shared_ptr<T>& ptr = m_map[ipc_key];
 		const bool existed = ptr.operator bool();
 
 		if (!existed)
@@ -34,7 +33,7 @@ public:
 		}
 
 		const bool added = !existed && ptr;
-		return {added, (peek_ptr || added) ? ptr : stx::null_ptr};
+		return {added, (peek_ptr || added) ? ptr : null_ptr};
 	}
 
 	// Unregister specified ipc_key, may return true even if the object doesn't exist anymore
@@ -46,7 +45,7 @@ public:
 	}
 
 	// Get object with specified ipc_key
-	stx::shared_ptr<T> get(const K& ipc_key) const
+	shared_ptr<T> get(const K& ipc_key) const
 	{
 		reader_lock lock(m_mutex);
 
@@ -57,7 +56,7 @@ public:
 			return found->second;
 		}
 
-		return {};//nullptr;
+		return {};
 	}
 
 	// Check whether the object actually exists

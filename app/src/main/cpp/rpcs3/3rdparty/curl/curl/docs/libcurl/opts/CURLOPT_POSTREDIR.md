@@ -41,9 +41,9 @@ after a 303 redirect. The value **CURL_REDIR_POST_ALL** is a convenience
 define that sets all three bits.
 
 The non-RFC behavior is ubiquitous in web browsers, so the library does the
-conversion by default to maintain consistency. However, a server may require a
-POST to remain a POST after such a redirection. This option is meaningful only
-when setting CURLOPT_FOLLOWLOCATION(3).
+conversion by default to maintain consistency. A server may require a POST to
+remain a POST after such a redirection. This option is meaningful only when
+setting CURLOPT_FOLLOWLOCATION(3).
 
 # DEFAULT
 
@@ -77,8 +77,14 @@ int main(void)
 This option was known as CURLOPT_POST301 up to 7.19.0 as it only supported the
 301 then. CURL_REDIR_POST_303 was added in 7.26.0.
 
+**CURL_REDIR_*** macros became `long` types in 8.16.0, prior to this version
+a `long` cast was necessary when passed to curl_easy_setopt(3).
+
 # %AVAILABILITY%
 
 # RETURN VALUE
 
-Returns CURLE_OK if the option is supported, and CURLE_UNKNOWN_OPTION if not.
+curl_easy_setopt(3) returns a CURLcode indicating success or error.
+
+CURLE_OK (0) means everything was OK, non-zero means an error occurred, see
+libcurl-errors(3).

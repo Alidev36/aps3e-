@@ -12,13 +12,13 @@
 */
 /* blake2s.c
  *
- * Copyright (C) 2006-2023 wolfSSL Inc.
+ * Copyright (C) 2006-2026 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
  * wolfSSL is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * wolfSSL is distributed in the hope that it will be useful,
@@ -31,20 +31,18 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1335, USA
  */
 
-
-
-#ifdef HAVE_CONFIG_H
-    #include <config.h>
-#endif
-
-#include <wolfssl/wolfcrypt/settings.h>
+#include <wolfssl/wolfcrypt/libwolfssl_sources.h>
 
 #ifdef HAVE_BLAKE2S
 
 #include <wolfssl/wolfcrypt/blake2.h>
 #include <wolfssl/wolfcrypt/blake2-impl.h>
-#include <wolfssl/wolfcrypt/error-crypt.h>
-
+#ifdef NO_INLINE
+    #include <wolfssl/wolfcrypt/misc.h>
+#else
+    #define WOLFSSL_MISC_INCLUDED
+    #include <wolfcrypt/src/misc.c>
+#endif
 
 static const word32 blake2s_IV[8] =
 {
@@ -202,9 +200,7 @@ int blake2s_init_key( blake2s_state *S, const byte outlen, const void *key,
     secure_zero_memory( block, BLAKE2S_BLOCKBYTES ); /* Burn the key from */
                                                      /* memory */
 
-#ifdef WOLFSSL_SMALL_STACK
-    XFREE(block, NULL, DYNAMIC_TYPE_TMP_BUFFER);
-#endif
+    WC_FREE_VAR_EX(block, NULL, DYNAMIC_TYPE_TMP_BUFFER);
   }
   return ret;
 }
@@ -321,9 +317,7 @@ int blake2s_update( blake2s_state *S, const byte *in, word32 inlen )
     }
   }
 
-#ifdef WOLFSSL_SMALL_STACK
-  XFREE(m, NULL, DYNAMIC_TYPE_TMP_BUFFER);
-#endif
+  WC_FREE_VAR_EX(m, NULL, DYNAMIC_TYPE_TMP_BUFFER);
 
   return ret;
 }
@@ -371,15 +365,13 @@ int blake2s_final( blake2s_state *S, byte *out, byte outlen )
   }
 
   for( i = 0; i < 8; ++i ) /* Output full hash to temp buffer */
-    store64( buffer + sizeof( S->h[i] ) * i, S->h[i] );
+    store32( buffer + sizeof( S->h[i] ) * i, S->h[i] );
 
   XMEMCPY( out, buffer, outlen );
 
  out:
 
-#ifdef WOLFSSL_SMALL_STACK
-  XFREE(m, NULL, DYNAMIC_TYPE_TMP_BUFFER);
-#endif
+  WC_FREE_VAR_EX(m, NULL, DYNAMIC_TYPE_TMP_BUFFER);
 
   return ret;
 }
@@ -487,6 +479,16 @@ int wc_InitBlake2s_WithKey(Blake2s* b2s, word32 digestSz, const byte *key, word3
 /* Blake2s Update */
 int wc_Blake2sUpdate(Blake2s* b2s, const byte* data, word32 sz)
 {
+    if (b2s == NULL){
+        return BAD_FUNC_ARG;
+    }
+    if (data == NULL && sz != 0){
+        return BAD_FUNC_ARG;
+    }
+    if (sz == 0){
+        return 0;
+    }
+
     return blake2s_update(b2s->S, data, sz);
 }
 
@@ -494,13 +496,130 @@ int wc_Blake2sUpdate(Blake2s* b2s, const byte* data, word32 sz)
 /* Blake2s Final, if pass in zero size we use init digestSz */
 int wc_Blake2sFinal(Blake2s* b2s, byte* final, word32 requestSz)
 {
-    word32 sz = requestSz ? requestSz : b2s->digestSz;
+    word32 sz;
+
+    if (b2s == NULL){
+        return BAD_FUNC_ARG;
+    }
+    if (final == NULL){
+        return BAD_FUNC_ARG;
+    }
+
+    sz = requestSz ? requestSz : b2s->digestSz;
 
     return blake2s_final(b2s->S, final, (byte)sz);
 }
 
 
-/* end CTaoCrypt API */
+int wc_Blake2sHmacInit(Blake2s* b2s, const byte* key, size_t key_len)
+{
+    byte x_key[BLAKE2S_BLOCKBYTES];
+    int i;
+    int ret = 0;
+
+    if (key == NULL)
+        return BAD_FUNC_ARG;
+
+    if (key_len > BLAKE2S_BLOCKBYTES) {
+        ret = wc_InitBlake2s(b2s, BLAKE2S_OUTBYTES);
+        if (ret == 0)
+            ret = wc_Blake2sUpdate(b2s, key, (word32)key_len);
+        if (ret == 0)
+            ret = wc_Blake2sFinal(b2s, x_key, 0);
+    } else {
+        XMEMCPY(x_key, key, key_len);
+        if (key_len < BLAKE2S_BLOCKBYTES) {
+            XMEMSET(x_key + key_len, 0, BLAKE2S_BLOCKBYTES - key_len);
+        }
+    }
+
+    if (ret == 0) {
+        for (i = 0; i < BLAKE2S_BLOCKBYTES; ++i)
+            x_key[i] ^= 0x36U;
+    }
+
+    if (ret == 0)
+        ret = wc_InitBlake2s(b2s, BLAKE2S_OUTBYTES);
+    if (ret == 0)
+        ret = wc_Blake2sUpdate(b2s, x_key, BLAKE2S_BLOCKBYTES);
+
+    ForceZero(x_key, sizeof(x_key));
+
+    return ret;
+}
+
+int wc_Blake2sHmacUpdate(Blake2s* b2s, const byte* in, size_t in_len)
+{
+    if (in == NULL)
+        return BAD_FUNC_ARG;
+
+    return wc_Blake2sUpdate(b2s, in, (word32)in_len);
+}
+
+int wc_Blake2sHmacFinal(Blake2s* b2s, const byte* key, size_t key_len,
+        byte* out, size_t out_len)
+{
+    byte x_key[BLAKE2S_BLOCKBYTES];
+    int i;
+    int ret = 0;
+
+    if (key == NULL)
+        return BAD_FUNC_ARG;
+
+    if (out_len != BLAKE2S_OUTBYTES)
+        return BUFFER_E;
+
+    if (key_len > BLAKE2S_BLOCKBYTES) {
+        ret = wc_InitBlake2s(b2s, BLAKE2S_OUTBYTES);
+        if (ret == 0)
+            ret = wc_Blake2sUpdate(b2s, key, (word32)key_len);
+        if (ret == 0)
+            ret = wc_Blake2sFinal(b2s, x_key, 0);
+    } else {
+        XMEMCPY(x_key, key, key_len);
+        if (key_len < BLAKE2S_BLOCKBYTES) {
+            XMEMSET(x_key + key_len, 0, BLAKE2S_BLOCKBYTES - key_len);
+        }
+    }
+
+    if (ret == 0) {
+        for (i = 0; i < BLAKE2S_BLOCKBYTES; ++i)
+            x_key[i] ^= 0x5CU;
+    }
+
+    if (ret == 0)
+        ret = wc_Blake2sFinal(b2s, out, 0);
+
+    if (ret == 0)
+        ret = wc_InitBlake2s(b2s, BLAKE2S_OUTBYTES);
+    if (ret == 0)
+        ret = wc_Blake2sUpdate(b2s, x_key, BLAKE2S_BLOCKBYTES);
+    if (ret == 0)
+        ret = wc_Blake2sUpdate(b2s, out, BLAKE2S_OUTBYTES);
+    if (ret == 0)
+        ret = wc_Blake2sFinal(b2s, out, 0);
+
+    ForceZero(x_key, sizeof(x_key));
+
+    return ret;
+}
+
+int wc_Blake2sHmac(const byte* in, size_t in_len,
+        const byte* key, size_t key_len,
+        byte* out, size_t out_len)
+{
+    Blake2s state;
+    int ret;
+
+    ret = wc_Blake2sHmacInit(&state, key, key_len);
+    if (ret == 0)
+        ret = wc_Blake2sHmacUpdate(&state, in, in_len);
+    if (ret == 0)
+        ret = wc_Blake2sHmacFinal(&state, key, key_len, out, out_len);
+
+    return ret;
+}
+
+/* end wolfCrypt API */
 
 #endif  /* HAVE_BLAKE2S */
-

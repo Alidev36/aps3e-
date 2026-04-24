@@ -5,10 +5,47 @@
 #include "Utilities/Config.h"
 
 #include <array>
+#include <vector>
 
 namespace pad
 {
 	constexpr static std::string_view keyboard_device_name = "Keyboard";
+
+	struct combo
+	{
+	public:
+		combo() = default;
+		combo(std::set<std::string> buttons) : m_buttons(std::move(buttons)) {}
+
+		const std::set<std::string>& buttons() const
+		{
+			return m_buttons;
+		}
+
+		void add_button(const std::string& button)
+		{
+			if (button.empty()) return;
+			m_buttons.insert(button);
+		}
+
+		std::string to_string() const
+		{
+			return fmt::merge(m_buttons, "&");
+		}
+
+		bool operator==(const combo& other) const
+		{
+			return m_buttons == other.m_buttons;
+		}
+
+		bool operator<(const combo& other) const
+		{
+			return m_buttons < other.m_buttons;
+		}
+
+	private:
+		std::set<std::string> m_buttons;
+	};
 }
 
 struct cfg_sensor final : cfg::node
@@ -25,8 +62,13 @@ struct cfg_pad final : cfg::node
 	cfg_pad() {};
 	cfg_pad(node* owner, const std::string& name) : cfg::node(owner, name) {}
 
-	static std::vector<std::string> get_buttons(const std::string& str);
-	static std::string get_buttons(std::vector<std::string> vec);
+	static std::vector<pad::combo> get_combos(std::string_view button_string);
+	static std::string get_button_string(std::vector<pad::combo>& combos);
+	static std::string make_button_string(const std::unordered_map<u32, std::string>& button_list, const std::vector<std::set<u32>>& button_combos);
+
+	u8 get_motor_speed(VibrateMotor& motor, f32 multiplier) const;
+	u8 get_large_motor_speed(std::array<VibrateMotor, 2>& motors) const;
+	u8 get_small_motor_speed(std::array<VibrateMotor, 2>& motors) const;
 
 	cfg::string ls_left{ this, "Left Stick Left", "" };
 	cfg::string ls_down{ this, "Left Stick Down", "" };
@@ -66,6 +108,9 @@ struct cfg_pad final : cfg::node
 	cfg_sensor motion_sensor_z{ this, "Motion Sensor Z" };
 	cfg_sensor motion_sensor_g{ this, "Motion Sensor G" };
 
+	cfg::string orientation_reset_button{ this, "Orientation Reset Button", "" };
+	cfg::_bool orientation_enabled{ this, "Orientation Enabled", false };
+
 	cfg::string pressure_intensity_button{ this, "Pressure Intensity Button", "" };
 	cfg::uint<0, 100> pressure_intensity{ this, "Pressure Intensity Percent", 50 };
 	cfg::_bool pressure_intensity_toggle_mode{ this, "Pressure Intensity Toggle Mode", false };
@@ -81,8 +126,8 @@ struct cfg_pad final : cfg::node
 	cfg::uint<0, 1000000> rstick_anti_deadzone{ this, "Right Stick Anti-Deadzone", 0 };
 	cfg::uint<0, 1000000> ltriggerthreshold{ this, "Left Trigger Threshold", 0 };
 	cfg::uint<0, 1000000> rtriggerthreshold{ this, "Right Trigger Threshold", 0 };
-	cfg::uint<0, 1000000> lpadsquircling{ this, "Left Pad Squircling Factor", 8000 };
-	cfg::uint<0, 1000000> rpadsquircling{ this, "Right Pad Squircling Factor", 8000 };
+	cfg::uint<0, 1000000> lpadsquircling{ this, "Left Pad Squircling Factor", 4000 };
+	cfg::uint<0, 1000000> rpadsquircling{ this, "Right Pad Squircling Factor", 4000 };
 
 	cfg::uint<0, 255> colorR{ this, "Color Value R", 0 };
 	cfg::uint<0, 255> colorG{ this, "Color Value G", 0 };
@@ -93,9 +138,10 @@ struct cfg_pad final : cfg::node
 	cfg::uint<0, 100> led_battery_indicator_brightness{ this, "LED battery indicator brightness", 50 };
 	cfg::_bool player_led_enabled{ this, "Player LED enabled", true };
 
-	cfg::_bool enable_vibration_motor_large{ this, "Enable Large Vibration Motor", true };
-	cfg::_bool enable_vibration_motor_small{ this, "Enable Small Vibration Motor", true };
+	cfg::uint<0, 200> multiplier_vibration_motor_large{ this, "Large Vibration Motor Multiplier", 100 };
+	cfg::uint<0, 200> multiplier_vibration_motor_small{ this, "Small Vibration Motor Multiplier", 100 };
 	cfg::_bool switch_vibration_motors{ this, "Switch Vibration Motors", false };
+	cfg::uint<0, 255> vibration_threshold{ this, "Vibration Threshold", MOTOR_THRESHOLD };
 
 	cfg::_enum<mouse_movement_mode> mouse_move_mode{ this, "Mouse Movement Mode", mouse_movement_mode::relative };
 	cfg::uint<0, 255> mouse_deadzone_x{ this, "Mouse Deadzone X Axis", 60 };

@@ -1,5 +1,4 @@
 #include "stdafx.h"
-#include "overlays.h"
 #include "overlay_message.h"
 #include "overlay_loading_icon.hpp"
 
@@ -19,7 +18,7 @@ namespace rsx
 			}
 
 			queue_message(
-				localized_string_id::RSX_OVERLAYS_COMPILING_SHADERS,
+				localized_string_id::RSX_OVERLAYS_SPINNER_NO_TEXT,
 				5'000'000,
 				{},
 				message_pin_location::bottom_left,

@@ -175,6 +175,7 @@ private:
 	{
 		atomic_ptr<std::vector<u8>> m_input;
 		atomic_ptr<std::vector<u8>> m_output;
+		bool notify_pending = false;
 		bool notified = false;
 		std::unique_ptr<named_thread<std::function<void()>>> m_thread;
 	};
@@ -187,7 +188,6 @@ private:
 	void initialize(utils::serial& ar);
 	void stream_data_prepare_thread_op();
 	void file_writer_thread_op();
-	void blocked_compressed_write(const std::vector<u8>& data);
 };
 
 template <typename File> requires (std::is_same_v<std::remove_cvref_t<File>, fs::file>)

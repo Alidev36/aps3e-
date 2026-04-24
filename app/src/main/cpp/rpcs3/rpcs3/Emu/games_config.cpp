@@ -4,6 +4,8 @@
 #include "util/yaml.hpp"
 #include "Utilities/File.h"
 
+#include "Loader/ISO.h"
+
 LOG_CHANNEL(cfg_log, "CFG");
 
 games_config::games_config()
@@ -44,6 +46,21 @@ std::string games_config::get_path(const std::string& title_id) const
 
 games_config::result games_config::add_game(const std::string& key, const std::string& path)
 {
+	if (path == iso_device::virtual_device_name + "/")
+	{
+		const auto device = fs::get_virtual_device(iso_device::virtual_device_name + "/");
+		if (!device) return result::failure;
+
+		const auto iso_dev = dynamic_cast<const iso_device*>(device.get());
+
+#ifdef __ANDROID__
+        m_games.emplace(key, ":iso");
+        return result::success;
+#else
+		return add_game(key, iso_dev->get_loaded_iso());
+#endif
+	}
+
 	std::lock_guard lock(m_mutex);
 
 	// Access or create node if does not exist
@@ -123,7 +140,7 @@ bool games_config::save_nl()
 	YAML::Emitter out;
 	out << m_games;
 
-	fs::pending_file temp(fs::get_config_dir() + "/games.yml");
+	fs::pending_file temp(fs::get_config_dir(true) + "games.yml");
 
 	if (temp.file && temp.file.write(out.c_str(), out.size()) >= out.size() && temp.commit())
 	{
@@ -147,7 +164,24 @@ void games_config::load()
 
 	m_games.clear();
 
-	if (fs::file f{fs::get_config_dir() + "/games.yml", fs::read + fs::create})
+	const std::string path = fs::get_config_dir(true) + "games.yml";
+
+	// Move file from deprecated location to new location
+#ifdef _WIN32
+	const std::string old_path = fs::get_config_dir(false) + "games.yml";
+
+	if (fs::is_file(old_path))
+	{
+		cfg_log.notice("Found deprecated games.yml file: '%s'", old_path);
+
+		if (!fs::rename(old_path, path, false))
+		{
+			(fs::g_tls_error == fs::error::exist ? cfg_log.warning : cfg_log.error)("Failed to move '%s' to '%s' (error='%s')", old_path, path, fs::g_tls_error);
+		}
+	}
+#endif
+
+	if (fs::file f{path, fs::read + fs::create})
 	{
 		auto [result, error] = yaml_load(f.to_string());
 

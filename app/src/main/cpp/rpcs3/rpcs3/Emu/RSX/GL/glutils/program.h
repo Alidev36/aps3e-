@@ -14,7 +14,7 @@ namespace gl
 		class shader
 		{
 			std::string source;
-			::glsl::program_domain type;
+			::glsl::program_domain type {};
 			GLuint m_id = GL_NONE;
 
 			fence m_compiled_fence;
@@ -181,13 +181,12 @@ namespace gl
 				return *this;
 			}
 
-#ifndef USE_GLES
 			program& bind_fragment_data_location(const std::string& name, int color_number)
 			{
 				glBindFragDataLocation(m_id, color_number, name.c_str());
 				return *this;
 			}
-#endif
+
 			GLuint id() const { return m_id; }
 
 			bool created() const { return m_id != GL_NONE; }

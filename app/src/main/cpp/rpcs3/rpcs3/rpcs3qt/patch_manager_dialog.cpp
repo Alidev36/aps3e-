@@ -14,7 +14,6 @@
 
 #include "ui_patch_manager_dialog.h"
 #include "patch_manager_dialog.h"
-#include "table_item_delegate.h"
 #include "gui_settings.h"
 #include "downloader.h"
 #include "qt_utils.h"
@@ -58,12 +57,11 @@ enum node_level : int
 
 Q_DECLARE_METATYPE(patch_engine::patch_config_value);
 
-patch_manager_dialog::patch_manager_dialog(std::shared_ptr<gui_settings> gui_settings, std::unordered_map<std::string, std::set<std::string>> games, const std::string& title_id, const std::string& version, QWidget* parent)
+patch_manager_dialog::patch_manager_dialog(std::shared_ptr<gui_settings> gui_settings, const std::vector<game_info>& games, const std::string& title_id, const std::string& version, QWidget* parent)
 	: QDialog(parent)
 	, m_gui_settings(std::move(gui_settings))
 	, m_expand_current_match(!title_id.empty() && !version.empty()) // Expand first search results
 	, m_search_version(QString::fromStdString(version))
-	, m_owned_games(std::move(games))
 	, ui(new Ui::patch_manager_dialog)
 {
 	ui->setupUi(this);
@@ -71,6 +69,15 @@ patch_manager_dialog::patch_manager_dialog(std::shared_ptr<gui_settings> gui_set
 
 	// Load gui settings
 	m_show_owned_games_only = m_gui_settings->GetValue(gui::pm_show_owned).toBool();
+
+	// Get owned games
+	for (const auto& game : games)
+	{
+		if (game && game->info.bootable)
+		{
+			m_owned_games[game->info.serial].insert(game->GetGameVersion());
+		}
+	}
 
 	// Initialize gui controls
 	ui->patch_filter->setText(QString::fromStdString(title_id));
@@ -88,13 +95,19 @@ patch_manager_dialog::patch_manager_dialog(std::shared_ptr<gui_settings> gui_set
 	ui->configurable_double_spin_box->setEnabled(false);
 	ui->configurable_double_spin_box->setVisible(false);
 
+	// Allow to double click the patches in order to de/select them
+	ui->patch_tree->set_checkable_by_double_click_callback([](QTreeWidgetItem* item, int column)
+	{
+		return item && !item->isDisabled() && (item->flags() & Qt::ItemIsUserCheckable) && static_cast<node_level>(item->data(column, node_level_role).toInt()) == node_level::patch_level;
+	});
+
 	// Create connects
 	connect(ui->patch_filter, &QLineEdit::textChanged, this, &patch_manager_dialog::filter_patches);
 	connect(ui->patch_tree, &QTreeWidget::currentItemChanged, this, &patch_manager_dialog::handle_item_selected);
 	connect(ui->patch_tree, &QTreeWidget::itemChanged, this, &patch_manager_dialog::handle_item_changed);
 	connect(ui->patch_tree, &QTreeWidget::customContextMenuRequested, this, &patch_manager_dialog::handle_custom_context_menu_requested);
 	connect(ui->cb_owned_games_only, &QCheckBox::checkStateChanged, this, &patch_manager_dialog::handle_show_owned_games_only);
-	connect(ui->configurable_selector, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index)
+	connect(ui->configurable_selector, &QComboBox::currentIndexChanged, this, [this](int index)
 	{
 		if (index >= 0)
 		{
@@ -103,15 +116,15 @@ patch_manager_dialog::patch_manager_dialog(std::shared_ptr<gui_settings> gui_set
 			handle_item_selected(item, item);
 		}
 	});
-	connect(ui->configurable_combo_box, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index)
+	connect(ui->configurable_combo_box, &QComboBox::currentIndexChanged, this, [this](int index)
 	{
 		if (index >= 0)
 		{
 			handle_config_value_changed(ui->configurable_combo_box->itemData(index).toDouble());
 		}
 	});
-	connect(ui->configurable_spin_box, QOverload<int>::of(&QSpinBox::valueChanged), this, &patch_manager_dialog::handle_config_value_changed);
-	connect(ui->configurable_double_spin_box, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &patch_manager_dialog::handle_config_value_changed);
+	connect(ui->configurable_spin_box, &QSpinBox::valueChanged, this, &patch_manager_dialog::handle_config_value_changed);
+	connect(ui->configurable_double_spin_box, &QDoubleSpinBox::valueChanged, this, &patch_manager_dialog::handle_config_value_changed);
 	connect(ui->buttonBox, &QDialogButtonBox::rejected, this, &QWidget::close);
 	connect(ui->buttonBox, &QDialogButtonBox::clicked, [this](QAbstractButton* button)
 	{
@@ -323,24 +336,29 @@ void patch_manager_dialog::populate_tree()
 						const QString q_description = QString::fromStdString(description);
 						QString visible_description = q_description;
 
-						const QList<QPair<int, QVariant>> match_criteria = QList<QPair<int, QVariant>>()
-							<< QPair<int, QVariant>(description_role, q_description)
-							<< QPair<int, QVariant>(persistance_role, true);
+						const std::vector<std::pair<int, QVariant>> match_criteria =
+						{
+							std::pair<int, QVariant>(description_role, q_description),
+							std::pair<int, QVariant>(persistance_role, true)
+						};
 
 						// Add counter to leafs if the name already exists due to different hashes of the same game (PPU, SPU, PRX, OVL)
-						if (const auto matches = gui::utils::find_children_by_data(serial_level_item, match_criteria, false); matches.count() > 0)
+						std::vector<QTreeWidgetItem*> matches;
+						gui::utils::find_children_by_data(serial_level_item, matches, match_criteria, false);
+
+						if (!matches.empty())
 						{
-							if (auto only_match = matches.count() == 1 ? matches[0] : nullptr)
+							if (auto only_match = matches.size() == 1 ? matches[0] : nullptr)
 							{
 								only_match->setText(0, q_description + QStringLiteral(" (01)"));
 							}
-							const int counter = matches.count() + 1;
+							const usz counter = matches.size() + 1;
 							visible_description += QStringLiteral(" (");
 							if (counter < 10) visible_description += '0';
 							visible_description += QString::number(counter) + ')';
 						}
 
-						QMap<QString, QVariant> q_config_values;
+						QVariantMap q_config_values;
 
 						for (const auto& [key, default_config_value] : patch.default_config_values)
 						{
@@ -375,8 +393,10 @@ void patch_manager_dialog::populate_tree()
 		}
 	}
 
-	const QList<QPair<int, QVariant>> match_criteria = QList<QPair<int, QVariant>>()
-		<< QPair<int, QVariant>(persistance_role, true);
+	const std::vector<std::pair<int, QVariant>> match_criteria =
+	{
+		std::pair<int, QVariant>(persistance_role, true)
+	};
 
 	for (int i = ui->patch_tree->topLevelItemCount() - 1; i >= 0; i--)
 	{
@@ -535,7 +555,7 @@ void patch_manager_dialog::filter_patches(const QString& term)
 	m_expand_current_match = false;
 }
 
-void patch_manager_dialog::update_patch_info(const patch_manager_dialog::gui_patch_info& info) const
+void patch_manager_dialog::update_patch_info(const patch_manager_dialog::gui_patch_info& info, bool force_update) const
 {
 	ui->label_hash->setText(info.hash);
 	ui->label_author->setText(info.author);
@@ -563,7 +583,7 @@ void patch_manager_dialog::update_patch_info(const patch_manager_dialog::gui_pat
 		return;
 	}
 
-	if (key == info.config_value_key)
+	if (!force_update && key == info.config_value_key)
 	{
 		// Don't update widget if the config key did not change
 		return;
@@ -578,7 +598,7 @@ void patch_manager_dialog::update_patch_info(const patch_manager_dialog::gui_pat
 	ui->configurable_double_spin_box->setVisible(false);
 
 	// Fetch the config values of this item
-	const QVariant& variant = info.config_values.value(key);
+	const QVariant& variant = ::at32(info.config_values, key);
 	ensure(variant.canConvert<patch_engine::patch_config_value>());
 
 	const patch_engine::patch_config_value config_value = variant.value<patch_engine::patch_config_value>();
@@ -627,7 +647,7 @@ void patch_manager_dialog::handle_item_selected(QTreeWidgetItem* current, QTreeW
 	if (!current)
 	{
 		// Clear patch info if no item is selected
-		update_patch_info({});
+		update_patch_info({}, true);
 		return;
 	}
 
@@ -662,7 +682,7 @@ void patch_manager_dialog::handle_item_selected(QTreeWidgetItem* current, QTreeW
 				info.notes = QString::fromStdString(found_info.notes);
 				info.description = QString::fromStdString(found_info.description);
 				info.patch_version = QString::fromStdString(found_info.patch_version);
-				info.config_values = current->data(0, config_values_role).toMap();
+				info.config_values = current->data(0, config_values_role).toMap().toStdMap();
 				info.config_value_key = current->data(0, config_key_role).toString();
 
 				if (current != previous)
@@ -670,11 +690,9 @@ void patch_manager_dialog::handle_item_selected(QTreeWidgetItem* current, QTreeW
 					// Update the config value combo box with the new config keys
 					ui->configurable_selector->blockSignals(true);
 					ui->configurable_selector->clear();
-					for (const QString& key : info.config_values.keys())
+					for (const auto& [key, variant] : info.config_values)
 					{
-						const QVariant& variant = info.config_values.value(key);
 						ensure(variant.canConvert<patch_engine::patch_config_value>());
-						const patch_engine::patch_config_value config_value = variant.value<patch_engine::patch_config_value>();
 						ui->configurable_selector->addItem(key, key);
 					}
 					if (ui->configurable_selector->count() > 0)
@@ -707,7 +725,7 @@ void patch_manager_dialog::handle_item_selected(QTreeWidgetItem* current, QTreeW
 	}
 	}
 
-	update_patch_info(info);
+	update_patch_info(info, current != previous);
 
 	const QString key = ui->configurable_selector->currentIndex() < 0 ? "" : ui->configurable_selector->currentData().toString();
 	current->setData(0, config_key_role, key);
@@ -723,41 +741,48 @@ void patch_manager_dialog::handle_item_changed(QTreeWidgetItem* item, int /*colu
 	// Get checkstate of the item
 	const bool enabled = item->checkState(0) == Qt::CheckState::Checked;
 
-	// Get patch identifiers stored in item data
-	const node_level level = static_cast<node_level>(item->data(0, node_level_role).toInt());
-	const std::string hash = item->data(0, hash_role).toString().toStdString();
-	const std::string title = item->data(0, title_role).toString().toStdString();
-	const std::string serial = item->data(0, serial_role).toString().toStdString();
-	const std::string app_version = item->data(0, app_version_role).toString().toStdString();
-	const std::string description = item->data(0, description_role).toString().toStdString();
-	const std::string patch_group = item->data(0, patch_group_role).toString().toStdString();
-
 	// Uncheck other patches with the same patch_group if this patch was enabled
-	if (const auto node = item->parent(); node && enabled && !patch_group.empty() && level == node_level::patch_level)
+	if (const auto node = item->parent(); node && enabled)
 	{
-		for (int i = 0; i < node->childCount(); i++)
-		{
-			if (const auto other = node->child(i); other && other != item)
-			{
-				const std::string other_patch_group = other->data(0, patch_group_role).toString().toStdString();
+		const node_level level = static_cast<node_level>(item->data(0, node_level_role).toInt());
+		const std::string patch_group = item->data(0, patch_group_role).toString().toStdString();
 
-				if (other_patch_group == patch_group)
+		if (!patch_group.empty() && level == node_level::patch_level)
+		{
+			for (int i = 0; i < node->childCount(); i++)
+			{
+				if (const auto other = node->child(i); other && other != item)
 				{
-					other->setCheckState(0, Qt::CheckState::Unchecked);
+					const std::string other_patch_group = other->data(0, patch_group_role).toString().toStdString();
+
+					if (other_patch_group == patch_group)
+					{
+						other->setCheckState(0, Qt::CheckState::Unchecked);
+					}
 				}
 			}
 		}
 	}
 
 	// Enable/disable the patch for this item and show its metadata
+	const std::string hash = item->data(0, hash_role).toString().toStdString();
 	if (m_map.contains(hash))
 	{
 		auto& info = m_map[hash].patch_info_map;
+		const std::string description = item->data(0, description_role).toString().toStdString();
 
 		if (info.contains(description))
 		{
+			const std::string title = item->data(0, title_role).toString().toStdString();
+			const std::string serial = item->data(0, serial_role).toString().toStdString();
+			const std::string app_version = item->data(0, app_version_role).toString().toStdString();
+
 			info[description].titles[title][serial][app_version].enabled = enabled;
-			handle_item_selected(item, item);
+
+			if (item->isSelected())
+			{
+				handle_item_selected(item, item);
+			}
 		}
 	}
 }
@@ -995,6 +1020,8 @@ void patch_manager_dialog::dropEvent(QDropEvent* event)
 		return;
 	}
 
+	event->acceptProposedAction();
+
 	QMessageBox box(QMessageBox::Icon::Question, tr("Patch Manager"), tr("What do you want to do with the patch file?"), QMessageBox::StandardButton::Cancel, this);
 	QPushButton* button_yes = box.addButton(tr("Import"), QMessageBox::YesRole);
 	QPushButton* button_no = box.addButton(tr("Validate"), QMessageBox::NoRole);
@@ -1070,7 +1097,7 @@ void patch_manager_dialog::dropEvent(QDropEvent* event)
 				QString message = tr("Errors were found in the patch file.");
 				QMessageBox* mb = new QMessageBox(QMessageBox::Icon::Critical, tr("Validation failed"), message, QMessageBox::Ok, this);
 				mb->setInformativeText(tr("To see the error log, please click \"Show Details\"."));
-				mb->setDetailedText(tr("%0").arg(summary));
+				mb->setDetailedText(summary);
 				mb->setAttribute(Qt::WA_DeleteOnClose);
 
 				// Smartass hack to make the unresizeable message box wide enough for the changelog
@@ -1098,7 +1125,7 @@ void patch_manager_dialog::dragEnterEvent(QDragEnterEvent* event)
 {
 	if (is_valid_file(*event->mimeData()))
 	{
-		event->accept();
+		event->acceptProposedAction();
 	}
 }
 
@@ -1106,13 +1133,8 @@ void patch_manager_dialog::dragMoveEvent(QDragMoveEvent* event)
 {
 	if (is_valid_file(*event->mimeData()))
 	{
-		event->accept();
+		event->acceptProposedAction();
 	}
-}
-
-void patch_manager_dialog::dragLeaveEvent(QDragLeaveEvent* event)
-{
-	event->accept();
 }
 
 void patch_manager_dialog::download_update(bool automatic, bool auto_accept)
@@ -1141,7 +1163,7 @@ void patch_manager_dialog::download_update(bool automatic, bool auto_accept)
 		}
 	}
 
-	m_downloader->start(url, true, !m_download_automatic, tr("Downloading latest patches"));
+	m_downloader->start(url, true, !m_download_automatic, true, tr("Downloading latest patches"));
 }
 
 bool patch_manager_dialog::handle_json(const QByteArray& data)
@@ -1162,9 +1184,9 @@ bool patch_manager_dialog::handle_json(const QByteArray& data)
 		}
 
 		if (return_code != -1)
-			patch_log.error("Patch download error: %s return code: %d", error_message, return_code);
+			patch_log.error("Patch download error: %s, return code: %d", error_message, return_code);
 		else
-			patch_log.warning("Patch download error: %s return code: %d", error_message, return_code);
+			patch_log.warning("Patch download error: %s, return code: %d", error_message, return_code);
 
 		return false;
 	}
@@ -1242,7 +1264,16 @@ bool patch_manager_dialog::handle_json(const QByteArray& data)
 	if (patch_engine::load(patches, "From Download", content, true, &log_message))
 	{
 		patch_log.notice("Successfully validated downloaded patch file");
-		const std::string path = patch_engine::get_patches_path() + "patch.yml";
+
+		const std::string patches_path = patch_engine::get_patches_path();
+
+		if (!fs::create_path(patches_path))
+		{
+			patch_log.fatal("Failed to create path: %s (%s)", patches_path, fs::g_tls_error);
+			return false;
+		}
+
+		const std::string path = patches_path + "patch.yml";
 
 		// Back up current patch file if possible
 		if (fs::is_file(path))
@@ -1258,7 +1289,7 @@ bool patch_manager_dialog::handle_json(const QByteArray& data)
 		// Overwrite current patch file
 		fs::pending_file patch_file(path);
 
-		if (!patch_file.file || (patch_file.file.write(content), !patch_file.commit()))
+		if (!patch_file.file || !patch_file.file.write(content) || !patch_file.commit())
 		{
 			patch_log.error("Could not save new patches to %s (error=%s)", path, fs::g_tls_error);
 			return false;
@@ -1283,7 +1314,7 @@ bool patch_manager_dialog::handle_json(const QByteArray& data)
 			QString message = tr("Errors were found in the downloaded patch file.");
 			QMessageBox* mb = new QMessageBox(QMessageBox::Icon::Critical, tr("Validation failed"), message, QMessageBox::Ok, this);
 			mb->setInformativeText(tr("To see the error log, please click \"Show Details\"."));
-			mb->setDetailedText(tr("%0").arg(summary));
+			mb->setDetailedText(summary);
 			mb->setAttribute(Qt::WA_DeleteOnClose);
 
 			// Smartass hack to make the unresizeable message box wide enough for the changelog

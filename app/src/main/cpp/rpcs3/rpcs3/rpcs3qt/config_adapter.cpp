@@ -6,11 +6,11 @@ LOG_CHANNEL(cfg_log, "CFG");
 // Helper methods to interact with YAML and the config settings.
 namespace cfg_adapter
 {
-	static cfg::_base& get_cfg(cfg::_base& root, const std::string& name)
+	static cfg::_base& get_cfg(const cfg::_base& root, const std::string& name)
 	{
 		if (root.get_type() == cfg::type::node)
 		{
-			for (const auto& node : static_cast<cfg::node&>(root).get_nodes())
+			for (const auto& node : static_cast<const cfg::node&>(root).get_nodes())
 			{
 				if (node->get_name() == name)
 				{
@@ -48,14 +48,9 @@ namespace cfg_adapter
 		return get_node(node, location.cbegin(), location.cend());
 	}
 
-	QStringList get_options(const cfg_location& location)
+	std::vector<std::string> get_options(const cfg_location& location)
 	{
-		QStringList values;
-		for (const std::string& value : cfg_adapter::get_cfg(g_cfg, location.cbegin(), location.cend()).to_list())
-		{
-			values.append(QString::fromStdString(value));
-		}
-		return values;
+		return cfg_adapter::get_cfg(g_cfg, location.cbegin(), location.cend()).to_list();
 	}
 
 	static bool get_is_dynamic(const cfg_location& location)
@@ -65,13 +60,12 @@ namespace cfg_adapter
 
 	bool get_is_dynamic(emu_settings_type type)
 	{
-		const cfg_location loc = settings_location[type];
-		return get_is_dynamic(loc);
+		return get_is_dynamic(::at32(settings_location, type));
 	}
 
 	std::string get_setting_name(emu_settings_type type)
 	{
-		const cfg_location loc = settings_location[type];
-		return loc[loc.size() - 1];
+		const cfg_location& loc = ::at32(settings_location, type);
+		return ::at32(loc, loc.size() - 1);
 	}
 }

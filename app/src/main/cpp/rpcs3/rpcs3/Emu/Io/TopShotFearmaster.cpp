@@ -247,7 +247,7 @@ static int get_heartrate_sensor_value(u8 heartrate)
 	return sensor_data[heartrate - 30];
 }
 
-static void set_sensor_pos(struct TopShotFearmaster_data* ts, s32 led_lx, s32 led_ly, s32 led_rx, s32 led_ry, s32 detect_l, s32 detect_r)
+static void set_sensor_pos(TopShotFearmaster_data* ts, s32 led_lx, s32 led_ly, s32 led_rx, s32 led_ry, s32 detect_l, s32 detect_r)
 {
 	ts->led_lx_hi = led_lx >> 2;
 	ts->led_lx_lo = led_lx & 0x3;
@@ -278,7 +278,7 @@ void usb_device_topshotfearmaster::interrupt_transfer(u32 buf_size, u8* buf, u32
 	transfer->expected_result = HC_CC_NOERR;
 	transfer->expected_time = get_timestamp() + 4000;
 
-	struct TopShotFearmaster_data ts{};
+	TopShotFearmaster_data ts{};
 	ts.dpad = Dpad_None;
 	ts.stick_lx = ts.stick_ly = ts.stick_rx = ts.stick_ry = 0x7f;
 	if (m_mode)
@@ -308,7 +308,7 @@ void usb_device_topshotfearmaster::interrupt_transfer(u32 buf_size, u8* buf, u32
 	}
 
 	bool up = false, right = false, down = false, left = false;
-	const auto input_callback = [&ts, &up, &down, &left, &right](topshotfearmaster_btn btn, u16 value, bool pressed)
+	const auto input_callback = [&ts, &up, &down, &left, &right](topshotfearmaster_btn btn, pad_button /*pad_button*/, u16 value, bool pressed, bool& /*abort*/)
 	{
 		if (!pressed)
 			return;
@@ -339,10 +339,10 @@ void usb_device_topshotfearmaster::interrupt_transfer(u32 buf_size, u8* buf, u32
 
 	{
 		std::lock_guard lock(pad::g_pad_mutex);
-		const auto gamepad_handler = pad::get_current_handler();
+		const auto gamepad_handler = pad::get_pad_thread();
 		const auto& pads = gamepad_handler->GetPads();
 		const auto& pad = ::at32(pads, m_controller_index);
-		if (pad->m_port_status & CELL_PAD_STATUS_CONNECTED)
+		if (pad->is_connected() && !pad->is_copilot())
 		{
 			cfg->handle_input(pad, true, input_callback);
 		}

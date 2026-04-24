@@ -3,11 +3,16 @@ project(libswresample LANGUAGES C CXX ASM)
 
 set(CMAKE_C_STANDARD 11)
 
+if(ANDROID)
+
+    set(libswresample_aarch64
+            ${FFMPEG_DIR}/libswresample/aarch64/audio_convert_init.c
+            ${FFMPEG_DIR}/libswresample/aarch64/audio_convert_neon.S
+            ${FFMPEG_DIR}/libswresample/aarch64/resample_init.c
+            ${FFMPEG_DIR}/libswresample/aarch64/resample.S)
+endif ()
 add_library(libswresample STATIC
-        ${FFMPEG_DIR}/libswresample/aarch64/audio_convert_init.c
-        ${FFMPEG_DIR}/libswresample/aarch64/audio_convert_neon.S
-        ${FFMPEG_DIR}/libswresample/aarch64/resample_init.c
-        ${FFMPEG_DIR}/libswresample/aarch64/resample.S
+        ${libswresample_aarch64}
         ${FFMPEG_DIR}/libswresample/audioconvert.c
         ${FFMPEG_DIR}/libswresample/dither.c
         ${FFMPEG_DIR}/libswresample/options.c

@@ -1,11 +1,8 @@
 #pragma once
 
-#include <map>
-#include <list>
-
 #include "util/atomic.hpp"
 #include "util/shared_ptr.hpp"
-
+#include "Emu/Cell/timers.hpp"
 
 /*
  * sys_config is a "subscription-based data storage API"
@@ -161,6 +158,8 @@ public:
 
 		return null_ptr;
 	}
+
+	~lv2_config() noexcept;
 };
 
 /*
@@ -276,7 +275,7 @@ public:
 
 	// Utilities
 	usz get_size() const { return sizeof(sys_config_service_event_t)-1 + data.size(); }
-	shared_ptr<lv2_config_service> get_shared_ptr () const { return idm::get_unlocked<lv2_config_service>(idm_id); }
+	shared_ptr<lv2_config_service> get_shared_ptr () const { return stx::make_shared_from_this<lv2_config_service>(this); }
 	u32 get_id() const { return idm_id; }
 };
 
@@ -297,10 +296,9 @@ private:
 
 	// The service listener owns the service events - service events will not be freed as long as their corresponding listener exists
 	// This has been confirmed to be the case in realhw
+	shared_mutex mutex_service_events;
 	std::vector<shared_ptr<lv2_config_service_event>> service_events;
 	shared_ptr<lv2_config_handle> handle;
-
-	bool notify(const shared_ptr<lv2_config_service_event>& event);
 
 public:
 	const sys_config_service_id service_id;
@@ -342,7 +340,7 @@ public:
 
 	// Utilities
 	u32 get_id() const { return idm_id; }
-	shared_ptr<lv2_config_service_listener> get_shared_ptr() const { return idm::get_unlocked<lv2_config_service_listener>(idm_id); }
+	shared_ptr<lv2_config_service_listener> get_shared_ptr() const { return stx::make_shared_from_this<lv2_config_service_listener>(this); }
 };
 
 /*
@@ -360,6 +358,10 @@ class lv2_config_service_event
 		return g_fxo->get<service_event_id>().next_id++;
 	}
 
+	atomic_t<bool> m_destroyed = false;
+
+	friend class lv2_config;
+
 public:
 	const u32 id;
 
@@ -367,14 +369,14 @@ public:
 	// This has been confirmed to be the case in realhw
 	const shared_ptr<lv2_config_handle> handle;
 	const shared_ptr<lv2_config_service> service;
-	const lv2_config_service_listener& listener;
+	const u32 listener_id;
 
 	// Constructors (should not be used directly)
 	lv2_config_service_event(shared_ptr<lv2_config_handle> _handle, shared_ptr<lv2_config_service> _service, const lv2_config_service_listener& _listener) noexcept
 		: id(get_next_id())
 		, handle(std::move(_handle))
 		, service(std::move(_service))
-		, listener(_listener)
+		, listener_id(_listener.get_id())
 	{
 	}
 
@@ -391,8 +393,7 @@ public:
 
 	// Destructor
 	lv2_config_service_event& operator=(thread_state s) noexcept;
-
-	~lv2_config_service_event() noexcept = default;
+	~lv2_config_service_event() noexcept;
 
 	// Notify queue that this event exists
 	bool notify() const;

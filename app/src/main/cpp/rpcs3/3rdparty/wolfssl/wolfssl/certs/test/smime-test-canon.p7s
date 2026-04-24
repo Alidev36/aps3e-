@@ -4,11 +4,11 @@ Content-Type: multipart/signed; protocol="application/x-pkcs7-signature"; micalg
 This is an S/MIME signed message
 
 ------7DB22CE8F405BFCE81603E2CD3794291
-Content-Type: text/plain
-
-This text/plain content has been signed with canonicalized CRLF line endings,
-but it is added to the multipart message with non canonicalized line endings.
-
+Content-Type: text/plain
+
+This text/plain content has been signed with canonicalized CRLF line endings,
+but it is added to the multipart message with non canonicalized line endings.
+
 In order to match the hash, it will need to be canonicalized first.
 ------7DB22CE8F405BFCE81603E2CD3794291
 Content-Type: application/x-pkcs7-signature; name="smime.p7s"

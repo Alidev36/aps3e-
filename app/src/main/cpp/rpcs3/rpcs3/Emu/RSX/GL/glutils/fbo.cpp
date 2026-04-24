@@ -50,13 +50,8 @@ namespace gl
 
 	bool fbo::check() const
 	{
-
-#ifndef USE_GLES
 		GLenum status = DSA_CALL2_RET(CheckNamedFramebufferStatus, m_id, GL_FRAMEBUFFER);
-#else
-        glBindFramebuffer(GL_FRAMEBUFFER, m_id);
-        GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-#endif
+
 		if (status != GL_FRAMEBUFFER_COMPLETE)
 		{
 			rsx_log.error("FBO check failed: 0x%04x", status);
@@ -77,24 +72,13 @@ namespace gl
 	void fbo::draw_buffer(const attachment& buffer) const
 	{
 		GLenum buf = buffer.id();
-#ifndef USE_GLES
 		DSA_CALL3(NamedFramebufferDrawBuffers, FramebufferDrawBuffers, m_id, 1, &buf);
-#else
-        glBindFramebuffer(GL_FRAMEBUFFER, m_id);
-        glDrawBuffers(1, &buf);
-#endif
 	}
 
 	void fbo::draw_buffer(swapchain_buffer buffer) const
 	{
 		GLenum buf = static_cast<GLenum>(buffer);
-
-#ifndef USE_GLES
 		DSA_CALL3(NamedFramebufferDrawBuffers, FramebufferDrawBuffers, m_id, 1, &buf);
-#else
-        glBindFramebuffer(GL_FRAMEBUFFER, m_id);
-        glDrawBuffers(1, &buf);
-#endif
 	}
 
 	void fbo::draw_buffers(const std::initializer_list<attachment>& indexes) const
@@ -105,33 +89,18 @@ namespace gl
 		for (auto& index : indexes)
 			ids.push_back(index.id());
 
-#ifndef USE_GLES
 		DSA_CALL3(NamedFramebufferDrawBuffers, FramebufferDrawBuffers, m_id, static_cast<GLsizei>(ids.size()), ids.data());
-#else
-        glBindFramebuffer(GL_FRAMEBUFFER, m_id);
-        glDrawBuffers(static_cast<GLsizei>(ids.size()), ids.data());
-#endif
 	}
 
 	void fbo::read_buffer(const attachment& buffer) const
 	{
-#ifndef USE_GLES
 		DSA_CALL3(NamedFramebufferReadBuffer, FramebufferReadBuffer, m_id, buffer.id());
-#else
-        glBindFramebuffer(GL_FRAMEBUFFER, m_id);
-        glReadBuffer(buffer.id());
-#endif
 	}
 
 	void fbo::read_buffer(swapchain_buffer buffer) const
 	{
 		GLenum buf = static_cast<GLenum>(buffer);
-#ifndef USE_GLES
 		DSA_CALL3(NamedFramebufferReadBuffer, FramebufferReadBuffer, m_id, buf);
-#else
-        glBindFramebuffer(GL_FRAMEBUFFER, m_id);
-        glReadBuffer(buf);
-#endif
 	}
 
 	void fbo::draw_arrays(GLenum mode, GLsizei count, GLint first) const
@@ -216,24 +185,7 @@ namespace gl
 	{
 		save_binding_state save(*this);
 		pixel_settings.apply();
-
-
-#ifdef USE_GLES
-        //FIXME
-        /*GLuint pbo_id;
-            glGenBuffers(1, &pbo_id);
-            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo_id);
-            GLubyte* pbo_ptr = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, size.width * size.height * 4, GL_MAP_WRITE_BIT);
-            ensure(pbo_ptr!=nullptr);
-            memcpy(pbo_ptr, pixels, size.width * size.height * 4);
-            glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, GL_NONE);
-            glDeleteBuffers(1, &pbo_id);*/
-
-
-#else
 		glDrawPixels(size.width, size.height, static_cast<GLenum>(format_), static_cast<GLenum>(type_), pixels);
-#endif
 	}
 
 	void fbo::copy_from(const buffer& buf, const sizei& size, gl::texture::format format_, gl::texture::type type_, class pixel_unpack_settings pixel_settings) const
@@ -241,11 +193,7 @@ namespace gl
 		save_binding_state save(*this);
 		buffer::save_binding_state save_buffer(buffer::target::pixel_unpack, buf);
 		pixel_settings.apply();
-
-#ifndef USE_GLES
-        //FIXME
 		glDrawPixels(size.width, size.height, static_cast<GLenum>(format_), static_cast<GLenum>(type_), nullptr);
-#endif
 	}
 
 	void fbo::copy_to(void* pixels, coordi coord, gl::texture::format format_, gl::texture::type type_, class pixel_pack_settings pixel_settings) const

@@ -1,10 +1,10 @@
 #include "stdafx.h"
 #include "microphone_creator.h"
 
-#include "Utilities/StrFmt.h"
 #include "Utilities/StrUtil.h"
 
-#include "3rdparty/OpenAL/openal-soft/include/AL/alext.h"
+#include "al.h"
+#include "alc.h"
 
 LOG_CHANNEL(cfg_log, "CFG");
 
@@ -28,8 +28,9 @@ void microphone_creator::refresh_list()
 	{
 		if (const char* devices = alcGetString(nullptr, ALC_CAPTURE_DEVICE_SPECIFIER))
 		{
-			while (*devices != 0)
+			while (devices && *devices != 0)
 			{
+				cfg_log.notice("Found microphone: '%s'", devices);
 				m_microphone_list.append(devices);
 				devices += strlen(devices) + 1;
 			}
@@ -42,6 +43,7 @@ void microphone_creator::refresh_list()
 
 		if (const char* device = alcGetString(nullptr, ALC_DEFAULT_DEVICE_SPECIFIER))
 		{
+			cfg_log.notice("Found default microphone: '%s'", device);
 			m_microphone_list.append(device);
 		}
 	}
@@ -59,23 +61,23 @@ std::array<std::string, 4> microphone_creator::get_selection_list() const
 
 std::string microphone_creator::set_device(u32 num, const QString& text)
 {
-	ensure(num < m_sel_list.size());
+	std::string& device = ::at32(m_sel_list, num);
 
 	if (text == get_none())
-		m_sel_list[num].clear();
+		device.clear();
 	else
-		m_sel_list[num] = text.toStdString();
+		device = text.toStdString();
 
 	return m_sel_list[0] + "@@@" + m_sel_list[1] + "@@@" + m_sel_list[2] + "@@@" + m_sel_list[3] + "@@@";
 }
 
-void microphone_creator::parse_devices(const std::string& list)
+void microphone_creator::parse_devices(std::string_view list)
 {
 	m_sel_list = {};
 
-	const std::vector<std::string> devices_list = fmt::split(list, { "@@@" });
+	std::vector<std::string> devices_list = fmt::split(list, { "@@@" });
 	for (usz index = 0; index < std::min(m_sel_list.size(), devices_list.size()); index++)
 	{
-		m_sel_list[index] = devices_list[index];
+		m_sel_list[index] = std::move(devices_list[index]);
 	}
 }

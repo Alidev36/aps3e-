@@ -20,7 +20,7 @@ usb_device_rb3_midi_keyboard::usb_device_rb3_midi_keyboard(const std::array<u8, 
 	usb_device_emulated::add_string("Harmonix RB3 MIDI Keyboard Interface for PlayStation®3");
 
 	// connect to midi device
-	
+
 #if !defined(__ANDROID__)
 	midi_in = rtmidi_in_create_default();
 	ensure(midi_in);
@@ -89,7 +89,7 @@ usb_device_rb3_midi_keyboard::usb_device_rb3_midi_keyboard(const std::array<u8, 
 
 usb_device_rb3_midi_keyboard::~usb_device_rb3_midi_keyboard()
 {
-	
+
 #if !defined(__ANDROID__)
 	rtmidi_in_free(midi_in);
 #endif
@@ -202,7 +202,7 @@ void usb_device_rb3_midi_keyboard::interrupt_transfer(u32 buf_size, u8* buf, u32
 
 		// this returns a double as some sort of delta time, with -1.0
 		// being used to signal an error
-		
+
 #if !defined(__ANDROID__)
 		if (rtmidi_in_get_message(midi_in, midi_msg, &size) == -1.0)
 		{

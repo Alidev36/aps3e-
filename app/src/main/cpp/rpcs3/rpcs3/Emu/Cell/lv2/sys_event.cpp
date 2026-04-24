@@ -37,8 +37,8 @@ lv2_event_queue::lv2_event_queue(utils::serial& ar) noexcept
 
 std::function<void(void*)> lv2_event_queue::load(utils::serial& ar)
 {
-	auto queue = make_shared<lv2_event_queue>(ar);
-	return [ptr = lv2_obj::load(queue->key, queue)](void* storage) { *static_cast<shared_ptr<lv2_obj>*>(storage) = ptr; };
+	auto queue = make_shared<lv2_event_queue>(stx::exact_t<utils::serial&>(ar));
+	return [ptr = lv2_obj::load(queue->key, queue)](void* storage) { *static_cast<atomic_ptr<lv2_obj>*>(storage) = ptr; };
 }
 
 void lv2_event_queue::save(utils::serial& ar)
@@ -117,7 +117,7 @@ shared_ptr<lv2_event_queue> lv2_event_queue::find(u64 ipc_key)
 	return g_fxo->get<ipc_manager<lv2_event_queue, u64>>().get(ipc_key);
 }
 
-extern void resume_spu_thread_group_from_waiting(spu_thread& spu);
+extern void resume_spu_thread_group_from_waiting(spu_thread& spu, std::array<shared_ptr<named_thread<spu_thread>>, 8>& notify_spus);
 
 CellError lv2_event_queue::send(lv2_event event, bool* notified_thread, lv2_event_port* port)
 {
@@ -125,6 +125,22 @@ CellError lv2_event_queue::send(lv2_event event, bool* notified_thread, lv2_even
 	{
 		*notified_thread = false;
 	}
+
+	struct notify_spus_t 
+	{
+		std::array<shared_ptr<named_thread<spu_thread>>, 8> spus;
+
+		~notify_spus_t() noexcept
+		{
+			for (auto& spu : spus)
+			{
+				if (spu && spu->state & cpu_flag::wait)
+				{
+					spu->state.notify_one();
+				}
+			}
+		}
+	} notify_spus{};
 
 	std::lock_guard lock(mutex);
 
@@ -154,8 +170,7 @@ CellError lv2_event_queue::send(lv2_event event, bool* notified_thread, lv2_even
 		{
 			if (auto cpu = get_current_cpu_thread())
 			{
-				cpu->state += cpu_flag::again;
-				cpu->state += cpu_flag::exit;
+				cpu->state += cpu_flag::again + cpu_flag::exit;
 			}
 
 			sys_event.warning("Ignored event!");
@@ -199,7 +214,7 @@ CellError lv2_event_queue::send(lv2_event event, bool* notified_thread, lv2_even
 		const u32 data2 = static_cast<u32>(std::get<2>(event));
 		const u32 data3 = static_cast<u32>(std::get<3>(event));
 		spu.ch_in_mbox.set_values(4, CELL_OK, data1, data2, data3);
-		resume_spu_thread_group_from_waiting(spu);
+		resume_spu_thread_group_from_waiting(spu, notify_spus.spus);
 	}
 
 	return {};
@@ -260,6 +275,22 @@ error_code sys_event_queue_destroy(ppu_thread& ppu, u32 equeue_id, s32 mode)
 		return CELL_EINVAL;
 	}
 
+	struct notify_spus_t 
+	{
+		std::array<shared_ptr<named_thread<spu_thread>>, 8> spus;
+
+		~notify_spus_t() noexcept
+		{
+			for (auto& spu : spus)
+			{
+				if (spu && spu->state & cpu_flag::wait)
+				{
+					spu->state.notify_one();
+				}
+			}
+		}
+	} notify_spus{};
+
 	std::vector<lv2_event> events;
 
 	std::unique_lock<shared_mutex> qlock;
@@ -277,6 +308,15 @@ error_code sys_event_queue_destroy(ppu_thread& ppu, u32 equeue_id, s32 mode)
 			return CELL_EBUSY;
 		}
 
+		for (auto cpu = head; cpu; cpu = cpu->get_next_cpu())
+		{
+			if (cpu->state & cpu_flag::again)
+			{
+				ppu.state += cpu_flag::again;
+				return CELL_EAGAIN;
+			}
+		}
+
 		if (!queue.events.empty())
 		{
 			// Copy events for logging, does not empty
@@ -288,17 +328,6 @@ error_code sys_event_queue_destroy(ppu_thread& ppu, u32 equeue_id, s32 mode)
 		if (!head)
 		{
 			qlock.unlock();
-		}
-		else
-		{
-			for (auto cpu = head; cpu; cpu = cpu->get_next_cpu())
-			{
-				if (cpu->state & cpu_flag::again)
-				{
-					ppu.state += cpu_flag::again;
-					return CELL_EAGAIN;
-				}
-			}
 		}
 
 		return {};
@@ -357,7 +386,7 @@ error_code sys_event_queue_destroy(ppu_thread& ppu, u32 equeue_id, s32 mode)
 			for (auto cpu = +queue->sq; cpu; cpu = cpu->next_cpu)
 			{
 				cpu->ch_in_mbox.set_values(1, CELL_ECANCELED);
-				resume_spu_thread_group_from_waiting(*cpu);
+				resume_spu_thread_group_from_waiting(*cpu, notify_spus.spus);
 			}
 
 			atomic_storage<spu_thread*>::release(queue->sq, nullptr);
@@ -420,10 +449,8 @@ error_code sys_event_queue_tryreceive(ppu_thread& ppu, u32 equeue_id, vm::ptr<sy
 	while (count < size && !queue->events.empty())
 	{
 		auto& dest = events[count++];
-		const auto event = queue->events.front();
+		std::tie(dest.source, dest.data1, dest.data2, dest.data3) = queue->events.front();
 		queue->events.pop_front();
-
-		std::tie(dest.source, dest.data1, dest.data2, dest.data3) = event;
 	}
 
 	lock.unlock();
@@ -591,7 +618,7 @@ error_code sys_event_port_create(cpu_thread& cpu, vm::ptr<u32> eport_id, s32 por
 
 	sys_event.warning("sys_event_port_create(eport_id=*0x%x, port_type=%d, name=0x%llx)", eport_id, port_type, name);
 
-	if (port_type != SYS_EVENT_PORT_LOCAL && port_type != 3)
+	if (port_type != SYS_EVENT_PORT_LOCAL && port_type != SYS_EVENT_PORT_IPC)
 	{
 		sys_event.error("sys_event_port_create(): unknown port type (%d)", port_type);
 		return CELL_EINVAL;
@@ -645,8 +672,9 @@ error_code sys_event_port_connect_local(cpu_thread& cpu, u32 eport_id, u32 equeu
 	std::lock_guard lock(id_manager::g_mutex);
 
 	const auto port = idm::check_unlocked<lv2_obj, lv2_event_port>(eport_id);
+	auto queue = idm::get_unlocked<lv2_obj, lv2_event_queue>(equeue_id);
 
-	if (!port || !idm::check_unlocked<lv2_obj, lv2_event_queue>(equeue_id))
+	if (!port || !queue)
 	{
 		return CELL_ESRCH;
 	}
@@ -661,7 +689,7 @@ error_code sys_event_port_connect_local(cpu_thread& cpu, u32 eport_id, u32 equeu
 		return CELL_EISCONN;
 	}
 
-	port->queue = idm::get_unlocked<lv2_obj, lv2_event_queue>(equeue_id);
+	port->queue = std::move(queue);
 
 	return CELL_OK;
 }

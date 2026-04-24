@@ -74,17 +74,6 @@ namespace aarch64
         { 0x41, 0xd13, "armv8-r+crc+simd", "", "Cortex-R52" },
         { 0x41, 0xd16, "armv8-r+crc+simd", "", "Cortex-R52+" },
 
-        { 0x41, 0xd46, "armv9-a+fp16+bf16+i8mm", "", "cortex-a510" },
-        { 0x41, 0xd80, "armv9.2-a", "", "cortex-a520" },
-        //{ 0x41, 0xd47, "armv9-a+fp16+bf16+i8mm", "", "Cortex-A710" },
-        { 0x41, 0xd4d, "armv9-a+fp16+bf16+i8mm", "", "Cortex-A715" },
-        { 0x41, 0xd81, "armv9.2-a", "", "Cortex-A720" },
-        { 0x41, 0xd87, "armv9.2-a", "", "Cortex-A725" },
-        { 0x41, 0xd48, "armv9-a+fp16+bf16+i8mm", "", "Cortex-X2" },
-        { 0x41, 0xd4e, "armv9-a+fp16+bf16+i8mm", "", "Cortex-X3" },
-        { 0x41, 0xd82, "armv9.2-a", "", "Cortex-X4" },
-        { 0x41, 0xd85, "armv9.2-a", "", "Cortex-X925" },
-
         // APPLE
         { 0x61, 0x22, "armv8.5-a", "M1", "Firestorm" },
         { 0x61, 0x23, "armv8.5-a", "M1", "IceStorm" },
@@ -97,10 +86,6 @@ namespace aarch64
 
         // QUALCOMM
         { 0x51, 0x01, "armv8.5-a", "Snapdragon", "X-Elite" },
-
-        // Samsung
-        { 0x53, 0x02, "armv8.0-a", "", "exynos-m3" },
-         { 0x53, 0x03, "armv8.2-a", "", "exynos-m4" },
     };
 
     static const cpu_vendor_t* find_cpu_vendor(u64 id)
@@ -149,6 +134,46 @@ namespace aarch64
         // Unimplemented
         return 0;
 #endif
+    }
+
+    std::string get_cpu_name()
+    {
+        std::map<u64, int> core_layout;
+        for (u32 i = 0; i < std::thread::hardware_concurrency(); ++i)
+        {
+            const auto midr = read_MIDR_EL1(i);
+            if (midr == umax)
+            {
+                break;
+            }
+
+            core_layout[midr]++;
+        }
+
+        if (core_layout.empty())
+        {
+            return {};
+        }
+
+        const cpu_entry_t* lowest_part_info = nullptr; 
+        for (const auto& [midr, count] : core_layout)
+        {
+            const auto implementer_id = (midr >> 24) & 0xff;
+            const auto part_id = (midr >> 4) & 0xfff;
+
+            const auto part_info = find_cpu_part(implementer_id, part_id);
+            if (!part_info)
+            {
+                return {};
+            }
+
+            if (lowest_part_info == nullptr || lowest_part_info > part_info)
+            {
+                lowest_part_info = part_info;
+            }
+        }
+
+        return lowest_part_info ? lowest_part_info->name : "";
     }
 
     std::string get_cpu_brand()

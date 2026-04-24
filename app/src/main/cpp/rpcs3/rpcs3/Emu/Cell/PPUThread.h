@@ -145,7 +145,7 @@ public:
 	virtual void dump_regs(std::string&, std::any& custom_data) const override;
 	virtual std::string dump_callstack() const override;
 	virtual std::vector<std::pair<u32, u32>> dump_callstack_list() const override;
-	virtual std::string dump_misc() const override;
+	virtual void dump_misc(std::string& ret, std::any& custom_data) const override;
 	virtual void dump_all(std::string&) const override;
 	virtual void cpu_task() override final;
 	virtual void cpu_sleep() override;
@@ -267,6 +267,7 @@ public:
 	u32 res_cached{0}; // Reservation "cached" addresss
 	u32 res_notify{0};
 	u64 res_notify_time{0};
+	u32 res_notify_postpone_streak{0};
 
 	union ppu_prio_t
 	{

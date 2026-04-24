@@ -8,37 +8,6 @@ namespace gl
 	{
 		m_memory_type = type;
 
-#ifdef USE_GLES
-		if (type != memory_type::userptr)
-		{
-			GLenum flags = 0;
-			if (usage_flags & usage::host_write)
-			{
-				flags |= GL_MAP_WRITE_BIT;
-			}
-			if (usage_flags & usage::host_read)
-			{
-				flags |= GL_MAP_READ_BIT;
-			}
-			if (usage_flags & usage::persistent_map)
-			{
-				flags |= GL_MAP_PERSISTENT_BIT_EXT;
-			}
-			if (usage_flags & usage::dynamic_update)
-			{
-				flags |= GL_DYNAMIC_STORAGE_BIT_EXT;
-			}
-
-			ensure((flags & (GL_MAP_PERSISTENT_BIT_EXT | GL_DYNAMIC_STORAGE_BIT_EXT)) != (GL_MAP_PERSISTENT_BIT_EXT | GL_DYNAMIC_STORAGE_BIT_EXT),
-				"Mutually exclusive usage flags set!");
-
-			ensure(type == memory_type::local || flags != 0, "Host-visible memory must have usage flags set!");
-
-			glBindBuffer(GL_ARRAY_BUFFER, m_id);
-            glBufferStorageEXT(GL_ARRAY_BUFFER, size, data_, flags);
-			m_size = size;
-		}
-		#else
 		if (const auto& caps = get_driver_caps();
 			type != memory_type::userptr && caps.ARB_buffer_storage_supported)
 		{
@@ -78,7 +47,6 @@ namespace gl
 			DSA_CALL2(NamedBufferStorage, m_id, size, data_, flags);
 			m_size = size;
 		}
-#endif
 		else
 		{
 			data(size, data_, GL_STREAM_COPY);
@@ -147,10 +115,6 @@ namespace gl
 
 		m_size = size;
 
-#ifdef USE_GLES
-        glBindBuffer(GL_ARRAY_BUFFER, m_id);
-        glBufferData(GL_ARRAY_BUFFER, size, data_, usage);
-#else
 		if (m_memory_type == memory_type::userptr)
 		{
 			glBindBuffer(GL_EXTERNAL_VIRTUAL_MEMORY_BUFFER_AMD, m_id);
@@ -159,19 +123,17 @@ namespace gl
 		}
 
 		DSA_CALL2(NamedBufferData, m_id, size, data_, usage);
-#endif
 	}
 
 	void buffer::sub_data(GLsizeiptr offset, GLsizeiptr length, const GLvoid* data)
 	{
 		ensure(m_memory_type == memory_type::local);
-
-#ifdef USE_GLES
-        glBindBuffer(GL_ARRAY_BUFFER, m_id);
-        glBufferSubData(GL_ARRAY_BUFFER, offset,length, data);
-#else
 		DSA_CALL2(NamedBufferSubData, m_id, offset, length, data);
-#endif
+	}
+
+	void buffer::fill(GLsizeiptr offset, GLsizeiptr length, GLuint pattern)
+	{
+		DSA_CALL2(ClearNamedBufferSubData, m_id, GL_R32UI, offset, length, GL_RED, GL_UNSIGNED_INT, &pattern);
 	}
 
 	GLubyte* buffer::map(GLsizeiptr offset, GLsizeiptr length, access access_)
@@ -181,24 +143,14 @@ namespace gl
 		GLenum access_bits = static_cast<GLenum>(access_);
 		if (access_bits == GL_MAP_WRITE_BIT) access_bits |= GL_MAP_UNSYNCHRONIZED_BIT;
 
-#ifdef USE_GLES
-        glBindBuffer(GL_ARRAY_BUFFER, m_id);
-        auto raw_data=glMapBufferRange(GL_ARRAY_BUFFER, offset,length, access_bits);
-#else
 		auto raw_data = DSA_CALL2_RET(MapNamedBufferRange, id(), offset, length, access_bits);
-#endif
 		return reinterpret_cast<GLubyte*>(raw_data);
 	}
 
 	void buffer::unmap()
 	{
 		ensure(m_memory_type == memory_type::host_visible);
-#ifdef USE_GLES
-        glBindBuffer(GL_ARRAY_BUFFER, m_id);
-        glUnmapBuffer(GL_ARRAY_BUFFER);
-#else
 		DSA_CALL2(UnmapNamedBuffer, id());
-#endif
 	}
 
 	void buffer::bind_range(u32 index, u32 offset, u32 size) const
@@ -215,12 +167,6 @@ namespace gl
 
 	void buffer::copy_to(buffer* other, u64 src_offset, u64 dst_offset, u64 size)
 	{
-
-#ifdef USE_GLES
-        glBindBuffer(GL_COPY_READ_BUFFER, this->id());
-        glBindBuffer(GL_COPY_WRITE_BUFFER, other->id());
-        glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, src_offset, dst_offset, size);
-#else
 		if (get_driver_caps().ARB_direct_state_access_supported)
 		{
 			glCopyNamedBufferSubData(this->id(), other->id(), src_offset, dst_offset, size);
@@ -229,7 +175,6 @@ namespace gl
 		{
 			glNamedCopyBufferSubDataEXT(this->id(), other->id(), src_offset, dst_offset, size);
 		}
-#endif
 	}
 
 	// Buffer view

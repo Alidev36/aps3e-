@@ -17,6 +17,7 @@ namespace gl
 		const u32 STENCIL_FRONT_OP   = 0xFFFF0007;
 		const u32 STENCIL_BACK_OP    = 0xFFFF0008;
 		const u32 STENCIL_BACK_MASK  = 0xFFFF0009;
+		const u32 POLYGON_MODE       = 0xFFFF000A;
 
 		std::unordered_map<GLenum, u64> properties = {};
 		std::unordered_map<GLenum, std::array<u64, 4>> indexed_properties = {};
@@ -137,7 +138,7 @@ namespace gl
 			const u32 value = std::bit_cast<u32>(depth);
 			if (!test_and_set_property(GL_DEPTH_CLEAR_VALUE, value))
 			{
-				glClearDepthf(depth);
+				glClearDepth(depth);
 			}
 		}
 
@@ -240,7 +241,6 @@ namespace gl
 			const u64 value = (static_cast<u64>(std::bit_cast<u32>(max)) << 32) | std::bit_cast<u32>(min);
 			if (!test_and_set_property(DEPTH_BOUNDS, value))
 			{
-#ifndef USE_GLES
 				if (get_driver_caps().NV_depth_buffer_float_supported)
 				{
 					glDepthBoundsdNV(min, max);
@@ -249,7 +249,6 @@ namespace gl
 				{
 					glDepthBoundsEXT(min, max);
 				}
-#endif
 			}
 		}
 
@@ -258,9 +257,6 @@ namespace gl
 			const u64 value = (static_cast<u64>(std::bit_cast<u32>(max)) << 32) | std::bit_cast<u32>(min);
 			if (!test_and_set_property(DEPTH_RANGE, value))
 			{
-#ifdef USE_GLES
-                glDepthRangef(min, max);
-#else
 				if (get_driver_caps().NV_depth_buffer_float_supported)
 				{
 					glDepthRangedNV(min, max);
@@ -269,18 +265,15 @@ namespace gl
 				{
 					glDepthRange(min, max);
 				}
-#endif
 			}
 		}
 
 		void logic_op(GLenum op)
 		{
-#ifndef USE_GLES
 			if (!test_and_set_property(GL_COLOR_LOGIC_OP, op))
 			{
 				glLogicOp(op);
 			}
-#endif
 		}
 
 		void line_width(GLfloat width)
@@ -349,17 +342,6 @@ namespace gl
 			{
 				for (u32 i = 0; i < 6; ++i)
 				{
-#ifdef USE_GLES
-
-                    if (mask & (1 << i))
-					{
-						glEnable(GL_CLIP_DISTANCE0_EXT + i);
-					}
-					else
-					{
-						glDisable(GL_CLIP_DISTANCE0_EXT + i);
-					}
-#else
 					if (mask & (1 << i))
 					{
 						glEnable(GL_CLIP_DISTANCE0 + i);
@@ -368,8 +350,16 @@ namespace gl
 					{
 						glDisable(GL_CLIP_DISTANCE0 + i);
 					}
-#endif
 				}
+			}
+		}
+
+		void polygon_mode(GLenum mode)
+		{
+			if (!test_and_set_property(POLYGON_MODE, mode))
+			{
+				// Note: GL4+ does not support separate polygon mode per-face-type
+				glPolygonMode(GL_FRONT_AND_BACK, mode);
 			}
 		}
 
@@ -386,15 +376,12 @@ namespace gl
 
 		GLuint get_bound_texture(GLuint layer, GLenum target)
 		{
-			ensure(layer < 48);
-			return bound_textures[layer][target];
+			return ::at32(bound_textures, layer)[target];
 		}
 
 		void bind_texture(GLuint layer, GLenum target, GLuint name, GLboolean force = GL_FALSE)
 		{
-			ensure(layer < 48);
-
-			auto& bound = bound_textures[layer][target];
+			auto& bound = ::at32(bound_textures, layer)[target];
 			if (bound != name || force)
 			{
 				glActiveTexture(GL_TEXTURE0 + layer);

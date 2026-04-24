@@ -2,10 +2,10 @@
 #include "overlay_manager.h"
 #include "overlay_osk.h"
 #include "Emu/Cell/Modules/cellSysutil.h"
-#include "Emu/Cell/Modules/cellMsgDialog.h"
-#include "Emu/Cell/Modules/cellKb.h"
+#include "Emu/Io/Keyboard.h"
 #include "Emu/System.h"
 #include "Emu/system_config.h"
+#include "Emu/Cell/timers.hpp"
 
 LOG_CHANNEL(osk, "OSK");
 
@@ -435,7 +435,7 @@ namespace rsx
 
 			m_preview.set_pos(input_x, input_y + title_height);
 			m_preview.set_size(input_w, preview_height);
-			m_preview.set_padding(get_scaled(15), 0, get_scaled(10), 0);
+			m_preview.set_padding(get_scaled(15), get_scaled(15), get_scaled(10), 0);
 
 			const s16 button_y = panel_y + panel_h + button_margin;
 
@@ -823,7 +823,7 @@ namespace rsx
 			}
 			case pad_button::start:
 			{
-				Emu.GetCallbacks().play_sound(fs::get_config_dir() + "sounds/snd_oskenter.wav");
+				play_sound(sound_effect::osk_accept);
 				Close(CELL_OSKDIALOG_CLOSE_CONFIRM);
 				play_cursor_sound = false;
 				break;
@@ -840,7 +840,7 @@ namespace rsx
 			}
 			case pad_button::cross:
 			{
-				Emu.GetCallbacks().play_sound(fs::get_config_dir() + "sounds/snd_oskenter.wav");
+				play_sound(sound_effect::osk_accept);
 				on_accept();
 				m_reset_pulse = true;
 				play_cursor_sound = false;
@@ -848,7 +848,7 @@ namespace rsx
 			}
 			case pad_button::circle:
 			{
-				Emu.GetCallbacks().play_sound(fs::get_config_dir() + "sounds/snd_oskcancel.wav");
+				play_sound(sound_effect::osk_cancel);
 				Close(CELL_OSKDIALOG_CLOSE_CANCEL);
 				play_cursor_sound = false;
 				break;
@@ -890,7 +890,7 @@ namespace rsx
 			// Play a sound unless this is a fast auto repeat which would induce a nasty noise
 			if (play_cursor_sound && (!is_auto_repeat || m_auto_repeat_ms_interval >= m_auto_repeat_ms_interval_default))
 			{
-				Emu.GetCallbacks().play_sound(fs::get_config_dir() + "sounds/snd_cursor.wav");
+				play_sound(sound_effect::cursor);
 			}
 
 			if (m_reset_pulse)
@@ -1167,7 +1167,7 @@ namespace rsx
 			const localized_string_id id = m_password_mode
 				? localized_string_id::RSX_OVERLAYS_OSK_DIALOG_ENTER_PASSWORD
 				: localized_string_id::RSX_OVERLAYS_OSK_DIALOG_ENTER_TEXT;
-			return utf8_to_u32string(get_localized_string(id));
+			return get_localized_u32string(id);
 		}
 
 		void osk_dialog::update(u64 timestamp_us)

@@ -1,10 +1,10 @@
 #include "stdafx.h"
 
 #include "Emu/IdManager.h"
-#include "Emu/IPC.h"
 
 #include "Emu/Cell/ErrorCodes.h"
 #include "Emu/Cell/PPUThread.h"
+#include "Emu/Memory/vm_reservation.h"
 
 #include "util/asm.hpp"
 
@@ -27,7 +27,7 @@ lv2_mutex::lv2_mutex(utils::serial& ar)
 
 std::function<void(void*)> lv2_mutex::load(utils::serial& ar)
 {
-	return load_func(make_shared<lv2_mutex>(ar));
+	return load_func(make_shared<lv2_mutex>(stx::exact_t<utils::serial&>(ar)));
 }
 
 void lv2_mutex::save(utils::serial& ar)
@@ -85,7 +85,7 @@ error_code sys_mutex_create(ppu_thread& ppu, vm::ptr<u32> mutex_id, vm::ptr<sys_
 		sys_mutex.todo("sys_mutex_create(): unexpected adaptive (0x%x)", _attr.adaptive);
 	}
 
-	if (auto error = lv2_obj::create<lv2_mutex>(_attr.pshared, _attr.ipc_key, _attr.flags, [&]()
+	if (auto error = lv2_obj::create<lv2_mutex>(_attr.pshared, ipc_key, _attr.flags, [&]()
 	{
 		return make_shared<lv2_mutex>(
 			_attr.protocol,
@@ -346,6 +346,9 @@ error_code sys_mutex_unlock(ppu_thread& ppu, u32 mutex_id)
 
 	const auto mutex = idm::check<lv2_obj, lv2_mutex>(mutex_id, [&, notify = lv2_obj::notify_all_t()](lv2_mutex& mutex) -> CellError
 	{
+		// At unlock, we have some time to do other jobs when the thread is unlikely to be in other critical sections
+		notify.enqueue_on_top(vm::reservation_notifier_notify(ppu.res_notify, ppu.res_notify_time, true));
+
 		auto result = mutex.try_unlock(ppu);
 
 		if (result == CELL_EBUSY)

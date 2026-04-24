@@ -15,6 +15,7 @@
 #include <vector>
 
 class gui_settings;
+enum class video_renderer;
 
 class gs_frame : public QWindow, public GSFrameBase
 {
@@ -33,7 +34,8 @@ private:
 
 	u64 m_frames = 0;
 	std::string m_window_title;
-	QWindow::Visibility m_last_visibility = Visibility::Windowed;
+	Visibility m_last_visibility = Visibility::Windowed;
+	Visibility m_visibility = Visibility::Windowed;
 	atomic_t<bool> m_is_closing = false;
 	atomic_t<bool> m_show_mouse = true;
 	bool m_disable_mouse = false;
@@ -45,12 +47,17 @@ private:
 	u32 m_hide_mouse_idletime = 2000; // ms
 	bool m_flip_showed_frame = false;
 	bool m_start_games_fullscreen = false;
+	bool m_ignore_stop_events = false;
 
 	std::shared_ptr<utils::video_encoder> m_video_encoder{};
 
 public:
 	explicit gs_frame(QScreen* screen, const QRect& geometry, const QIcon& appIcon, std::shared_ptr<gui_settings> gui_settings, bool force_fullscreen);
 	~gs_frame();
+
+	video_renderer renderer() const { return m_renderer; };
+
+	void ignore_stop_events() { m_ignore_stop_events = true; }
 
 	draw_context_t make_context() override;
 	void set_current(draw_context_t context) override;
@@ -72,14 +79,17 @@ public:
 	bool get_mouse_lock_state();
 
 	bool can_consume_frame() const override;
-	void present_frame(std::vector<u8>& data, u32 pitch, u32 width, u32 height, bool is_bgra) const override;
-	void take_screenshot(std::vector<u8> data, u32 sshot_width, u32 sshot_height, bool is_bgra) override;
+	void present_frame(std::vector<u8>&& data, u32 pitch, u32 width, u32 height, bool is_bgra) const override;
+	void take_screenshot(std::vector<u8>&& data, u32 sshot_width, u32 sshot_height, bool is_bgra) override;
 
 protected:
-	void paintEvent(QPaintEvent *event) override;
-	void showEvent(QShowEvent *event) override;
+	video_renderer m_renderer;
+
+	void paintEvent(QPaintEvent* event) override;
+	void showEvent(QShowEvent* event) override;
 
 	void close() override;
+	void reset() override;
 
 	bool shown() override;
 	void hide() override;
@@ -102,7 +112,7 @@ private:
 	void toggle_recording();
 	void toggle_mouselock();
 	void update_cursor();
-	void handle_cursor(QWindow::Visibility visibility, bool visibility_changed, bool active_changed, bool start_idle_timer);
+	void handle_cursor(Visibility visibility, bool visibility_changed, bool active_changed, bool start_idle_timer);
 
 private Q_SLOTS:
 	void mouse_hide_timeout();

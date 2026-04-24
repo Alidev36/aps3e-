@@ -2,7 +2,7 @@
 # All paths should be given relative to the root
 
 if BUILD_WOLFCRYPT_TESTS
-if !BUILD_LINUXKM
+if !BUILD_KERNEL_MODULE
 
 noinst_PROGRAMS+= wolfcrypt/test/testwolfcrypt
 if BUILD_CRYPTONLY
@@ -26,5 +26,9 @@ endif
 
 EXTRA_DIST += wolfcrypt/test/test.sln
 EXTRA_DIST += wolfcrypt/test/test.vcproj
+EXTRA_DIST += wolfcrypt/test/test-VS2022.sln
+EXTRA_DIST += wolfcrypt/test/test-VS2022.vcxproj
+EXTRA_DIST += wolfcrypt/test/test-VS2022.vcxproj.user
+
 EXTRA_DIST += wolfcrypt/test/README.md
 DISTCLEANFILES+= wolfcrypt/test/.libs/testwolfcrypt

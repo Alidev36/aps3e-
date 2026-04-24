@@ -493,6 +493,10 @@ inline FT build_function_asm(std::string_view name, F&& builder, ::jit_runtime* 
 	return reinterpret_cast<FT>(uptr(result));
 }
 
+#if defined(__INTELLISENSE__) && !defined(LLVM_AVAILABLE)
+#define LLVM_AVAILABLE
+#endif
+
 #ifdef LLVM_AVAILABLE
 
 namespace llvm
@@ -569,6 +573,6 @@ public:
 	bool add_sub_disk_space(ssz space);
 };
 
-llvm::StringRef fallback_cpu_detection();
+const char *fallback_cpu_detection();
 
 #endif // LLVM_AVAILABLE

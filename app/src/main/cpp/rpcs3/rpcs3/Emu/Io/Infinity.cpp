@@ -5,7 +5,6 @@
 
 #include "Crypto/aes.h"
 #include "Crypto/sha1.h"
-#include "util/asm.hpp"
 
 LOG_CHANNEL(infinity_log, "infinity");
 
@@ -259,13 +258,13 @@ void infinity_base::get_figure_identifier(u8 fig_num, u8 sequence, std::array<u8
 	reply_buf[11] = generate_checksum(reply_buf, 11);
 }
 
-bool infinity_base::has_figure_been_added_removed() const
+std::optional<std::array<u8, 32>> infinity_base::pop_added_removed_response()
 {
-	return !m_figure_added_removed_responses.empty();
-}
+	std::lock_guard lock(infinity_mutex);
 
-std::array<u8, 32> infinity_base::pop_added_removed_response()
-{
+	if (m_figure_added_removed_responses.empty())
+		return std::nullopt;
+
 	std::array<u8, 32> response = m_figure_added_removed_responses.front();
 	m_figure_added_removed_responses.pop();
 	return response;
@@ -373,6 +372,16 @@ usb_device_infinity::~usb_device_infinity()
 {
 }
 
+std::shared_ptr<usb_device> usb_device_infinity::make_instance(u32, const std::array<u8, 7>& location)
+{
+	return std::make_shared<usb_device_infinity>(location);
+}
+
+u16 usb_device_infinity::get_num_emu_devices()
+{
+	return 1;
+}
+
 void usb_device_infinity::control_transfer(u8 bmRequestType, u8 bRequest, u16 wValue, u16 wIndex, u16 wLength, u32 buf_size, u8* buf, UsbTransfer* transfer)
 {
 	usb_device_emulated::control_transfer(bmRequestType, bRequest, wValue, wIndex, wLength, buf_size, buf, transfer);
@@ -390,9 +399,10 @@ void usb_device_infinity::interrupt_transfer(u32 buf_size, u8* buf, u32 endpoint
 	{
 		// Respond after FF command
 		transfer->expected_time = get_timestamp() + 1000;
-		if (g_infinitybase.has_figure_been_added_removed())
+		std::optional<std::array<u8, 32>> response = g_infinitybase.pop_added_removed_response();
+		if (response)
 		{
-			memcpy(buf, g_infinitybase.pop_added_removed_response().data(), 0x20);
+			memcpy(buf, response.value().data(), 0x20);
 		}
 		else if (!m_queries.empty())
 		{

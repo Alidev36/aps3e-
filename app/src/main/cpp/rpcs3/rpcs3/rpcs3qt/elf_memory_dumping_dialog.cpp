@@ -1,9 +1,8 @@
 #include "elf_memory_dumping_dialog.h"
-#include "Utilities/Config.h"
+#include "gui_settings.h"
+#include "qt_utils.h"
 
 #include "Emu/Cell/SPUThread.h"
-
-#include "qt_utils.h"
 
 #include <QFileDialog>
 #include <QCoreApplication>

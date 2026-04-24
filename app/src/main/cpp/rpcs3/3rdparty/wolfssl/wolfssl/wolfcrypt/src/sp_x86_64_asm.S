@@ -1,12 +1,12 @@
 /* sp_x86_64_asm.S */
 /*
- * Copyright (C) 2006-2024 wolfSSL Inc.
+ * Copyright (C) 2006-2026 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
  * wolfSSL is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * wolfSSL is distributed in the hope that it will be useful,
@@ -42,7 +42,9 @@
 #define HAVE_INTEL_AVX1
 #endif /* HAVE_INTEL_AVX1 */
 #ifndef NO_AVX2_SUPPORT
+#ifndef HAVE_INTEL_AVX2
 #define HAVE_INTEL_AVX2
+#endif /* HAVE_INTEL_AVX2 */
 #endif /* NO_AVX2_SUPPORT */
 
 #ifdef WOLFSSL_SP_X86_64_ASM
@@ -58950,10 +58952,10 @@ L_256_mod_inv_4_store_end:
 .section	__DATA,__data
 #endif /* __APPLE__ */
 L_sp256_mod_inv_avx2_4_order:
-.long	0x632551,0x1e84f3b,0x3bce6fa,0x3ffffff
-.long	0x3ff0000,0x0,0x0,0x0
-.long	0x272b0bf,0x2b69c5e,0x3ffffff,0x3ff
-.long	0x3fffff,0x0,0x0,0x0
+.long	0x00632551,0x01e84f3b,0x03bce6fa,0x03ffffff
+.long	0x03ff0000,0x00000000,0x00000000,0x00000000
+.long	0x0272b0bf,0x02b69c5e,0x03ffffff,0x000003ff
+.long	0x003fffff,0x00000000,0x00000000,0x00000000
 #ifndef __APPLE__
 .data
 #else
@@ -58973,48 +58975,48 @@ L_sp256_mod_inv_avx2_4_one:
 .section	__DATA,__data
 #endif /* __APPLE__ */
 L_sp256_mod_inv_avx2_4_all_one:
-.long	0x1,0x1,0x1,0x1
-.long	0x1,0x1,0x1,0x1
+.long	0x00000001,0x00000001,0x00000001,0x00000001
+.long	0x00000001,0x00000001,0x00000001,0x00000001
 #ifndef __APPLE__
 .data
 #else
 .section	__DATA,__data
 #endif /* __APPLE__ */
 L_sp256_mod_inv_avx2_4_mask01111:
-.long	0x0,0x1,0x1,0x1
-.long	0x1,0x0,0x0,0x0
+.long	0x00000000,0x00000001,0x00000001,0x00000001
+.long	0x00000001,0x00000000,0x00000000,0x00000000
 #ifndef __APPLE__
 .data
 #else
 .section	__DATA,__data
 #endif /* __APPLE__ */
 L_sp256_mod_inv_avx2_4_down_one_dword:
-.long	0x1,0x2,0x3,0x4
-.long	0x5,0x6,0x7,0x7
+.long	0x00000001,0x00000002,0x00000003,0x00000004
+.long	0x00000005,0x00000006,0x00000007,0x00000007
 #ifndef __APPLE__
 .data
 #else
 .section	__DATA,__data
 #endif /* __APPLE__ */
 L_sp256_mod_inv_avx2_4_neg:
-.long	0x0,0x0,0x0,0x0
-.long	0x80000000,0x0,0x0,0x0
+.long	0x00000000,0x00000000,0x00000000,0x00000000
+.long	0x80000000,0x00000000,0x00000000,0x00000000
 #ifndef __APPLE__
 .data
 #else
 .section	__DATA,__data
 #endif /* __APPLE__ */
 L_sp256_mod_inv_avx2_4_up_one_dword:
-.long	0x7,0x0,0x1,0x2
-.long	0x3,0x7,0x7,0x7
+.long	0x00000007,0x00000000,0x00000001,0x00000002
+.long	0x00000003,0x00000007,0x00000007,0x00000007
 #ifndef __APPLE__
 .data
 #else
 .section	__DATA,__data
 #endif /* __APPLE__ */
 L_sp256_mod_inv_avx2_4_mask26:
-.long	0x3ffffff,0x3ffffff,0x3ffffff,0x3ffffff
-.long	0x3ffffff,0x0,0x0,0x0
+.long	0x03ffffff,0x03ffffff,0x03ffffff,0x03ffffff
+.long	0x03ffffff,0x00000000,0x00000000,0x00000000
 /* Non-constant time modular inversion.
  *
  * @param  [out]  r   Resulting number.

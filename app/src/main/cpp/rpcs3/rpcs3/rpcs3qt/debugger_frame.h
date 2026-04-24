@@ -1,6 +1,7 @@
 #pragma once
 
 #include "util/types.hpp"
+#include "util/shared_ptr.hpp"
 
 #include "custom_dock_widget.h"
 
@@ -45,20 +46,21 @@ class debugger_frame : public custom_dock_widget
 	const QString RunString = tr("Run");
 	const QString PauseString = tr("Pause");
 
-	debugger_list* m_debugger_list;
-	QSplitter* m_right_splitter;
+	debugger_list* m_debugger_list = nullptr;
+	QSplitter* m_right_splitter = nullptr;
 	QFont m_mono;
-	QPlainTextEdit* m_misc_state;
-	QPlainTextEdit* m_regs;
-	QPushButton* m_go_to_addr;
-	QPushButton* m_go_to_pc;
-	QPushButton* m_btn_step;
-	QPushButton* m_btn_step_over;
-	QPushButton* m_btn_run;
+	QPlainTextEdit* m_misc_state = nullptr;
+	QPlainTextEdit* m_regs = nullptr;
+	QPushButton* m_go_to_addr = nullptr;
+	QPushButton* m_go_to_pc = nullptr;
+	QPushButton* m_btn_step = nullptr;
+	QPushButton* m_btn_step_over = nullptr;
+	QPushButton* m_btn_add_bp = nullptr;
+	QPushButton* m_btn_run = nullptr;
 
-	QComboBox* m_choice_units;
-	QTimer* m_update;
-	QSplitter* m_splitter;
+	QComboBox* m_choice_units = nullptr;
+	QTimer* m_update = nullptr;
+	QSplitter* m_splitter = nullptr;
 
 	u64 m_threads_created = -1;
 	u64 m_threads_deleted = -1;
@@ -67,7 +69,9 @@ class debugger_frame : public custom_dock_widget
 	u32 m_last_pc = -1;
 	std::vector<char> m_last_query_state;
 	std::string m_last_reg_state;
+	std::string m_last_misc_state;
 	std::any m_dump_reg_func_data;
+	std::any m_dump_misc_func_data;
 	std::vector<std::function<cpu_thread*()>> m_threads_info;
 	u32 m_last_step_over_breakpoint = -1;
 	u64 m_ui_update_ctr = 0;
@@ -75,16 +79,17 @@ class debugger_frame : public custom_dock_widget
 	bool m_thread_list_pending_update = false;
 
 	std::shared_ptr<CPUDisAsm> m_disasm; // Only shared to allow base/derived functionality
-	std::shared_ptr<cpu_thread> m_cpu;
+	shared_ptr<cpu_thread> m_cpu;
 	rsx::thread* m_rsx = nullptr;
+	u32 m_hw_ppu_idx = umax;
 	std::shared_ptr<utils::shm> m_spu_disasm_memory;
 	u32 m_spu_disasm_origin_eal = 0;
 	u32 m_spu_disasm_pc = 0;
 	bool m_is_spu_disasm_mode = false;
 
-	breakpoint_list* m_breakpoint_list;
-	breakpoint_handler* m_ppu_breakpoint_handler;
-	call_stack_list* m_call_stack_list;
+	breakpoint_list* m_breakpoint_list = nullptr;
+	breakpoint_handler* m_ppu_breakpoint_handler = nullptr;
+	call_stack_list* m_call_stack_list = nullptr;
 	instruction_editor_dialog* m_inst_editor = nullptr;
 	register_editor_dialog* m_reg_editor = nullptr;
 	QDialog* m_goto_dialog = nullptr;
@@ -105,8 +110,8 @@ public:
 	void UpdateUI();
 	void UpdateUnitList();
 
-	void DoUpdate();
-	void WritePanels();
+	void DoUpdate(cpu_thread* cpu0);
+	void WritePanels(cpu_thread* cpu);
 	void EnableButtons(bool enable);
 	void ShowGotoAddressDialog();
 	void PerformGoToRequest(const QString& text_argument);
@@ -135,9 +140,11 @@ public Q_SLOTS:
 private Q_SLOTS:
 	void OnSelectUnit();
 	void OnSelectSPUDisassembler();
-	void ShowPC(bool user_requested = false);
+	void OnRegsContextMenu(const QPoint& pos);
+	void ShowPC(bool user_requested = false, cpu_thread* cpu = nullptr);
 	void EnableUpdateTimer(bool enable) const;
 	void RunBtnPress();
+	void RegsShowMemoryViewerAction();
 };
 
 Q_DECLARE_METATYPE(u32)

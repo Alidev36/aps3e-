@@ -51,5 +51,5 @@ void cfg_upnp::set_device_url(std::string_view url)
 
 std::string cfg_upnp::get_path()
 {
-	return fs::get_config_dir() + "upnp.yml";
+	return fs::get_config_dir(true) + "upnp.yml";
 }

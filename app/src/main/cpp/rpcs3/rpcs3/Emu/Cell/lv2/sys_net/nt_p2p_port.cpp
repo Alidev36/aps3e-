@@ -7,6 +7,7 @@
 #include "sys_net_helpers.h"
 #include "Emu/NP/vport0.h"
 #include "Emu/NP/np_handler.h"
+#include "Emu/NP/np_helpers.h"
 
 LOG_CHANNEL(sys_net);
 
@@ -40,10 +41,10 @@ namespace sys_net_helpers
 nt_p2p_port::nt_p2p_port(u16 port)
 	: port(port)
 {
-	is_ipv6 = np::is_ipv6_supported();
+	const bool is_ipv6 = np::is_ipv6_supported();
 
 	// Creates and bind P2P Socket
-	p2p_socket = is_ipv6 ? ::socket(AF_INET6, SOCK_DGRAM, 0) : ::socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+	p2p_socket = ::socket(is_ipv6 ? AF_INET6 : AF_INET, SOCK_DGRAM, 0);
 #ifdef _WIN32
 	if (p2p_socket == INVALID_SOCKET)
 #else
@@ -59,6 +60,7 @@ nt_p2p_port::nt_p2p_port(u16 port)
 
 	int ret_bind = 0;
 	const u16 be_port = std::bit_cast<u16, be_t<u16>>(port);
+	auto& nph = g_fxo->get<named_thread<np::np_handler>>();
 
 	if (is_ipv6)
 	{
@@ -73,15 +75,21 @@ nt_p2p_port::nt_p2p_port(u16 port)
 	else
 	{
 		::sockaddr_in p2p_ipv4_addr{.sin_family = AF_INET, .sin_port = be_port};
-		ret_bind = ::bind(p2p_socket, reinterpret_cast<sockaddr*>(&p2p_ipv4_addr), sizeof(p2p_ipv4_addr));
+		const u32 bind_ip = nph.get_bind_ip();
+		p2p_ipv4_addr.sin_addr.s_addr = bind_ip;
+
+		if (ret_bind = ::bind(p2p_socket, reinterpret_cast<const sockaddr*>(&p2p_ipv4_addr), sizeof(p2p_ipv4_addr)); ret_bind == -1 && bind_ip)
+		{
+			sys_net.error("Failed to bind to %s:%d, falling back to 0.0.0.0:%d", np::ip_to_string(bind_ip), port, port);
+			p2p_ipv4_addr.sin_addr.s_addr = 0;
+			ret_bind = ::bind(p2p_socket, reinterpret_cast<const sockaddr*>(&p2p_ipv4_addr), sizeof(p2p_ipv4_addr));
+		}
 	}
 
 	if (ret_bind == -1)
 		fmt::throw_exception("Failed to bind DGRAM socket to %d for P2P: %s!", port, get_last_error(true));
 
-	auto& nph = g_fxo->get<named_thread<np::np_handler>>();
 	nph.upnp_add_port_mapping(port, "UDP");
-
 	sys_net.notice("P2P port %d was bound!", port);
 }
 
@@ -145,13 +153,13 @@ bool nt_p2p_port::recv_data()
 {
 	::sockaddr_storage native_addr{};
 	::socklen_t native_addrlen = sizeof(native_addr);
-	const auto recv_res        = ::recvfrom(p2p_socket, reinterpret_cast<char*>(p2p_recv_data.data()), ::size32(p2p_recv_data), 0, reinterpret_cast<struct sockaddr*>(&native_addr), &native_addrlen);
+	const auto recv_res = ::recvfrom(p2p_socket, reinterpret_cast<char*>(p2p_recv_data.data()), ::size32(p2p_recv_data), 0, reinterpret_cast<struct sockaddr*>(&native_addr), &native_addrlen);
 
 	if (recv_res == -1)
 	{
 		auto lerr = get_last_error(false);
 		if (lerr != SYS_NET_EINPROGRESS && lerr != SYS_NET_EWOULDBLOCK)
-			sys_net.error("Error recvfrom on %s P2P socket: %d", is_ipv6 ? "IPv6" : "IPv4", lerr);
+			sys_net.error("Error recvfrom on %s P2P socket: %d", np::is_ipv6_supported() ? "IPv6" : "IPv4", lerr);
 
 		return false;
 	}
@@ -164,7 +172,7 @@ bool nt_p2p_port::recv_data()
 
 	u16 dst_vport = reinterpret_cast<le_t<u16>&>(p2p_recv_data[0]);
 
-	if (is_ipv6)
+	if (np::is_ipv6_supported())
 	{
 		const auto* addr_ipv6 = reinterpret_cast<sockaddr_in6*>(&native_addr);
 		const auto addr_ipv4 = np::sockaddr6_to_sockaddr(*addr_ipv6);
@@ -241,8 +249,9 @@ bool nt_p2p_port::recv_data()
 
 			auto& bound_sockets = ::at32(bound_p2p_vports, dst_vport);
 
-			for (const auto sock_id : bound_sockets)
+			for (auto it = bound_sockets.begin(); it != bound_sockets.end();)
 			{
+				s32 sock_id = *it;
 				const auto sock = idm::check<lv2_socket>(sock_id, [&](lv2_socket& sock)
 					{
 						ensure(sock.get_type() == SYS_NET_SOCK_DGRAM_P2P);
@@ -254,11 +263,16 @@ bool nt_p2p_port::recv_data()
 				if (!sock)
 				{
 					sys_net.error("Socket %d found in bound_p2p_vports didn't exist!", sock_id);
-					bound_sockets.erase(sock_id);
+					it = bound_sockets.erase(it);
 					if (bound_sockets.empty())
 					{
 						bound_p2p_vports.erase(dst_vport);
+						break;
 					}
+				}
+				else
+				{
+					it++;
 				}
 			}
 

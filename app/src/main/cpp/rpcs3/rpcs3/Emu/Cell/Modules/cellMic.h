@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Utilities/Thread.h"
-#include "Emu/Cell/timers.hpp"
+#include "Utilities/mutex.h"
 
 #include "3rdparty/OpenAL/openal-soft/include/AL/alext.h"
 
@@ -238,7 +238,7 @@ public:
 		if (over_size > Size)
 		{
 			m_tail += (over_size - Size);
-			if (m_tail > Size)
+			if (m_tail >= Size)
 				m_tail -= Size;
 
 			m_used = Size;
@@ -290,6 +290,8 @@ public:
 	void update_audio();
 	bool has_data() const;
 
+	f32 calculate_energy_level();
+
 	bool is_registered() const { return mic_registered; }
 	bool is_opened() const { return mic_opened; }
 	bool is_started() const { return mic_started; }
@@ -325,6 +327,11 @@ private:
 	static inline void variable_byteswap(const void* src, void* dst);
 	inline u32 convert_16_bit_pcm_to_float(const std::vector<u8>& buffer, u32 num_bytes);
 
+#ifndef WITHOUT_OPENAL
+	void enumerate_devices();
+	ALCdevice* open_device(const std::string& name, u32 samplingrate, ALCenum num_al_channels, u32 buf_size);
+#endif
+
 	u32 capture_audio();
 
 	void get_data(const u32 num_samples);
@@ -344,6 +351,7 @@ private:
 		std::vector<u8> buf;
 	};
 
+	std::vector<std::string> enumerated_devices;
 	std::vector<mic_device> devices;
 	std::vector<u8> temp_buf;
 	std::vector<u8> float_buf;
@@ -375,7 +383,7 @@ public:
 	void wake_up();
 
 	// Returns index of registered device
-	u32 register_device(const std::string& name);
+	u32 register_device(const std::string& device_name);
 	void unregister_device(u32 dev_num);
 	bool check_device(u32 dev_num);
 

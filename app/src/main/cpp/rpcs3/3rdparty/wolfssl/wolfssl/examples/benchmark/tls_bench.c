@@ -1,12 +1,12 @@
 /* tls_bench.c
  *
- * Copyright (C) 2006-2023 wolfSSL Inc.
+ * Copyright (C) 2006-2026 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
  * wolfSSL is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * wolfSSL is distributed in the hope that it will be useful,
@@ -32,7 +32,6 @@ Or
   bench_tls(args);
 */
 
-
 #ifdef HAVE_CONFIG_H
     #include <config.h>
 #endif
@@ -40,6 +39,10 @@ Or
     #include <wolfssl/options.h>
 #endif
 #include <wolfssl/wolfcrypt/settings.h>
+
+#undef TEST_OPENSSL_COEXIST /* can't use this option with this example */
+#undef OPENSSL_COEXIST /* can't use this option with this example */
+
 #include <wolfssl/wolfcrypt/types.h>
 #include <wolfssl/wolfcrypt/wc_port.h>
 #include <wolfssl/ssl.h>
@@ -69,7 +72,8 @@ Or
 #endif
 
 /* PTHREAD requires server and client enabled */
-#if defined(NO_WOLFSSL_CLIENT) || defined(NO_WOLFSSL_SERVER)
+#if !defined(NO_TLS) && \
+    (defined(NO_WOLFSSL_CLIENT) || defined(NO_WOLFSSL_SERVER))
     #if !defined(SINGLE_THREADED)
         #ifdef __GNUC__  /* GCC compiler */
             #pragma message "PTHREAD requires server and client enabled."
@@ -81,12 +85,12 @@ Or
         #define SINGLE_THREADED
     #endif
 #endif
-/* Conversely, if both server and client are enabled, we must require pthreads */
+
+/* If both client and server are enabled and single threaded, just disable this example */
 #if !defined(NO_WOLFSSL_CLIENT) && !defined(NO_WOLFSSL_SERVER) \
     && defined(SINGLE_THREADED)
-    #error "threads must be enabled if building benchmark suite \
-to run both client and server. Please define HAVE_PTHREAD if your \
-platform supports it"
+    #undef  NO_TLS
+    #define NO_TLS
 #endif
 
 #if 0
@@ -137,7 +141,7 @@ platform supports it"
 #define SHOW_VERBOSE        0 /* Default output is tab delimited format */
 
 #if (!defined(NO_WOLFSSL_CLIENT) || !defined(NO_WOLFSSL_SERVER)) && \
-    !defined(WOLFCRYPT_ONLY) && defined(USE_WOLFSSL_IO)
+    !defined(WOLFCRYPT_ONLY) && !defined(NO_TLS) && defined(USE_WOLFSSL_IO)
 
 /* shutdown message - nice signal to server, we are done */
 static const char* kShutdown = "shutdown";
@@ -282,18 +286,40 @@ static struct group_info groups[] = {
     { WOLFSSL_ECC_BRAINPOOLP512R1, "ECC_BRAINPOOLP512R1" },
     { WOLFSSL_ECC_X25519, "ECC_X25519" },
     { WOLFSSL_ECC_X448, "ECC_X448" },
+    { WOLFSSL_ECC_BRAINPOOLP256R1TLS13, "ECC_BRAINPOOLP256R1TLS13" },
+    { WOLFSSL_ECC_BRAINPOOLP384R1TLS13, "ECC_BRAINPOOLP384R1TLS13" },
+    { WOLFSSL_ECC_BRAINPOOLP512R1TLS13, "ECC_BRAINPOOLP512R1TLS13" },
     { WOLFSSL_FFDHE_2048, "FFDHE_2048" },
     { WOLFSSL_FFDHE_3072, "FFDHE_3072" },
     { WOLFSSL_FFDHE_4096, "FFDHE_4096" },
     { WOLFSSL_FFDHE_6144, "FFDHE_6144" },
     { WOLFSSL_FFDHE_8192, "FFDHE_8192" },
 #ifdef HAVE_PQC
+#ifndef WOLFSSL_NO_ML_KEM
+    { WOLFSSL_ML_KEM_512, "ML_KEM_512" },
+    { WOLFSSL_ML_KEM_768, "ML_KEM_768" },
+    { WOLFSSL_ML_KEM_1024, "ML_KEM_1024" },
+    { WOLFSSL_SECP256R1MLKEM512,   "SecP256r1MLKEM512"   },
+    { WOLFSSL_SECP384R1MLKEM768,   "SecP384r1MLKEM768"   },
+    { WOLFSSL_SECP256R1MLKEM768,   "SecP256r1MLKEM768"   },
+    { WOLFSSL_SECP521R1MLKEM1024,  "SecP521r1MLKEM1024"  },
+    { WOLFSSL_SECP384R1MLKEM1024,  "SecP384r1MLKEM1024"  },
+    { WOLFSSL_X25519MLKEM512, "X25519MLKEM512" },
+    { WOLFSSL_X448MLKEM768,   "X448MLKEM768"   },
+    { WOLFSSL_X25519MLKEM768, "X25519MLKEM768" },
+#endif
+#ifdef WOLFSSL_MLKEM_KYBER
     { WOLFSSL_KYBER_LEVEL1, "KYBER_LEVEL1" },
     { WOLFSSL_KYBER_LEVEL3, "KYBER_LEVEL3" },
     { WOLFSSL_KYBER_LEVEL5, "KYBER_LEVEL5" },
-    { WOLFSSL_P256_KYBER_LEVEL1, "P256_KYBER_LEVEL1" },
-    { WOLFSSL_P384_KYBER_LEVEL3, "P384_KYBER_LEVEL3" },
-    { WOLFSSL_P521_KYBER_LEVEL5, "P521_KYBER_LEVEL5" },
+    { WOLFSSL_P256_KYBER_LEVEL1,   "P256_KYBER_LEVEL1"   },
+    { WOLFSSL_P384_KYBER_LEVEL3,   "P384_KYBER_LEVEL3"   },
+    { WOLFSSL_P256_KYBER_LEVEL3,   "P256_KYBER_LEVEL3"   },
+    { WOLFSSL_P521_KYBER_LEVEL5,   "P521_KYBER_LEVEL5"   },
+    { WOLFSSL_X25519_KYBER_LEVEL1, "X25519_KYBER_LEVEL1" },
+    { WOLFSSL_X448_KYBER_LEVEL3,   "X448_KYBER_LEVEL3"   },
+    { WOLFSSL_X25519_KYBER_LEVEL3, "X25519_KYBER_LEVEL3" },
+#endif
 #endif
     { 0, NULL }
 };
@@ -1216,7 +1242,7 @@ exit:
 }
 
 #if !defined(SINGLE_THREADED) && defined(WOLFSSL_THREAD_NO_JOIN)
-static THREAD_RETURN WOLFSSL_THREAD_NO_JOIN client_thread(void* args)
+static THREAD_RETURN_NOJOIN WOLFSSL_THREAD_NO_JOIN client_thread(void* args)
 {
     int ret;
     info_t* info = (info_t*)args;
@@ -1229,7 +1255,7 @@ static THREAD_RETURN WOLFSSL_THREAD_NO_JOIN client_thread(void* args)
     THREAD_CHECK_RET(wolfSSL_CondSignal(&info->to_server.cond));
     THREAD_CHECK_RET(wolfSSL_CondEnd(&info->to_server.cond));
 
-    WOLFSSL_RETURN_FROM_THREAD(0);
+    RETURN_FROM_THREAD_NOJOIN(0);
 }
 #endif /* !SINGLE_THREADED */
 #endif /* !NO_WOLFSSL_CLIENT */
@@ -1661,7 +1687,7 @@ exit:
 }
 
 #if !defined(SINGLE_THREADED) && defined(WOLFSSL_THREAD_NO_JOIN)
-static THREAD_RETURN WOLFSSL_THREAD_NO_JOIN server_thread(void* args)
+static THREAD_RETURN_NOJOIN WOLFSSL_THREAD_NO_JOIN server_thread(void* args)
 {
     int ret = 0;
     info_t* info = (info_t*)args;
@@ -1689,7 +1715,7 @@ static THREAD_RETURN WOLFSSL_THREAD_NO_JOIN server_thread(void* args)
     THREAD_CHECK_RET(wolfSSL_CondSignal(&info->to_client.cond));
     THREAD_CHECK_RET(wolfSSL_CondEnd(&info->to_client.cond));
 
-    WOLFSSL_RETURN_FROM_THREAD(0);
+    RETURN_FROM_THREAD_NOJOIN(0);
 }
 #endif /* !SINGLE_THREADED */
 #endif /* !NO_WOLFSSL_SERVER */
@@ -1816,7 +1842,9 @@ static int SetupSupportedGroups(int verbose)
                     printf("Will benchmark the following group: %s\n",
                        groups[i].name);
                 }
-            } else if (uks_ret == BAD_FUNC_ARG || uks_ret == NOT_COMPILED_IN) {
+            } else if (uks_ret == WC_NO_ERR_TRACE(BAD_FUNC_ARG) ||
+                       uks_ret == WC_NO_ERR_TRACE(NOT_COMPILED_IN))
+            {
                 groups[i].group = 0;
                 if (verbose) {
                     printf("Will NOT benchmark the following group: %s\n",
@@ -2322,7 +2350,7 @@ int main(int argc, char** argv)
     args.return_code = 0;
 
 #if (!defined(NO_WOLFSSL_CLIENT) || !defined(NO_WOLFSSL_SERVER)) && \
-    !defined(WOLFCRYPT_ONLY) && defined(USE_WOLFSSL_IO)
+    !defined(WOLFCRYPT_ONLY) && !defined(NO_TLS) && defined(USE_WOLFSSL_IO)
     bench_tls(&args);
 #endif
 

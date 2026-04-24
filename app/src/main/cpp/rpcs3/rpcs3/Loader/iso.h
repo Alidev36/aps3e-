@@ -1,183 +1,211 @@
 #pragma once
 
-#include <stdint.h>
-#include <endian.h>
-#include <bit>
-#include <fcntl.h>
-#include <unistd.h>
-#include <optional>
-#include <string>
-#include <unordered_map>
-#include <vector>
-#include <cassert>
-#include <numeric>
-#include <time.h>
+#include "Loader/PSF.h"
 
-#include "util/logs.hpp"
+#include "Utilities/File.h"
+#include "util/types.hpp"
+#include "Crypto/aes.h"
 
-LOG_CHANNEL(iso_fs_log);
+#ifndef __ANDROID__
+bool is_file_iso(const std::string& path);
+#endif
+bool is_file_iso(const fs::file& path);
 
-template<typename T>
-struct le_be_t {
-    T le;
-    T be;
-    T ne() {
-#if __BYTE_ORDER==__LITTLE_ENDIAN
-        return le;
-#elif  __BYTE_ORDER==__BIG_ENDIAN
-        return be;
+#ifdef __ANDROID__
+void load_iso(int fd);
 #else
-#error "unknown byte order"
+void load_iso(const std::string& path);
 #endif
-    }
+void unload_iso();
+
+/*
+- Hijacked the "iso_archive::iso_archive" method to test if the ".iso" file is encrypted and sets a flag.
+  The flag is set according to the first matching encryption type found following the order below:
+  - Redump: ".dkey" or ".key" (as alternative) file, with the same name of the ".iso" file,
+            exists in the same folder of the ".iso" file
+  - 3k3y:   3k3y watermark exists at offset 0xF70
+  If the flag is set then the "iso_file::read" method will decrypt the data on the fly
+
+- Supported ISO encryption type:
+  - Decrypted (.iso)
+  - 3k3y (decrypted / encrypted) (.iso)
+  - Redump (encrypted) (.iso + .dkey / .key)
+
+- Unsupported ISO encryption type:
+  - Encrypted split ISO files
+*/
+
+// Struct to store ISO region information (storing addresses instead of LBA since we need to compare
+// the address anyway, so would have to multiply or divide every read if storing LBA)
+struct iso_region_info
+{
+	bool encrypted = false;
+	u64 region_first_addr = 0;
+	u64 region_last_addr = 0;
 };
 
-struct path_table_t{
-    uint32_t path_table;
-    uint32_t ext_path_table;
+// Enum to decide ISO encryption type
+enum class iso_encryption_type
+{
+	NONE,
+	DEC_3K3Y,
+	ENC_3K3Y,
+	REDUMP
 };
 
-static_assert(sizeof(path_table_t)==8, "sizeof(path_table_t) != 8");
+// ISO file decryption class
+class iso_file_decryption
+{
+private:
+	aes_context m_aes_dec;
+	iso_encryption_type m_enc_type = iso_encryption_type::NONE;
+	std::vector<iso_region_info> m_region_info;
 
-#pragma pack(push, 1)
-struct RootDirectoryRecord {
-    uint8_t length;
-    uint8_t extended_attribute_length;
-    le_be_t<uint32_t> extent_location;
-    le_be_t<uint32_t> data_length;
-    uint8_t recording_date[7];
-    uint8_t file_flags;
-    uint8_t file_unit_size;
-    uint8_t interleave_gap_size;
-    le_be_t<uint16_t> volume_sequence_number;
-    uint8_t file_identifier_length;
-};
+	void reset();
 
-static_assert(sizeof(RootDirectoryRecord)==33, "sizeof(RootDirectoryRecord) != 33");
-
-struct VolumeDescriptor {
-    uint8_t type_code;
-    char identifier[5];
-    uint8_t version;
-    uint8_t unused[1];
-    char system_identifier[32];
-    char volume_identifier[32];
-    uint8_t unused2[8];
-    le_be_t<uint32_t> volume_space_size;
-    uint8_t unused3[32];
-    le_be_t<uint16_t> volume_set_size;
-    le_be_t<uint16_t> volume_sequence_number;
-    le_be_t<uint16_t> logical_block_size;
-    le_be_t<uint32_t> path_table_size;
-    le_be_t<path_table_t> path_table_data;
-    RootDirectoryRecord root_directory_record;
-    uint8_t unused4[1];
-    char volume_set_identifier[128];
-    char publisher_identifier[128];
-    char data_preparer_identifier[128];
-    char application_identifier[128];
-    char copyright_file_identifier[37];
-    char abstract_file_identifier[37];
-    char bibliographic_file_identifier[37];
-    char volume_creation_date[17];
-    char volume_modification_date[17];
-    char volume_expiration_date[17];
-    char volume_effective_date[17];
-    uint8_t file_structure_version;
-    uint8_t unused5[1];
-    uint8_t application_data[512];
-    uint8_t reserved[653];
-};
-
-static_assert(sizeof(VolumeDescriptor)==2048, "sizeof(VolumeDescriptor) != 2048");
-
-struct iso_fs{
-    static constexpr std::string_view ROOT=":";
-    static std::unique_ptr<iso_fs> from_fd(int fd);
-
-    iso_fs()=default;
-    ~iso_fs();
-
-    iso_fs(const iso_fs&) = delete;
-    iso_fs(iso_fs&&)      = delete;
-
-    bool load();
-
-    bool exists(const std::string& path);
-
-    std::vector<uint8_t> get_data_tiny(const std::string& path);
-
-#if 0
-    struct block_t {
-        uint64_t offset;
-        uint64_t size;
-
-        uint64_t entry_offset;
-    };
-
-    struct entry_t {
-        std::string path;
-        std::vector<block_t> blocks;
-        bool  is_dir;
-
-        uint64_t size(){return std::accumulate(blocks.begin(),blocks.end(),0ull,[](uint64_t sum,const block_t& b){return sum+b.size;});}
-    };
+public:
+	iso_encryption_type get_enc_type() const { return m_enc_type; }
+#ifdef __ANDROID__
+	bool init(fs::file& file,fs::file& dec_key_file);
 #else
-
-    struct entry_t {
-        std::string path;
-        uint64_t offset;
-        uint64_t size;
-        time_t time;
-        bool  is_dir;
-    };
+    bool init(const std::string& path);
 #endif
-    entry_t get_entry(const std::string& path){
-        if(files.find(path)==files.end()) {
-            iso_fs_log.warning("iso_fs::get_entry(%s) not found",path);
-            return {};
-        }else {
-            iso_fs_log.warning("iso_fs::get_entry(%s) found",path);
-            return files[path];
-        }
-    }
+	bool decrypt(u64 offset, void* buffer, u64 size, const std::string& name);
+};
 
-    std::vector<entry_t>& list_dir(const std::string& path);
+struct iso_extent_info
+{
+	u64 start = 0;
+	u64 size = 0;
+};
 
-    off_t seek(uint64_t offset) const {return lseek(fd, offset, SEEK_SET);}
-    ssize_t read(uint8_t* buffer, uint64_t size){return ::read(fd, buffer, size);}
+struct iso_fs_metadata
+{
+	std::string name;
+	s64 time = 0;
+	bool is_directory = false;
+	bool has_multiple_extents = false;
+	std::vector<iso_extent_info> extents;
 
-#if 0
-    void save(int fp,const std::string& path){
-        auto entry=get_entry(path);
-        uint8_t buffer[1024*1024];
-        for(auto& block:entry.blocks){
-            uint64_t  offset=block.offset;
-            uint64_t remaining=block.size;
-            uint64_t buffer_size=std::min(remaining,sizeof(buffer));
-            while(remaining>0){
-                seek(offset);
-                read(buffer,buffer_size);
-                write(fp,buffer,buffer_size);
-                remaining-=buffer_size;
-                offset+=buffer_size;
-                buffer_size=std::min(remaining,sizeof(buffer));
-            }
-        }
-    }
-#endif
+	u64 size() const;
+};
+
+struct iso_fs_node
+{
+	iso_fs_metadata metadata {};
+	std::vector<std::unique_ptr<iso_fs_node>> children;
+};
+
+class iso_archive;
+class iso_file : public fs::file_base
+{
+private:
+    iso_archive& m_archive;
+    std::shared_ptr<iso_file_decryption> m_dec;
+	iso_fs_metadata m_meta;
+	u64 m_pos = 0;
+    u64 m_entry_start = 0;
+
+public:
+	iso_file(iso_archive& archive, std::shared_ptr<iso_file_decryption> iso_dec, const iso_fs_node& node);
+
+	fs::stat_t get_stat() override;
+	bool trunc(u64 length) override;
+	u64 read(void* buffer, u64 size) override;
+	u64 read_at(u64 offset, void* buffer, u64 size) override;
+	u64 write(const void* buffer, u64 size) override;
+	u64 seek(s64 offset, fs::seek_mode whence) override;
+	u64 size() override;
+
+	void release() override;
+};
+
+class iso_dir : public fs::dir_base
+{
+private:
+	const iso_fs_node& m_node;
+	u64 m_pos = 0;
+
+public:
+	iso_dir(const iso_fs_node& node)
+		: m_node(node)
+	{}
+
+	bool read(fs::dir_entry&) override;
+	void rewind() override;
+};
+
+// Represents the .iso file itself
+class iso_archive
+{
 private:
 
-    template<const int VOLUME_TYPE>
-    void parse(VolumeDescriptor& vd);
+#ifdef __ANDROID__
+	int m_fd = -1;
+    int m_dec_key_fd = -1;
+    fs::file m_dec_key_file;
+#else
+	std::string m_path;
+#endif
+	fs::file m_file;
+	std::shared_ptr<iso_file_decryption> m_dec;
+	iso_fs_node m_root {};
 
-    template<const int VOLUME_TYPE>
-    void read_dir(RootDirectoryRecord& dir_record,std::string path);
+public:
+#ifdef __ANDROID__
+    iso_archive(int fd,int dec_key_fd);
+	int get_fd() const { return m_fd; }
+	int get_dec_key_fd() const { return m_dec_key_fd; }
+#else
+    iso_archive(const std::string& path);
+	const std::string& path() const { return m_path; }
+#endif
+	const std::shared_ptr<iso_file_decryption> get_dec() { return m_dec; }
+	fs::file& get_file() { return m_file; }
 
-    int fd;
-    std::unordered_map <std::string, entry_t> files;
-    std::unordered_map <std::string, std::vector<entry_t>> tree;
+	iso_fs_node* retrieve(const std::string& path);
+	bool exists(const std::string& path);
+	bool is_file(const std::string& path);
+
+	iso_file open(const std::string& path);
+	psf::registry open_psf(const std::string& path);
 };
 
-#pragma pack(pop)
+class iso_device : public fs::device_base
+{
 
+#ifdef __ANDROID__
+    int m_fd = -1;
+    int m_dec_key_fd = -1;
+public:
+    iso_device(int fd, int dec_key_fd, const std::string& device_name = virtual_device_name)
+            : m_fd(fd), m_archive(fd,dec_key_fd)
+    {
+        fs_prefix = device_name;
+    }
+
+#else
+	std::string m_path;
+public:
+    iso_device(const std::string& iso_path, const std::string& device_name = virtual_device_name)
+		: m_path(iso_path), m_archive(iso_path)
+	{
+		fs_prefix = device_name;
+	}
+#endif
+	iso_archive m_archive;
+
+public:
+	inline static std::string virtual_device_name = "/vfsv0_virtual_iso_overlay_fs_dev";
+
+	~iso_device() override = default;
+
+#ifndef __ANDROID__
+	const std::string& get_loaded_iso() const { return m_path; }
+#endif
+	bool stat(const std::string& path, fs::stat_t& info) override;
+	bool statfs(const std::string& path, fs::device_stat& info) override;
+
+	std::unique_ptr<fs::file_base> open(const std::string& path, bs_t<fs::open_mode> mode) override;
+	std::unique_ptr<fs::dir_base> open_dir(const std::string& path) override;
+};

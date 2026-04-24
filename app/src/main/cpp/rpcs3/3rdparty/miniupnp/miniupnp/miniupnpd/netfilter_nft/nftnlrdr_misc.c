@@ -1,10 +1,10 @@
-/* $Id: nftnlrdr_misc.c,v 1.19 2024/03/11 23:28:21 nanard Exp $ */
+/* $Id: nftnlrdr_misc.c,v 1.22 2025/04/21 22:02:43 nanard Exp $ */
 /* vim: tabstop=4 shiftwidth=4 noexpandtab
  * MiniUPnP project
  * http://miniupnp.free.fr/ or https://miniupnp.tuxfamily.org/
  * (c) 2015 Tomofumi Hayashi
  * (c) 2019 Paul Chambers
- * (c) 2019-2024 Thomas Bernard
+ * (c) 2019-2025 Thomas Bernard
  *
  * This software is subject to the conditions detailed
  * in the LICENCE file provided within the distribution.
@@ -283,6 +283,9 @@ parse_rule_nat(struct nftnl_expr *e, rule_t *r)
 	r->family = nftnl_expr_get_u32(e, NFTNL_EXPR_NAT_FAMILY);
 	addr_min_reg = nftnl_expr_get_u32(e, NFTNL_EXPR_NAT_REG_ADDR_MIN);
 	addr_max_reg = nftnl_expr_get_u32(e, NFTNL_EXPR_NAT_REG_ADDR_MAX);
+	/* see expr_add_nat() :
+	 * NFTNL_EXPR_NAT_REG_PROTO_MIN/NFTNL_EXPR_NAT_REG_PROTO_MAX is used
+	 * for destination port */
 	proto_min_reg = nftnl_expr_get_u32(e, NFTNL_EXPR_NAT_REG_PROTO_MIN);
 	proto_max_reg = nftnl_expr_get_u32(e, NFTNL_EXPR_NAT_REG_PROTO_MAX);
 
@@ -300,10 +303,10 @@ parse_rule_nat(struct nftnl_expr *e, rule_t *r)
 	}
 	reg_val_ptr = get_reg_val_ptr(r, addr_min_reg);
 	if (reg_val_ptr != NULL) {
+		/* destination address */
 		r->nat_addr = (in_addr_t)*reg_val_ptr;
-		if (proto_min_reg == NFT_REG_1) {
-			r->nat_port = proto_min_val;
-		}
+		/* destination port */
+		r->nat_port = proto_min_val;
 	} else {
 		syslog(LOG_ERR, "%s: invalid addr_min_reg %u", "parse_rule_nat", addr_min_reg);
 	}
@@ -984,12 +987,14 @@ rule_set_dnat(uint8_t family, const char * ifname, uint8_t proto,
 		nftnl_rule_set_u64(r, NFTNL_RULE_POSITION, handle_num);
 	}
 
+#ifdef USE_IFNAME_IN_RULES
 	if (ifname != NULL) {
 		if_idx = (uint32_t)if_nametoindex(ifname);
 		expr_add_meta(r, NFT_META_IIF, NFT_REG_1);
 		expr_add_cmp(r, NFT_REG_1, NFT_CMP_EQ, &if_idx,
 			     sizeof(uint32_t));
 	}
+#endif
 
 	/* Source IP */
 	if (rhost != 0) {
@@ -1140,12 +1145,14 @@ rule_set_filter_common(struct nftnl_rule *r, uint8_t family, const char * ifname
 		nftnl_rule_set_u64(r, NFTNL_RULE_POSITION, handle_num);
 	}
 
+#ifdef USE_IFNAME_IN_RULES
 	if (ifname != NULL) {
 		if_idx = (uint32_t)if_nametoindex(ifname);
 		expr_add_meta(r, NFT_META_IIF, NFT_REG_1);
 		expr_add_cmp(r, NFT_REG_1, NFT_CMP_EQ, &if_idx,
 			     sizeof(uint32_t));
 	}
+#endif
 
 	/* Destination Port */
 	dport = htons(iport);

@@ -5,6 +5,7 @@
 #include <QDragMoveEvent>
 #include <QMimeData>
 
+#include "gui_game_info.h"
 #include "Utilities/bin_patch.h"
 #include <unordered_map>
 
@@ -31,7 +32,7 @@ class patch_manager_dialog : public QDialog
 		QString description;
 		QString patch_version;
 		QString config_value_key;
-		QMap<QString, QVariant> config_values;
+		std::map<QString, QVariant> config_values;
 	};
 
 	const QString tr_all_titles   = tr("All titles - Warning: These patches apply to all games!");
@@ -39,7 +40,7 @@ class patch_manager_dialog : public QDialog
 	const QString tr_all_versions = tr("All versions");
 
 public:
-	explicit patch_manager_dialog(std::shared_ptr<gui_settings> gui_settings, std::unordered_map<std::string, std::set<std::string>> games, const std::string& title_id, const std::string& version, QWidget* parent = nullptr);
+	explicit patch_manager_dialog(std::shared_ptr<gui_settings> gui_settings, const std::vector<game_info>& games, const std::string& title_id, const std::string& version, QWidget* parent = nullptr);
 	~patch_manager_dialog();
 
 	int exec() override;
@@ -57,7 +58,7 @@ private:
 	void load_patches(bool show_error);
 	void populate_tree();
 	void save_config() const;
-	void update_patch_info(const gui_patch_info& info) const;
+	void update_patch_info(const gui_patch_info& info, bool force_update) const;
 	static bool is_valid_file(const QMimeData& md, QStringList* drop_paths = nullptr);
 	void download_update(bool automatic, bool auto_accept);
 	bool handle_json(const QByteArray& data);
@@ -82,6 +83,5 @@ protected:
 	void dropEvent(QDropEvent* event) override;
 	void dragEnterEvent(QDragEnterEvent* event) override;
 	void dragMoveEvent(QDragMoveEvent* event) override;
-	void dragLeaveEvent(QDragLeaveEvent* event) override;
 	void closeEvent(QCloseEvent* event) override;
 };

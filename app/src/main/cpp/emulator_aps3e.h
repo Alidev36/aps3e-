@@ -10,7 +10,7 @@ extern void ppu_register_function_at(u32, u32, ppu_intrp_func_t);
 namespace ae{
     extern std::string game_id;
     extern bool install_firmware(int fd);
-    extern bool install_pkg(iso_fs& iso_fs, const std::string& path);
+    //extern bool install_pkg(iso_fs& iso_fs, const std::string& path);
     extern bool install_pkg(const char* path);
     extern bool install_pkg(int pkg_fd);
     extern bool allow_eboot_decrypt(const fs::file& eboot_file);

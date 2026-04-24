@@ -11,7 +11,7 @@ class usb_device_rb3_midi_keyboard : public usb_device_emulated
 private:
 	usz response_pos = 0;
 	bool buttons_enabled = false;
-	
+
 #if !defined(__ANDROID__)
 	RtMidiInPtr midi_in{};
 #endif

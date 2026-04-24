@@ -8,11 +8,15 @@
 #include "Emu/RSX/RSXThread.h"
 #include "Thread.h"
 #include "Utilities/JIT.h"
-#include <thread>
 #include <cfenv>
 
 #ifdef ARCH_ARM64
 #include "Emu/CPU/Backends/AArch64/AArch64Signal.h"
+#endif
+
+#ifdef __cpp_lib_stacktrace
+#include "rpcs3_version.h"
+#include <stacktrace>
 #endif
 
 #ifdef _WIN32
@@ -21,6 +25,7 @@
 #include <process.h>
 #include <sysinfoapi.h>
 
+#include "stack_trace.h"
 #include "util/dyn_lib.hpp"
 
 DYNAMIC_IMPORT_RENAME("Kernel32.dll", SetThreadDescriptionImport, "SetThreadDescription", HRESULT(HANDLE hThread, PCWSTR lpThreadDescription));
@@ -103,8 +108,13 @@ thread_local u64 g_tls_fault_rsx = 0;
 thread_local u64 g_tls_fault_spu = 0;
 thread_local u64 g_tls_wait_time = 0;
 thread_local u64 g_tls_wait_fail = 0;
-thread_local bool g_tls_access_violation_recovered = false;
+thread_local u64 g_tls_access_violation_recovered = umax;
 extern thread_local std::string(*g_tls_log_prefix)();
+
+namespace stx
+{
+	atomic_t<u32> g_launch_retainer{0};
+}
 
 // Report error and call std::abort(), defined in main.cpp
 [[noreturn]] void report_fatal_error(std::string_view text, bool is_html = false, bool include_help_text = true);
@@ -1260,7 +1270,7 @@ namespace rsx
 	extern std::function<bool(u32 addr, bool is_writing)> g_access_violation_handler;
 }
 
-bool handle_access_violation(u32 addr, bool is_writing, ucontext_t* context) noexcept
+bool handle_access_violation(u32 addr, bool is_writing, bool is_exec, ucontext_t* context) noexcept
 {
 	g_tls_fault_all++;
 
@@ -1296,7 +1306,7 @@ bool handle_access_violation(u32 addr, bool is_writing, ucontext_t* context) noe
 		}
 	} spu_protection{cpu};
 
-	if (addr < RAW_SPU_BASE_ADDR && vm::check_addr(addr) && rsx::g_access_violation_handler)
+	if (!is_exec && addr < RAW_SPU_BASE_ADDR && vm::check_addr(addr) && rsx::g_access_violation_handler)
 	{
 		bool state_changed = false;
 
@@ -1362,7 +1372,7 @@ bool handle_access_violation(u32 addr, bool is_writing, ucontext_t* context) noe
 	{
 		auto thread = idm::get_unlocked<named_thread<spu_thread>>(spu_thread::find_raw_spu((addr - RAW_SPU_BASE_ADDR) / RAW_SPU_OFFSET));
 
-		if (!thread)
+		if (!thread || is_exec)
 		{
 			break;
 		}
@@ -1494,7 +1504,9 @@ bool handle_access_violation(u32 addr, bool is_writing, ucontext_t* context) noe
 	static_cast<void>(context);
 #endif /* ARCH_ */
 
-	if (vm::check_addr(addr, is_writing ? vm::page_writable : vm::page_readable))
+	const auto required_page_perms = (is_writing ? vm::page_writable : vm::page_readable) + (is_exec ? vm::page_executable : 0);
+
+	if (vm::check_addr(addr, required_page_perms))
 	{
 		return true;
 	}
@@ -1502,9 +1514,7 @@ bool handle_access_violation(u32 addr, bool is_writing, ucontext_t* context) noe
 	// Hack: allocate memory in case the emulator is stopping
 	const auto hack_alloc = [&]()
 	{
-		g_tls_access_violation_recovered = true;
-
-		if (vm::check_addr(addr, is_writing ? vm::page_writable : vm::page_readable))
+		if (vm::check_addr(addr, required_page_perms))
 		{
 			return true;
 		}
@@ -1516,17 +1526,45 @@ bool handle_access_violation(u32 addr, bool is_writing, ucontext_t* context) noe
 			return false;
 		}
 
+		extern void ppu_register_range(u32 addr, u32 size);
+
+		bool reprotected = false;
+
 		if (vm::writer_lock mlock; area->flags & vm::preallocated || vm::check_addr(addr, 0))
 		{
 			// For allocated memory with protection lower than required (such as protection::no or read-only while writing to it)
 			utils::memory_protect(vm::base(addr & -0x1000), 0x1000, utils::protection::rw);
+			reprotected = true;
+		}
+
+		if (reprotected)
+		{
+			if (is_exec && !vm::check_addr(addr, vm::page_executable))
+			{
+				ppu_register_range(addr & -0x10000, 0x10000);
+			}
+
+			g_tls_access_violation_recovered = addr;
 			return true;
 		}
 
-		return area->falloc(addr & -0x10000, 0x10000) || vm::check_addr(addr, is_writing ? vm::page_writable : vm::page_readable);
+		const bool allocated = area->falloc(addr & -0x10000, 0x10000);
+
+		if (allocated)
+		{
+			if (is_exec && !vm::check_addr(addr, vm::page_executable))
+			{
+				ppu_register_range(addr & -0x10000, 0x10000);
+			}
+
+			g_tls_access_violation_recovered = addr;
+			return true;
+		}
+
+		return false;
 	};
 
-	if (cpu && (cpu->get_class() == thread_class::ppu || cpu->get_class() == thread_class::spu))
+	if (cpu && (cpu->get_class() == thread_class::ppu || cpu->get_class() == thread_class::spu) && !is_exec)
 	{
 		vm::temporary_unlock(*cpu);
 		u32 pf_port_id = 0;
@@ -1669,7 +1707,7 @@ bool handle_access_violation(u32 addr, bool is_writing, ucontext_t* context) noe
 
 		if (cpu->get_class() == thread_class::spu)
 		{
-			if (!g_tls_access_violation_recovered)
+			if (g_tls_access_violation_recovered != addr)
 			{
 				vm_log.notice("\n%s", dump_useful_thread_info());
 				vm_log.always()("[%s] Access violation %s location 0x%x (%s)", cpu->get_name(), is_writing ? "writing" : "reading", addr, (is_writing && vm::check_addr(addr)) ? "read-only memory" : "unmapped memory");
@@ -1705,10 +1743,10 @@ bool handle_access_violation(u32 addr, bool is_writing, ucontext_t* context) noe
 
 	// Note: a thread may access violate more than once after hack_alloc recovery
 	// Do not log any further access violations in this case.
-	if (!g_tls_access_violation_recovered)
+	if (g_tls_access_violation_recovered != addr)
 	{
 		vm_log.notice("\n%s", dump_useful_thread_info());
-		vm_log.fatal("Access violation %s location 0x%x (%s)", is_writing ? "writing" : (cpu && cpu->get_class() == thread_class::ppu && cpu->get_pc() == addr ? "executing" : "reading"), addr, (is_writing && vm::check_addr(addr)) ? "read-only memory" : "unmapped memory");
+		vm_log.fatal("Access violation %s location 0x%x (%s)", is_writing ? "writing" : (is_exec ? "executing" : "reading"), addr, (is_writing && vm::check_addr(addr)) ? "read-only memory" : "unmapped memory");
 	}
 
 	while (Emu.IsPausedOrReady())
@@ -1757,8 +1795,13 @@ bool handle_access_violation(u32 addr, bool is_writing, ucontext_t* context) noe
 		}
 	}
 
-	if (Emu.IsStopped() && !hack_alloc())
+	if (Emu.IsStopped())
 	{
+		while (!hack_alloc())
+		{
+			thread_ctrl::wait_for(1000);
+		}
+
 		return false;
 	}
 
@@ -1797,6 +1840,7 @@ static LONG exception_handler(PEXCEPTION_POINTERS pExp) noexcept
 	if (pExp->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION && !is_executing)
 	{
 		u32 addr = 0;
+		bool is_exec = false;
 
 		if (auto [addr0, ok] = vm::try_get_addr(ptr); ok)
 		{
@@ -1804,14 +1848,21 @@ static LONG exception_handler(PEXCEPTION_POINTERS pExp) noexcept
 		}
 		else if (const usz exec64 = (ptr - vm::g_exec_addr) / 2; exec64 <= u32{umax})
 		{
+			is_exec = true;
 			addr = static_cast<u32>(exec64);
 		}
-		else
+		else if (const usz exec64 = (ptr - vm::g_exec_addr - vm::g_exec_addr_seg_offset); exec64 <= u32{umax})
 		{
+			is_exec = true;
+			addr = static_cast<u32>(exec64);
+		}
+		else 
+		{
+			std::this_thread::sleep_for(1ms);
 			return EXCEPTION_CONTINUE_SEARCH;
 		}
 
-		if (thread_ctrl::get_current() && handle_access_violation(addr, is_writing, pExp->ContextRecord))
+		if (thread_ctrl::get_current() && handle_access_violation(addr, is_writing, is_exec, pExp->ContextRecord))
 		{
 			return EXCEPTION_CONTINUE_EXECUTION;
 		}
@@ -1931,9 +1982,39 @@ static LONG exception_filter(PEXCEPTION_POINTERS pExp) noexcept
 	}
 
 	fmt::append(msg, "RPCS3 image base: %p.\n", GetModuleHandle(NULL));
+	
+#if defined(ARCH_X64)
+	fmt::append(msg, "RAX: %016llX	RBX: %016llX\n", pExp->ContextRecord->Rax, pExp->ContextRecord->Rbx);
+	fmt::append(msg, "RCX: %016llX	RDX: %016llX\n", pExp->ContextRecord->Rcx, pExp->ContextRecord->Rdx);
+	fmt::append(msg, "RSI: %016llX  RDI: %016llX\n", pExp->ContextRecord->Rsi, pExp->ContextRecord->Rdi);
+	fmt::append(msg, "RBP: %016llX  RSP: %016llX\n", pExp->ContextRecord->Rbp, pExp->ContextRecord->Rsp);
+	fmt::append(msg, "R8:  %016llX  R9:  %016llX\n", pExp->ContextRecord->R8,  pExp->ContextRecord->R9);
+	fmt::append(msg, "R10: %016llX  R11: %016llX\n", pExp->ContextRecord->R10, pExp->ContextRecord->R11);
+	fmt::append(msg, "R12: %016llX  R13: %016llX\n", pExp->ContextRecord->R12, pExp->ContextRecord->R13);
+	fmt::append(msg, "R14: %016llX  R15: %016llX\n", pExp->ContextRecord->R14, pExp->ContextRecord->R15);
+	fmt::append(msg, "RFLAGS: %08X\n", pExp->ContextRecord->EFlags);
+#elif defined(ARCH_ARM64)
+	for (int i = 0; i < 29; i += 2)
+	{
+		if (i + 1 < 29)
+			fmt::append(msg, "X%-2d: %016llX  X%-2d: %016llX\n", i, pExp->ContextRecord->X[i], i + 1, pExp->ContextRecord->X[i + 1]);
+		else
+			fmt::append(msg, "X%-2d: %016llX\n", i, pExp->ContextRecord->X[i]);
+	}
+	fmt::append(msg, "SP: %016llX  FP: %016llX  LR: %016llX\n", pExp->ContextRecord->Sp, pExp->ContextRecord->Fp, pExp->ContextRecord->Lr);
+	fmt::append(msg, "CPSR: %08X\n", pExp->ContextRecord->Cpsr);
+#endif
 
-	// TODO: print registers and the callstack
+	const auto stack_trace = utils::get_backtrace(64, pExp->ContextRecord);
+	const auto stack_symbols = utils::get_backtrace_symbols(stack_trace);
 
+	msg += "Stack Trace:\n";
+
+	for (const auto& symbol : stack_symbols)
+	{
+		fmt::append(msg, "%s\n", symbol);
+	}
+	
 	sys_log.fatal("\n%s", msg);
 	logs::listener::sync_all();
 
@@ -1983,11 +2064,6 @@ static void signal_handler(int /*sig*/, siginfo_t* info, void* uct) noexcept
 #elif defined(ARCH_ARM64)
 	const bool is_executing = uptr(info->si_addr) == uptr(RIP(context));
 
-#if defined(__ANDROID__)
-    extern uint64_t find_esr(const ucontext_t* ctx);
-	sig_log.error("崩溃 esr=0x%llx", find_esr(context));
-#endif
-
 #if defined(__linux__) || defined(__APPLE__)
 	// Current CPU state decoder is reverse-engineered from the linux kernel and may not work on other platforms.
 	const auto decoded_reason = aarch64::decode_fault_reason(context);
@@ -2023,12 +2099,13 @@ static void signal_handler(int /*sig*/, siginfo_t* info, void* uct) noexcept
 #endif
 
 	const u64 exec64 = (reinterpret_cast<u64>(info->si_addr) - reinterpret_cast<u64>(vm::g_exec_addr)) / 2;
+	const u64 exec64_2 = (reinterpret_cast<u64>(info->si_addr) - reinterpret_cast<u64>(vm::g_exec_addr)) - vm::g_exec_addr_seg_offset;
 	const auto cause = is_executing ? "executing" : is_writing ? "writing" : "reading";
 
 	if (auto [addr, ok] = vm::try_get_addr(info->si_addr); ok && !is_executing)
 	{
 		// Try to process access violation
-		if (thread_ctrl::get_current() && handle_access_violation(addr, is_writing, context))
+		if (thread_ctrl::get_current() && handle_access_violation(addr, is_writing, false, context))
 		{
 			return;
 		}
@@ -2036,7 +2113,14 @@ static void signal_handler(int /*sig*/, siginfo_t* info, void* uct) noexcept
 
 	if (exec64 < 0x100000000ull && !is_executing)
 	{
-		if (thread_ctrl::get_current() && handle_access_violation(static_cast<u32>(exec64), is_writing, context))
+		if (thread_ctrl::get_current() && handle_access_violation(static_cast<u32>(exec64), is_writing, true, context))
+		{
+			return;
+		}
+	}
+	else if (exec64_2 < 0x100000000ull && !is_executing)
+	{
+		if (thread_ctrl::get_current() && handle_access_violation(static_cast<u32>(exec64_2), is_writing, true, context))
 		{
 			return;
 		}
@@ -2165,10 +2249,17 @@ void thread_base::start()
 	ensure(m_thread);
 	ensure(::ResumeThread(reinterpret_cast<HANDLE>(+m_thread)) != static_cast<DWORD>(-1));
 #elif defined(__APPLE__)
-	pthread_attr_t stack_size_attr;
-	pthread_attr_init(&stack_size_attr);
-	pthread_attr_setstacksize(&stack_size_attr, 0x800000);
-	ensure(pthread_create(reinterpret_cast<pthread_t*>(&m_thread.raw()), &stack_size_attr, entry_point, this) == 0);
+	pthread_attr_t attrs;
+	struct sched_param sp;
+    memset(&sp, 0, sizeof(struct sched_param));
+    sp.sched_priority=99;
+	pthread_attr_init(&attrs);
+	pthread_attr_setstacksize(&attrs, 0x800000);
+	
+	pthread_attr_set_qos_class_np(&attrs, QOS_CLASS_USER_INTERACTIVE, 0);
+	pthread_attr_setschedpolicy(&attrs, SCHED_RR);
+	pthread_attr_setschedparam(&attrs, &sp);
+	ensure(pthread_create(reinterpret_cast<pthread_t*>(&m_thread.raw()), &attrs, entry_point, this) == 0);
 #else
 	ensure(pthread_create(reinterpret_cast<pthread_t*>(&m_thread.raw()), nullptr, entry_point, this) == 0);
 #endif
@@ -2177,7 +2268,11 @@ void thread_base::start()
 void thread_base::initialize(void (*error_cb)())
 {
 #ifndef _WIN32
-	m_thread.release(static_cast<u64>(pthread_self()));
+#ifdef ANDROID
+	m_thread.release(pthread_self());
+#else
+	m_thread.release(reinterpret_cast<u64>(pthread_self()));
+#endif
 #endif
 
 	// Initialize TLS variables
@@ -2344,7 +2439,7 @@ thread_base::native_entry thread_base::finalize(u64 _self) noexcept
 	g_tls_fault_spu = 0;
 	g_tls_wait_time = 0;
 	g_tls_wait_fail = 0;
-	g_tls_access_violation_recovered = false;
+	g_tls_access_violation_recovered = umax;
 
 	g_tls_log_prefix = []() -> std::string { return {}; };
 
@@ -2433,7 +2528,7 @@ void thread_ctrl::wait_for(u64 usec, [[maybe_unused]] bool alert /* true */)
 		usec = 50000;
 	}
 
-#if defined(__linux__)
+#ifdef __linux__
 	static thread_local struct linux_timer_handle_t
 	{
 		// Allocate timer only if needed (i.e. someone calls wait_for with alert and short period)
@@ -2491,7 +2586,7 @@ void thread_ctrl::wait_for(u64 usec, [[maybe_unused]] bool alert /* true */)
 	if (alert)
 	{
 		list.set<0>(_this->m_sync, 0);
-		list.set<1>(utils::bless<atomic_t<u32>>(&_this->m_taskq)[1], 0);
+		list.template set<1>(_this->m_taskq);
 	}
 	else
 	{
@@ -2541,7 +2636,7 @@ void thread_ctrl::wait_for_accurate(u64 usec)
 		fmt::throw_exception("thread_ctrl::wait_for_accurate: unsupported amount");
 	}
 
-#if defined(__linux__)
+#ifdef __linux__
 	return wait_for(usec, false);
 #else
 	using namespace std::chrono_literals;
@@ -2622,8 +2717,10 @@ thread_base::~thread_base() noexcept
 		const HANDLE handle0 = reinterpret_cast<HANDLE>(m_thread.load());
 		WaitForSingleObject(handle0, INFINITE);
 		CloseHandle(handle0);
+#elif defined(ANDROID)
+		pthread_join(m_thread.load(), nullptr);
 #else
-		pthread_join(static_cast<pthread_t>(m_thread.load()), nullptr);
+		pthread_join(reinterpret_cast<pthread_t>(m_thread.load()), nullptr);
 #endif
 	}
 }
@@ -2696,7 +2793,12 @@ u64 thread_base::get_cycles()
 #else
 	clockid_t _clock;
 	struct timespec thread_time;
-	if (!pthread_getcpuclockid(static_cast<pthread_t>(handle), &_clock) && !clock_gettime(_clock, &thread_time))
+#ifdef ANDROID
+	pthread_t thread_id = handle;
+#else
+	pthread_t thread_id = reinterpret_cast<pthread_t>(handle);
+#endif
+	if (!pthread_getcpuclockid(thread_id, &_clock) && !clock_gettime(_clock, &thread_time))
 	{
 		cycles = static_cast<u64>(thread_time.tv_sec) * 1'000'000'000 + thread_time.tv_nsec;
 #endif
@@ -2783,6 +2885,16 @@ void thread_base::exec()
 
 [[noreturn]] void thread_ctrl::emergency_exit(std::string_view reason)
 {
+	// Print stacktrace
+#ifdef __cpp_lib_stacktrace
+	if (rpcs3::is_local_build())
+	{
+		std::ostringstream oss;
+		oss << std::stacktrace::current();
+		sys_log.notice("StackTrace\n\n%s\n", oss.str());
+	}
+#endif
+
 	if (const std::string info = dump_useful_thread_info(); !info.empty())
 	{
 		sys_log.notice("\n%s", info);
@@ -2796,6 +2908,16 @@ void thread_base::exec()
 		{
 			fmt::append(reason_buf, "%s (PPU: %s)", reason, func);
 		}
+	}
+
+	if (auto [total, current] = utils::get_memory_usage(); total - current <= 256 * 1024 * 1024)
+	{
+		if (reason_buf.empty())
+		{
+			reason_buf = std::string{reason};
+		}
+
+		fmt::append(reason_buf, " (Possible RAM deficiency: free RAM: %dMB)", (total - current) / (1024 * 1024));
 	}
 
 	if (!reason_buf.empty())
@@ -2920,25 +3042,8 @@ void thread_ctrl::detect_cpu_layout()
 
 u64 thread_ctrl::get_affinity_mask(thread_class group)
 {
-#ifndef __ANDROID__
 	detect_cpu_layout();
-#endif
-#if 1
-    const u64 all_cores_mask = process_affinity_mask;
 
-    switch (group)
-    {
-        default:
-        case thread_class::general:
-            return all_cores_mask;
-        case thread_class::rsx:
-            return g_cfg.core.thread_affinity_mask.rsx_threads;
-        case thread_class::ppu:
-            return g_cfg.core.thread_affinity_mask.ppu_threads;
-        case thread_class::spu:
-            return g_cfg.core.thread_affinity_mask.spu_threads;
-    }
-#else
 	if (const auto thread_count = utils::get_thread_count())
 	{
 		const u64 all_cores_mask = process_affinity_mask;
@@ -3038,18 +3143,18 @@ u64 thread_ctrl::get_affinity_mask(thread_class group)
 						break;
 					case 16:
 						// 1700, 1800, 2700, TR 1900X family
-						//if (g_cfg.core.thread_scheduler == thread_scheduler_mode::alt)
+						if (g_cfg.core.thread_scheduler == thread_scheduler_mode::alt)
 						{
 							ppu_mask = 0b0010000010000000;
 							spu_mask = 0b0000101010101010;
 							rsx_mask = 0b1000000000000000;
 						}
-						/*else // if (g_cfg.core.thread_scheduler == thread_scheduler_mode::old)
+						else // if (g_cfg.core.thread_scheduler == thread_scheduler_mode::old)
 						{
 							ppu_mask = 0b1111111100000000;
 							spu_mask = ppu_mask;
 							rsx_mask = 0b0000000000111100;
-						}*/
+						}
 						break;
 					case 12:
 						// 1600, 2600 family, Assign threads 3-12
@@ -3079,30 +3184,30 @@ u64 thread_ctrl::get_affinity_mask(thread_class group)
 					break;
 				case 16:
 					// 5800X
-					//if (g_cfg.core.thread_scheduler == thread_scheduler_mode::alt)
+					if (g_cfg.core.thread_scheduler == thread_scheduler_mode::alt)
 					{
 						ppu_mask = 0b0000000011110000;
 						spu_mask = 0b1111111100000000;
 						rsx_mask = 0b0000000000001111;
 					}
-					/*else // if (g_cfg.core.thread_scheduler == thread_scheduler_mode::old)
+					else // if (g_cfg.core.thread_scheduler == thread_scheduler_mode::old)
 					{
 						// Verified by more than one windows user on 16-thread CPU
 						ppu_mask = spu_mask = rsx_mask = (0b10101010101010101010101010101010 & all_cores_mask);
-					}*/
+					}
 					break;
 				case 12:
 					// 5600X
-					//if (g_cfg.core.thread_scheduler == thread_scheduler_mode::alt)
+					if (g_cfg.core.thread_scheduler == thread_scheduler_mode::alt)
 					{
 						ppu_mask = 0b000000001100;
 						spu_mask = 0b111111110000;
 						rsx_mask = 0b000000000011;
 					}
-					/*else // if (g_cfg.core.thread_scheduler == thread_scheduler_mode::old)
+					else // if (g_cfg.core.thread_scheduler == thread_scheduler_mode::old)
 					{
 						ppu_mask = spu_mask = rsx_mask = all_cores_mask;
-					}*/
+					}
 					break;
 				default:
 					if (thread_count > 24)
@@ -3134,7 +3239,7 @@ u64 thread_ctrl::get_affinity_mask(thread_class group)
 		}
 		case native_core_arrangement::intel_ht:
 		{
-			if (thread_count >= 12 )//&& g_cfg.core.thread_scheduler == thread_scheduler_mode::alt)
+			if (thread_count >= 12 && g_cfg.core.thread_scheduler == thread_scheduler_mode::alt)
 				return (0b10101010101010101010101010101010 & all_cores_mask); // Potentially improves performance by mimicking HT off
 			return all_cores_mask;
 		}
@@ -3142,7 +3247,6 @@ u64 thread_ctrl::get_affinity_mask(thread_class group)
 	}
 
 	return -1;
-#endif
 }
 
 void thread_ctrl::set_native_priority(int priority)
@@ -3217,7 +3321,7 @@ void thread_ctrl::set_thread_affinity_mask(u64 mask)
 	thread_affinity_policy_data_t policy = { static_cast<integer_t>(std::countr_zero(mask)) };
 	thread_port_t mach_thread = pthread_mach_thread_np(pthread_self());
 	thread_policy_set(mach_thread, THREAD_AFFINITY_POLICY, reinterpret_cast<thread_policy_t>(&policy), !mask ? 0 : 1);
-#elif defined(__linux__) || defined(__DragonFly__) || defined(__FreeBSD__)
+#elif !defined(ANDROID) && (defined(__linux__) || defined(__DragonFly__) || defined(__FreeBSD__))
 	if (!mask)
 	{
 		// Reset affinity mask
@@ -3244,11 +3348,8 @@ void thread_ctrl::set_thread_affinity_mask(u64 mask)
 			break;
 		}
 	}
-#if defined(__ANDROID__)
-	if (int err = sched_setaffinity(0, sizeof(cpu_set_t), &cs))
-#else
+
 	if (int err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cs))
-#endif
 	{
 		sig_log.error("Failed to set thread affinity 0x%x: error %d.", mask, err);
 	}
@@ -3272,14 +3373,11 @@ u64 thread_ctrl::get_thread_affinity_mask()
 
 	sig_log.error("Failed to get thread affinity mask.");
 	return 0;
-#elif defined(__linux__) || defined(__DragonFly__) || defined(__FreeBSD__)
+#elif !defined(ANDROID) && (defined(__linux__) || defined(__DragonFly__) || defined(__FreeBSD__))
 	cpu_set_t cs;
 	CPU_ZERO(&cs);
-#if defined(__ANDROID__)
-	if (int err = sched_getaffinity(0, sizeof(cpu_set_t), &cs))
-#else
+
 	if (int err = pthread_getaffinity_np(pthread_self(), sizeof(cpu_set_t), &cs))
-#endif
 	{
 		sig_log.error("Failed to get thread affinity mask: error %d.", err);
 		return 0;
@@ -3342,6 +3440,8 @@ u64 thread_ctrl::get_tid()
 {
 #ifdef _WIN32
 	return GetCurrentThreadId();
+#elif defined(ANDROID)
+	return static_cast<u64>(pthread_self());
 #elif defined(__linux__)
 	return syscall(SYS_gettid);
 #else

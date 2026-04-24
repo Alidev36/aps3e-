@@ -1,12 +1,12 @@
 /* ed448.c
  *
- * Copyright (C) 2006-2023 wolfSSL Inc.
+ * Copyright (C) 2006-2026 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
  * wolfSSL is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * wolfSSL is distributed in the hope that it will be useful,
@@ -30,12 +30,7 @@
  *     Check that the private key didn't change during the signing operations.
  */
 
-#ifdef HAVE_CONFIG_H
-    #include <config.h>
-#endif
-
-/* in case user set HAVE_ED448 there */
-#include <wolfssl/wolfcrypt/settings.h>
+#include <wolfssl/wolfcrypt/libwolfssl_sources.h>
 
 #ifdef HAVE_ED448
 #if FIPS_VERSION3_GE(6,0,0)
@@ -49,7 +44,6 @@
 #endif
 
 #include <wolfssl/wolfcrypt/ed448.h>
-#include <wolfssl/wolfcrypt/error-crypt.h>
 #include <wolfssl/wolfcrypt/hash.h>
 #ifdef NO_INLINE
     #include <wolfssl/wolfcrypt/misc.h>
@@ -397,16 +391,15 @@ int wc_ed448_sign_msg_ex(const byte* in, word32 inLen, byte* out,
 #else
         wc_Shake sha[1];
         ret = ed448_hash_init(key, sha);
-        if (ret < 0)
-            return ret;
 #endif
         /* apply clamp */
         az[0]  &= 0xfc;
         az[55] |= 0x80;
         az[56]  = 0x00;
 
-        ret = ed448_hash_update(key, sha, ed448Ctx, ED448CTX_SIZE);
-
+        if (ret == 0) {
+            ret = ed448_hash_update(key, sha, ed448Ctx, ED448CTX_SIZE);
+        }
         if (ret == 0) {
             ret = ed448_hash_update(key, sha, &type, sizeof(type));
         }
@@ -435,15 +428,14 @@ int wc_ed448_sign_msg_ex(const byte* in, word32 inLen, byte* out,
 #else
         wc_Shake sha[1];
         ret = ed448_hash_init(key, sha);
-        if (ret < 0)
-            return ret;
 #endif
-        sc448_reduce(nonce);
-
+        if (ret == 0)
+            sc448_reduce(nonce);
         /* step 2: computing R = rB where rB is the scalar multiplication of
            r and B */
-        ret = ge448_scalarmult_base(&R,nonce);
-
+        if (ret == 0) {
+            ret = ge448_scalarmult_base(&R,nonce);
+        }
         /* step 3: hash R + public key + message getting H(R,A,M) then
            creating S = (r + H(R,A,M)a) mod l */
         if (ret == 0) {
@@ -493,6 +485,8 @@ int wc_ed448_sign_msg_ex(const byte* in, word32 inLen, byte* out,
     }
 #endif
 
+    ForceZero(az, sizeof(az));
+    ForceZero(nonce, sizeof(nonce));
     return ret;
 }
 
@@ -975,7 +969,7 @@ void wc_ed448_free(ed448_key* key)
  *         ECC_BAD_ARG_E when outLen is less than ED448_PUB_KEY_SIZE,
  *         0 otherwise.
  */
-int wc_ed448_export_public(ed448_key* key, byte* out, word32* outLen)
+int wc_ed448_export_public(const ed448_key* key, byte* out, word32* outLen)
 {
     int ret = 0;
 
@@ -1023,7 +1017,9 @@ int wc_ed448_import_public_ex(const byte* in, word32 inLen, ed448_key* key,
         ret = BAD_FUNC_ARG;
     }
 
-    if ((inLen != ED448_PUB_KEY_SIZE) && (inLen != ED448_PUB_KEY_SIZE + 1)) {
+    if ((inLen != ED448_PUB_KEY_SIZE) &&
+        (inLen != ED448_PUB_KEY_SIZE + 1) &&
+        (inLen != 2 * ED448_PUB_KEY_SIZE + 1)) {
         ret = BAD_FUNC_ARG;
     }
 
@@ -1216,7 +1212,7 @@ int wc_ed448_import_private_key(const byte* priv, word32 privSz,
  *         ECC_BAD_ARG_E when outLen is less than ED448_KEY_SIZE,
  *         0 otherwise.
  */
-int wc_ed448_export_private_only(ed448_key* key, byte* out, word32* outLen)
+int wc_ed448_export_private_only(const ed448_key* key, byte* out, word32* outLen)
 {
     int ret = 0;
 
@@ -1248,7 +1244,7 @@ int wc_ed448_export_private_only(ed448_key* key, byte* out, word32* outLen)
  *         BUFFER_E when outLen is less than ED448_PRV_KEY_SIZE,
  *         0 otherwise.
  */
-int wc_ed448_export_private(ed448_key* key, byte* out, word32* outLen)
+int wc_ed448_export_private(const ed448_key* key, byte* out, word32* outLen)
 {
     int ret = 0;
 
@@ -1283,7 +1279,7 @@ int wc_ed448_export_private(ed448_key* key, byte* out, word32* outLen)
  *         than ED448_PUB_KEY_SIZE,
  *         0 otherwise.
  */
-int wc_ed448_export_key(ed448_key* key, byte* priv, word32 *privSz,
+int wc_ed448_export_key(const ed448_key* key, byte* priv, word32 *privSz,
                         byte* pub, word32 *pubSz)
 {
     int ret = 0;
@@ -1396,7 +1392,7 @@ int wc_ed448_check_key(ed448_key* key)
  * returns BAD_FUNC_ARG when key is NULL,
  *         ED448_KEY_SIZE otherwise.
  */
-int wc_ed448_size(ed448_key* key)
+int wc_ed448_size(const ed448_key* key)
 {
     int ret = ED448_KEY_SIZE;
 
@@ -1413,7 +1409,7 @@ int wc_ed448_size(ed448_key* key)
  * returns BAD_FUNC_ARG when key is NULL,
  *         ED448_PRV_KEY_SIZE otherwise.
  */
-int wc_ed448_priv_size(ed448_key* key)
+int wc_ed448_priv_size(const ed448_key* key)
 {
     int ret = ED448_PRV_KEY_SIZE;
 
@@ -1430,7 +1426,7 @@ int wc_ed448_priv_size(ed448_key* key)
  * returns BAD_FUNC_ARG when key is NULL,
  *         ED448_PUB_KEY_SIZE otherwise.
  */
-int wc_ed448_pub_size(ed448_key* key)
+int wc_ed448_pub_size(const ed448_key* key)
 {
     int ret = ED448_PUB_KEY_SIZE;
 
@@ -1447,7 +1443,7 @@ int wc_ed448_pub_size(ed448_key* key)
  * returns BAD_FUNC_ARG when key is NULL,
  *         ED448_SIG_SIZE otherwise.
  */
-int wc_ed448_sig_size(ed448_key* key)
+int wc_ed448_sig_size(const ed448_key* key)
 {
     int ret = ED448_SIG_SIZE;
 

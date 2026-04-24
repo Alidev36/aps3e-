@@ -7,11 +7,10 @@
 #include "Common/unordered_map.hpp"
 #include "Emu/System.h"
 #include "Emu/cache_utils.hpp"
+#include "Emu/Memory/vm.h"
 #include "Emu/RSX/Program/RSXVertexProgram.h"
 #include "Emu/RSX/Program/RSXFragmentProgram.h"
 #include "Overlays/Shaders/shader_loading_dialog.h"
-#include "Emu/localized_string_id.h"
-#include "Emu/localized_string.h"
 
 #include <chrono>
 
@@ -23,7 +22,13 @@ namespace rsx
 	template <typename pipeline_storage_type, typename backend_storage>
 	class shaders_cache
 	{
-		using unpacked_type = std::vector<std::tuple<pipeline_storage_type, RSXVertexProgram, RSXFragmentProgram>>;
+		using unpacked_type = lf_fifo<std::tuple<pipeline_storage_type, RSXVertexProgram, RSXFragmentProgram>,
+#ifdef ANDROID
+		200
+#else
+		1000 // TODO: Determine best size
+#endif
+		>;
 
 		struct pipeline_data
 		{
@@ -115,7 +120,7 @@ namespace rsx
 
 					m_storage.preload_programs(nullptr, std::get<1>(entry), std::get<2>(entry));
 
-					unpacked.push_back(std::move(entry));
+					unpacked[unpacked.push_begin()] = std::move(entry);
 				}
 				// Do not account for an extra shader that was never processed
 				processed--;
@@ -225,7 +230,7 @@ namespace rsx
 				return;
 			}
 
-			std::string directory_path = root_path + pipeline_class_name;
+			std::string directory_path = root_path + "/pipelines/" + pipeline_class_name + "/" + version_prefix;
 
 			fs::dir root = fs::dir(directory_path);
 
@@ -261,7 +266,7 @@ namespace rsx
 				dlg = fallback_dlg.get();
 			}
 
-			dlg->create(get_localized_string(localized_string_id::PROGRESS_DIALOG_PRELOADING_SHADER_CACHE), "Shader Compilation");
+			dlg->create("Preloading cached shaders from disk.\nPlease wait...", "Shader Compilation");
 			dlg->set_limit(0, entry_count);
 			dlg->set_limit(1, entry_count);
 			dlg->update_msg(0, get_message(0, 0, entry_count));
@@ -269,10 +274,9 @@ namespace rsx
 
 			// Preload everything needed to compile the shaders
 			unpacked_type unpacked;
-
-            load_shaders(1, unpacked, directory_path, entries, entry_count, dlg);
-
 			uint nb_workers = g_cfg.video.renderer == video_renderer::vulkan ? utils::get_thread_count() : 1;
+
+			load_shaders(nb_workers, unpacked, directory_path, entries, entry_count, dlg);
 
 			// Account for any invalid entries
 			entry_count = unpacked.size();
@@ -333,7 +337,7 @@ namespace rsx
 			const usz state_hash = rpcs3::hash_array(state_params);
 
 			const std::string pipeline_file_name = fmt::format("%llX+%llX+%llX+%llX.bin", data.vertex_program_hash, data.fragment_program_hash, data.pipeline_storage_hash, state_hash);
-			const std::string pipeline_path = root_path + pipeline_class_name + "/" + pipeline_file_name;
+			const std::string pipeline_path = root_path + "/pipelines/" + pipeline_class_name + "/" + version_prefix + "/" + pipeline_file_name;
 			fs::write_file(pipeline_path, fs::rewrite, &data, sizeof(data));
 		}
 
@@ -475,6 +479,7 @@ namespace rsx
 			uptr local_address;
 			u32 offset_in_heap;
 			u32 data_length;
+			u64 fingerprint;
 		};
 
 		// A weak vertex cache with no data checks or memory range locks
@@ -499,8 +504,17 @@ namespace rsx
 			{
 				const auto key = hash(local_addr, data_length);
 				const auto found = vertex_ranges.find(key);
+
 				if (found == vertex_ranges.end())
 				{
+					return nullptr;
+				}
+
+				// Check if data in local_address changed vs what was stored in the vertex_cache
+				if (auto sudo_ptr = vm::get_super_ptr<char>(local_addr);
+					data_length >= 8 && found->second.fingerprint != *utils::bless<u64>(sudo_ptr))
+				{
+					vertex_ranges.erase(key);
 					return nullptr;
 				}
 
@@ -513,6 +527,11 @@ namespace rsx
 				v.data_length = data_length;
 				v.local_address = local_addr;
 				v.offset_in_heap = offset_in_heap;
+
+				if (auto sudo_ptr = vm::get_super_ptr<char>(local_addr); data_length >= 8)
+				{
+					v.fingerprint = *utils::bless<u64>(sudo_ptr);
+				}
 
 				const auto key = hash(local_addr, data_length);
 				vertex_ranges[key] = v;

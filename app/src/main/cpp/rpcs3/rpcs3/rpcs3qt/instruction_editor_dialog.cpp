@@ -1,4 +1,5 @@
 #include "instruction_editor_dialog.h"
+#include "hex_validator.h"
 
 #include "Emu/Cell/SPUThread.h"
 #include "Emu/CPU/CPUThread.h"
@@ -11,8 +12,6 @@
 #include <QPushButton>
 #include <QCheckBox>
 
-constexpr auto qstr = QString::fromStdString;
-
 extern bool ppu_patch(u32 addr, u32 value);
 
 extern std::string format_spu_func_info(u32 addr, cpu_thread* spu);
@@ -21,7 +20,7 @@ instruction_editor_dialog::instruction_editor_dialog(QWidget *parent, u32 _pc, C
 	: QDialog(parent)
 	, m_pc(_pc)
 	, m_disasm(_disasm->copy_type_erased())
-	, m_get_cpu(std::move(func))
+	, m_get_cpu(func ? std::move(func) : std::function<cpu_thread*()>(FN(nullptr)))
 {
 	setWindowTitle(tr("Edit instruction"));
 	setAttribute(Qt::WA_DeleteOnClose);
@@ -44,19 +43,19 @@ instruction_editor_dialog::instruction_editor_dialog(QWidget *parent, u32 _pc, C
 
 	m_instr = new QLineEdit(this);
 	m_instr->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
-	m_instr->setMaxLength(8);
-	m_instr->setMaximumWidth(65);
+	m_instr->setValidator(new HexValidator(m_instr));
+	m_instr->setMaximumWidth(130);
 
 	m_disasm->change_mode(cpu_disasm_mode::normal);
 	m_disasm->disasm(m_pc);
-	m_preview = new QLabel(qstr(m_disasm->last_opcode), this);
+	m_preview = new QLabel(QString::fromStdString(m_disasm->last_opcode), this);
 
 	// Layouts
 	vbox_left_panel->addWidget(new QLabel(tr("Address:     ")));
 	vbox_left_panel->addWidget(new QLabel(tr("Instruction: ")));
 	vbox_left_panel->addWidget(new QLabel(tr("Preview:     ")));
 
-	vbox_right_panel->addWidget(new QLabel(qstr(fmt::format("%08x", m_pc))));
+	vbox_right_panel->addWidget(new QLabel(QString::fromStdString(fmt::format("%08x", m_pc))));
 	vbox_right_panel->addWidget(m_instr);
 	vbox_right_panel->addWidget(m_preview);
 
@@ -67,7 +66,7 @@ instruction_editor_dialog::instruction_editor_dialog(QWidget *parent, u32 _pc, C
 		m_func_info = new QLabel("", this);
 		vbox_right_panel->addWidget(m_func_info);
 
-		m_func_info->setText(qstr(format_spu_func_info(m_pc, cpu)));
+		m_func_info->setText(QString::fromStdString(format_spu_func_info(m_pc, cpu)));
 	}
 
 	if (cpu && cpu->get_class() == thread_class::spu)
@@ -109,7 +108,7 @@ instruction_editor_dialog::instruction_editor_dialog(QWidget *parent, u32 _pc, C
 		}
 
 		bool ok;
-		const ulong opcode = m_instr->text().toULong(&ok, 16);
+		const ulong opcode = normalize_hex_qstring(m_instr->text()).toULong(&ok, 16);
 		if (!ok || opcode > u32{umax})
 		{
 			QMessageBox::critical(this, tr("Error"), tr("Failed to parse PPU instruction."));
@@ -152,12 +151,12 @@ instruction_editor_dialog::instruction_editor_dialog(QWidget *parent, u32 _pc, C
 void instruction_editor_dialog::updatePreview() const
 {
 	bool ok;
-	const be_t<u32> opcode{static_cast<u32>(m_instr->text().toULong(&ok, 16))};
+	const be_t<u32> opcode{static_cast<u32>(normalize_hex_qstring(m_instr->text()).toULong(&ok, 16))};
 	m_disasm->change_ptr(reinterpret_cast<const u8*>(&opcode) - std::intptr_t{m_pc});
 
 	if (ok && m_disasm->disasm(m_pc))
 	{
-		m_preview->setText(qstr(m_disasm->last_opcode));
+		m_preview->setText(QString::fromStdString(m_disasm->last_opcode));
 	}
 	else
 	{

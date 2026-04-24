@@ -196,6 +196,10 @@ VK_FUNC(vkAcquireNextImageKHR);
 
 VK_FUNC(vkQueuePresentKHR);
 
+//VK 1.1
+VK_FUNC(vkGetPhysicalDeviceProperties2);
+VK_FUNC(vkGetPhysicalDeviceFeatures2);
+
 #ifndef DBG_ADRENO_GPU_MEM
 #if defined(DECL_VK_FUNCTION)||defined(DEF_VK_FUNCTION)||defined(CLEAR_N_VK_FUNCTION)||defined(PRINT_N_VK_FUNCTION)
 #define INSTANCE_VK_FUNCTION

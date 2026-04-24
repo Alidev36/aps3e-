@@ -33,17 +33,6 @@ namespace vk
 		}
 	}
 
-    static void gpu_ror8_impl(const vk::command_buffer& cmd, vk::buffer* buf, u32 data_offset, u32 data_length)
-    {
-        vk::get_compute_task<vk::cs_shuffle_ror8>()->run(cmd, buf, data_length, data_offset);
-    }
-#if 0
-    template<int bc_ver>
-    static void gpu_decompress_bc(const vk::command_buffer& cmd, vk::buffer* buf, u32 element_size, u32 data_offset, u32 data_length)
-    {
-
-    }
-#endif
 	u64 calculate_working_buffer_size(u64 base_size, VkImageAspectFlags aspect)
 	{
 		if (aspect & (VK_IMAGE_ASPECT_STENCIL_BIT | VK_IMAGE_ASPECT_DEPTH_BIT))
@@ -387,7 +376,7 @@ namespace vk
 		const auto min_scratch_size = calculate_working_buffer_size(src_length, src->aspect() | dst->aspect());
 
 		// Initialize scratch memory
-		auto scratch_buf = vk::get_scratch_buffer(cmd, min_scratch_size);
+		auto scratch_buf = vk::get_scratch_buffer(cmd, min_scratch_size, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
 
 		for (u32 mip_level = 0; mip_level < mipmaps; ++mip_level)
 		{
@@ -410,24 +399,7 @@ namespace vk
 				if (src_convert.first == dst_convert.first &&
 					src_convert.second == dst_convert.second)
 				{
-                    if(!g_cfg.video.bgra_format){
-                        if(src->info.format==dst->info.format){
-                            //nop
-                        }
-                        else if(src->info.format==VK_FORMAT_R8G8B8A8_UNORM||dst->info.format==VK_FORMAT_R8G8B8A8_UNORM){
-                            insert_buffer_memory_barrier(cmd, scratch_buf->value, 0, src_length,
-                                                         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                                         VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
-
-                            vk::cs_shuffle_base *shuffle_kernel = vk::get_compute_task<vk::cs_shuffle_swap_rb>();
-                            shuffle_kernel->run(cmd, scratch_buf, src_length);
-                            insert_buffer_memory_barrier(cmd, scratch_buf->value, 0, src_length,
-                                                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                                         VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT);
-
-                            require_rw_barrier = false;
-                        }
-                    }
+					// NOP, the two operations will cancel out
 				}
 				else
 				{
@@ -557,8 +529,6 @@ namespace vk
 
 		a_dst = a_src;
 
-        static const VkFormat dst_fmt=g_cfg.video.bgra_format.get()?VK_FORMAT_B8G8R8A8_UNORM:VK_FORMAT_R8G8B8A8_UNORM;
-
 		if (vk::is_renderpass_open(cmd))
 		{
 			vk::end_renderpass(cmd);
@@ -631,7 +601,7 @@ namespace vk
 					const auto dst_w = dst_rect.width();
 					const auto dst_h = dst_rect.height();
 
-					auto scratch_buf = vk::get_scratch_buffer(cmd, std::max(src_w, dst_w) * std::max(src_h, dst_h) * 4);
+					auto scratch_buf = vk::get_scratch_buffer(cmd, std::max(src_w, dst_w) * std::max(src_h, dst_h) * 4, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
 
 					//1. Copy unscaled to typeless surface
 					VkBufferImageCopy info{};
@@ -720,13 +690,13 @@ namespace vk
 
 					if (use_unsafe_transport)
 					{
-						auto typeless = vk::get_typeless_helper(dst_fmt, RSX_FORMAT_CLASS_COLOR, typeless_w, typeless_h);
+						auto typeless = vk::get_typeless_helper(VK_FORMAT_B8G8R8A8_UNORM, RSX_FORMAT_CLASS_COLOR, typeless_w, typeless_h);
 						change_image_layout(cmd, typeless, VK_IMAGE_LAYOUT_GENERAL);
 						stretch_image_typeless_unsafe(src, dst, typeless, src_rect, dst_rect, depth_stencil);
 					}
 					else
 					{
-						auto typeless_depth = vk::get_typeless_helper(dst_fmt, RSX_FORMAT_CLASS_COLOR, typeless_w, typeless_h);
+						auto typeless_depth = vk::get_typeless_helper(VK_FORMAT_B8G8R8A8_UNORM, RSX_FORMAT_CLASS_COLOR, typeless_w, typeless_h);
 						auto typeless_stencil = vk::get_typeless_helper(VK_FORMAT_R8_UNORM, RSX_FORMAT_CLASS_COLOR, typeless_w, typeless_h);
 						change_image_layout(cmd, typeless_depth, VK_IMAGE_LAYOUT_GENERAL);
 						change_image_layout(cmd, typeless_stencil, VK_IMAGE_LAYOUT_GENERAL);
@@ -745,7 +715,7 @@ namespace vk
 					// NOTE: While it may seem intuitive to use R32_SFLOAT as the carrier for the depth aspect, this does not work properly
 					// Floating point interpolation is non-linear from a bit-by-bit perspective and generates undesirable effects
 
-					auto typeless_depth = vk::get_typeless_helper(dst_fmt, RSX_FORMAT_CLASS_COLOR, typeless_w, typeless_h);
+					auto typeless_depth = vk::get_typeless_helper(VK_FORMAT_B8G8R8A8_UNORM, RSX_FORMAT_CLASS_COLOR, typeless_w, typeless_h);
 					auto typeless_stencil = vk::get_typeless_helper(VK_FORMAT_R8_UNORM, RSX_FORMAT_CLASS_COLOR, typeless_w, typeless_h);
 					change_image_layout(cmd, typeless_depth, VK_IMAGE_LAYOUT_GENERAL);
 					change_image_layout(cmd, typeless_stencil, VK_IMAGE_LAYOUT_GENERAL);
@@ -784,49 +754,62 @@ namespace vk
 		if (src != dst) dst->pop_layout(cmd);
 	}
 
-	template <typename WordType, cs_deswizzle_3d_data_proc_mth data_proc_mth>
+	template <typename WordType, bool SwapBytes>
 	cs_deswizzle_base* get_deswizzle_transformation(u32 block_size)
 	{
 		switch (block_size)
 		{
+		case 1:
+			return vk::get_compute_task<cs_deswizzle_3d<u8, u8, false>>();
+		case 2:
+			return vk::get_compute_task<cs_deswizzle_3d<u16, WordType, SwapBytes>>();
 		case 4:
-			return vk::get_compute_task<cs_deswizzle_3d<u32, WordType, data_proc_mth>>();
+			return vk::get_compute_task<cs_deswizzle_3d<u32, WordType, SwapBytes>>();
 		case 8:
-			return vk::get_compute_task<cs_deswizzle_3d<u64, WordType, data_proc_mth>>();
+			return vk::get_compute_task<cs_deswizzle_3d<u64, WordType, SwapBytes>>();
 		case 16:
-			return vk::get_compute_task<cs_deswizzle_3d<u128, WordType, data_proc_mth>>();
+			return vk::get_compute_task<cs_deswizzle_3d<u128, WordType, SwapBytes>>();
 		default:
 			fmt::throw_exception("Unreachable");
 		}
 	}
 
-	static void gpu_deswizzle_sections_impl(const vk::command_buffer& cmd, vk::buffer* scratch_buf, u32 dst_offset, int word_size, int word_count, cs_deswizzle_3d_data_proc_mth data_proc_mth, std::vector<VkBufferImageCopy>& sections)
+	static void gpu_deswizzle_sections_impl(const vk::command_buffer& cmd, vk::buffer* scratch_buf, u32 dst_offset, int word_size, int word_count, bool swap_bytes, std::vector<VkBufferImageCopy>& sections)
 	{
 		// NOTE: This has to be done individually for every LOD
 		vk::cs_deswizzle_base* job = nullptr;
 		const auto block_size = (word_size * word_count);
 
-		ensure(word_size == 4 || word_size == 2);
+		if (!swap_bytes)
+		{
+			switch (word_size)
+			{
+			case 1:
+				job = get_deswizzle_transformation<u8, false>(block_size);
+				break;
+			case 2:
+				job = get_deswizzle_transformation<u16, false>(block_size);
+				break;
+			case 4:
+				job = get_deswizzle_transformation<u32, false>(block_size);
+				break;
+			default:
+				fmt::throw_exception("Unimplemented deswizzle for format.");
+			}
+		}
+		else
+		{
+			ensure(word_size == 2 || word_size == 4);
 
-        if(data_proc_mth==cs_deswizzle_3d_data_proc_mth::none){
-            if (word_size == 4)
-            {
-                job = get_deswizzle_transformation<u32, cs_deswizzle_3d_data_proc_mth::none>(block_size);
-            }
-            else
-            {
-                job = get_deswizzle_transformation<u16, cs_deswizzle_3d_data_proc_mth::none>(block_size);
-            }
-        }
-        else if(data_proc_mth==cs_deswizzle_3d_data_proc_mth::ror8_u32){
-            job = get_deswizzle_transformation<u32, cs_deswizzle_3d_data_proc_mth::ror8_u32>(block_size);
-        }
-        else if(data_proc_mth==cs_deswizzle_3d_data_proc_mth::swap_u32){
-            job = get_deswizzle_transformation<u32, cs_deswizzle_3d_data_proc_mth::swap_u32>(block_size);
-        }
-        else if(data_proc_mth==cs_deswizzle_3d_data_proc_mth::swap_u16){
-            job = get_deswizzle_transformation<u16, cs_deswizzle_3d_data_proc_mth::swap_u16>(block_size);
-        }
+			if (word_size == 4)
+			{
+				job = get_deswizzle_transformation<u32, true>(block_size);
+			}
+			else
+			{
+				job = get_deswizzle_transformation<u16, true>(block_size);
+			}
+		}
 
 		ensure(job);
 
@@ -894,7 +877,7 @@ namespace vk
 	static const vk::command_buffer& prepare_for_transfer(const vk::command_buffer& primary_cb, vk::image* dst_image, rsx::flags32_t& flags)
 	{
 		AsyncTaskScheduler* async_scheduler = (flags & image_upload_options::upload_contents_async)
-			? std::addressof(g_fxo->get<AsyncTaskScheduler>())
+			? g_fxo->try_get<AsyncTaskScheduler>()
 			: nullptr;
 
 		if (async_scheduler && (dst_image->aspect() & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)))
@@ -902,7 +885,7 @@ namespace vk
 			auto pdev = vk::get_current_renderer();
 			if (pdev->get_graphics_queue_family() != pdev->get_transfer_queue_family()) [[ likely ]]
 			{
-				// According to spec, we cannot call _vkCopyBufferToImage on a queue that does not support VK_QUEUE_GRAPHICS_BIT (VUID-_vkCmdCopyBufferToImage-commandBuffer-07737)
+				// According to spec, we cannot call vkCopyBufferToImage on a queue that does not support VK_QUEUE_GRAPHICS_BIT (VUID-vkCmdCopyBufferToImage-commandBuffer-07737)
 				// AMD doesn't care about this, but NVIDIA will crash if you try to cheat.
 				// We can just disable it for this case - it is actually very rare to upload depth-stencil stuff from CPU and RDB already uses inline uploads
 				flags &= ~image_upload_options::upload_contents_async;
@@ -1007,7 +990,7 @@ namespace vk
 		auto pdev = vk::get_current_renderer();
 		rsx::texture_uploader_capabilities caps{ .supports_dxt = pdev->get_texture_compression_bc_support(), .alignment = heap_align };
 		rsx::texture_memory_info opt{};
-		bool check_caps = true;
+		bool check_hw_caps = !(image_setup_flags & source_is_userptr);
 
 		vk::buffer* scratch_buf = nullptr;
 		u32 scratch_offset = 0;
@@ -1023,10 +1006,6 @@ namespace vk
 
 		auto& cmd2 = prepare_for_transfer(cmd, dst_image, image_setup_flags);
 
-        using require_mth=rsx::texture_memory_info_require_mth;
-
-        static const bool texture_upload_with_gpu=g_cfg.video.texture_upload_type==texture_upload_type::gpu;
-
 		for (const rsx::subresource_layout &layout : subresource_layout)
 		{
 			const auto [row_pitch, upload_pitch_in_texel] = calculate_upload_pitch(format, heap_align, dst_image, layout, caps);
@@ -1036,13 +1015,13 @@ namespace vk
 			image_linear_size = row_pitch * layout.depth * (rsx::is_compressed_host_format(caps, format) ? layout.height_in_block : layout.height_in_texel);
 
 			// Only do GPU-side conversion if occupancy is good
-			if (check_caps)
+			if (check_hw_caps)
 			{
 				caps.supports_byteswap = (image_linear_size >= 1024) || (image_setup_flags & source_is_gpu_resident);
 				caps.supports_hw_deswizzle = caps.supports_byteswap;
 				caps.supports_zero_copy = caps.supports_byteswap;
 				caps.supports_vtc_decoding = false;
-				check_caps = false;
+				check_hw_caps = false;
 			}
 
 			auto buf_allocator = [&](usz) -> std::tuple<void*, usz>
@@ -1060,9 +1039,7 @@ namespace vk
 			};
 
 			auto io_buf = rsx::io_buffer(buf_allocator);
-			opt = texture_upload_with_gpu&&caps.supports_zero_copy?  upload_texture_subresource_with_gpu(io_buf, layout, format, is_swizzled, caps)
-                    :upload_texture_subresource_with_cpu(io_buf, layout, format, is_swizzled, caps);
-
+			opt = upload_texture_subresource(io_buf, layout, format, is_swizzled, caps);
 			upload_heap.unmap();
 
 			if (image_setup_flags & source_is_gpu_resident)
@@ -1072,7 +1049,7 @@ namespace vk
 				upload_buffer = static_cast<buffer*>(iobuf);
 				offset_in_upload_buffer = io_offset;
 				// Never upload. Data is already resident.
-				opt.require_mth &=~require_mth::upload;
+				opt.require_upload = false;
 			}
 			else
 			{
@@ -1092,9 +1069,7 @@ namespace vk
 			copy_info.imageSubresource.mipLevel = layout.level;
 			copy_info.bufferRowLength = upload_pitch_in_texel;
 
-            bool require_data_proc=opt.require_mth&~require_mth::upload;
-
-			if (opt.require_mth&require_mth::upload)
+			if (opt.require_upload)
 			{
 				ensure(!opt.deferred_cmds.empty());
 
@@ -1128,34 +1103,19 @@ namespace vk
 				caps.supports_zero_copy = false;
 			}
 
-			if (require_data_proc || requires_depth_processing)
+			if (opt.require_swap || opt.require_deswizzle || requires_depth_processing)
 			{
 				if (!scratch_buf)
 				{
 					// Calculate enough scratch memory. We need 2x the size of layer 0 to fit all the mip levels and an extra 128 bytes per level as alignment overhead.
 					const u64 layer_size = (image_linear_size + image_linear_size);
 					u64 scratch_buf_size = 128u * ::size32(subresource_layout) + (layer_size * layer_count);
-					if (opt.require_mth&require_mth::deswizzle)
+					if (opt.require_deswizzle)
 					{
 						// Double the memory if hw deswizzle is going to be used.
 						// For GPU deswizzle, the memory is not transformed in-place, rather the decoded texture is placed at the end of the uploaded data.
 						scratch_buf_size += scratch_buf_size;
 					}
-
-                    if((opt.require_mth&require_mth::decode_brgr8)
-                    ||(opt.require_mth&require_mth::decode_rbrg8)){
-                        //FIXME 计算正确的大小
-                        scratch_buf_size +=  scratch_buf_size*2;
-                    }
-                    else if(opt.require_mth&require_mth::decode_bc1){
-                        //FIXME 计算正确的大小
-                        scratch_buf_size +=  scratch_buf_size*8;
-                    }
-                    else if((opt.require_mth&require_mth::decode_bc2)
-                       ||(opt.require_mth&require_mth::decode_bc3)){
-                        //FIXME 计算正确的大小
-                        scratch_buf_size +=  scratch_buf_size*4;
-                    }
 
 					if (requires_depth_processing)
 					{
@@ -1163,7 +1123,8 @@ namespace vk
 						// Due to reverse processing of inputs, only enough space to fit one layer is needed here.
 						scratch_buf_size += (image_linear_size * 5) / 4;
 					}
-					scratch_buf = vk::get_scratch_buffer(cmd2, scratch_buf_size);
+
+					scratch_buf = vk::get_scratch_buffer(cmd2, scratch_buf_size, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
 					buffer_copies.reserve(subresource_layout.size());
 				}
 
@@ -1174,7 +1135,7 @@ namespace vk
 				}
 
 				// Copy from upload heap to scratch mem
-				if (opt.require_mth&require_mth::upload)
+				if (opt.require_upload)
 				{
 					for (const auto& copy_cmd : opt.deferred_cmds)
 					{
@@ -1201,7 +1162,7 @@ namespace vk
 				ensure((scratch_offset + image_linear_size) <= scratch_buf->size()); // "Out of scratch memory"
 			}
 
-			if (opt.require_mth&require_mth::upload)
+			if (opt.require_upload)
 			{
 				if (upload_commands.empty() || upload_buffer->value != upload_commands.back().first)
 				{
@@ -1218,8 +1179,7 @@ namespace vk
 
 		ensure(upload_buffer);
 
-        bool require_data_proc=opt.require_mth&~require_mth::upload;
-		if (require_data_proc || requires_depth_processing)
+		if (opt.require_swap || opt.require_deswizzle || requires_depth_processing)
 		{
 			ensure(scratch_buf);
 
@@ -1232,37 +1192,28 @@ namespace vk
 					range_ptr += op.second;
 				}
 			}
-			else if (!buffer_copies.empty())
+			else
 			{
+				ensure(!buffer_copies.empty());
 				_vkCmdCopyBuffer(cmd2, upload_buffer->value, scratch_buf->value, static_cast<u32>(buffer_copies.size()), buffer_copies.data());
 			}
 
-			insert_buffer_memory_barrier(cmd2, scratch_buf->value, 0, scratch_offset, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+			insert_buffer_memory_barrier(
+				cmd2, scratch_buf->value, 0, scratch_offset,
+				VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
 		}
 
 		// Swap and deswizzle if requested
-		if (opt.require_mth&require_mth::deswizzle)
+		if (opt.require_deswizzle)
 		{
-            if (opt.require_mth&require_mth::ror8_u32)
-			gpu_deswizzle_sections_impl(cmd2, scratch_buf, scratch_offset, opt.element_size, opt.block_length, cs_deswizzle_3d_data_proc_mth::ror8_u32, copy_regions);
-            else if(opt.require_mth&require_mth::swap)
-            gpu_deswizzle_sections_impl(cmd2, scratch_buf, scratch_offset, opt.element_size, opt.block_length
-                                        , opt.element_size==4?cs_deswizzle_3d_data_proc_mth::swap_u32:cs_deswizzle_3d_data_proc_mth::swap_u16, copy_regions);
-            else gpu_deswizzle_sections_impl(cmd2, scratch_buf, scratch_offset, opt.element_size, opt.block_length, cs_deswizzle_3d_data_proc_mth::none, copy_regions);
-
-        }
-        else if (opt.require_mth&require_mth::ror8_u32)
-		{
-            gpu_ror8_impl(cmd2, scratch_buf,0, scratch_offset);
+			gpu_deswizzle_sections_impl(cmd2, scratch_buf, scratch_offset, opt.element_size, opt.block_length, opt.require_swap, copy_regions);
 		}
-		else if (opt.require_mth&require_mth::swap)
+		else if (opt.require_swap)
 		{
 			gpu_swap_bytes_impl(cmd2, scratch_buf, opt.element_size, 0, scratch_offset);
 		}
-        else if (opt.require_mth&require_mth::decode_bc3){
-
-        }
 
 		// CopyBufferToImage routines
 		if (requires_depth_processing)
@@ -1275,7 +1226,7 @@ namespace vk
 		}
 		else if (scratch_buf)
 		{
-			//ensure(opt.require_deswizzle || opt.require_swap);
+			ensure(opt.require_deswizzle || opt.require_swap);
 
 			const auto block_start = copy_regions.front().bufferOffset;
 			insert_buffer_memory_barrier(cmd2, scratch_buf->value, block_start, scratch_offset, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -1310,7 +1261,7 @@ namespace vk
 	}
 
 	std::pair<buffer*, u32> detile_memory_block(const vk::command_buffer& cmd, const rsx::GCM_tile_reference& tiled_region,
-		const utils::address_range& range, u16 width, u16 height, u8 bpp)
+		const utils::address_range32& range, u16 width, u16 height, u8 bpp)
 	{
 		// Calculate the true length of the usable memory section
 		const auto available_tile_size = tiled_region.tile->size - (range.start - tiled_region.base_address);
@@ -1322,7 +1273,10 @@ namespace vk
 		vk::load_dma(range.start, section_length);
 
 		// Allocate scratch and prepare for the GPU job
-		const auto scratch_buf = vk::get_scratch_buffer(cmd, section_length * 3); // 0 = linear data, 1 = padding (deswz), 2 = tiled data
+		const auto scratch_buf = vk::get_scratch_buffer(cmd, section_length * 3,       // 0 = linear data, 1 = padding (deswz), 2 = tiled data
+			VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+
 		const auto tiled_data_scratch_offset = section_length * 2;
 		const auto linear_data_scratch_offset = 0u;
 
@@ -1356,16 +1310,16 @@ namespace vk
 		};
 		_vkCmdCopyBuffer(cmd, dma_mapping.second->value, scratch_buf->value, 1, &copy_rgn);
 
-		// Barrier
+		// Post-Transfer barrier
 		vk::insert_buffer_memory_barrier(
-			cmd, scratch_buf->value, linear_data_scratch_offset, section_length,
+			cmd, scratch_buf->value, tiled_data_scratch_offset, section_length,
 			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 			VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
 
 		// Detile
 		vk::get_compute_task<vk::cs_tile_memcpy<RSX_detiler_op::decode>>()->run(cmd, config);
 
-		// Barrier
+		// Post-Compute barrier
 		vk::insert_buffer_memory_barrier(
 			cmd, scratch_buf->value, linear_data_scratch_offset, static_cast<u32>(width) * height * bpp,
 			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,

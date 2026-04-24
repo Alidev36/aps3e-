@@ -2,53 +2,6 @@
 #include "system_config_types.h"
 
 template <>
-void fmt_class_string<texture_upload_type>::format(std::string& out, u64 arg)
-{
-    format_enum(out, arg, [](texture_upload_type value)
-    {
-        switch (value)
-        {
-            case texture_upload_type::cpu: return "CPU";
-            case texture_upload_type::gpu: return "GPU";
-        }
-
-        return unknown;
-    });
-}
-
-template <>
-void fmt_class_string<font_file_selection>::format(std::string& out, u64 arg)
-{
-    format_enum(out, arg, [](font_file_selection value)
-    {
-        switch (value)
-        {
-            case font_file_selection::from_firmware: return "From Firmware";
-            case font_file_selection::from_os: return "From OS";
-            case font_file_selection::custom: return "Custom";
-        }
-
-        return unknown;
-    });
-}
-
-template <>
-void fmt_class_string<vertex_buffer_upload_mode>::format(std::string& out, u64 arg)
-{
-    format_enum(out, arg, [](vertex_buffer_upload_mode value)
-    {
-        switch (value)
-        {
-            case vertex_buffer_upload_mode::_auto: return "Auto";
-            case vertex_buffer_upload_mode::buffer_view: return "Buffer View";
-            case vertex_buffer_upload_mode::buffer: return "Buffer";
-        }
-
-        return unknown;
-    });
-}
-
-template <>
 void fmt_class_string<mouse_handler>::format(std::string& out, u64 arg)
 {
 	format_enum(out, arg, [](mouse_handler value)
@@ -72,9 +25,7 @@ void fmt_class_string<video_renderer>::format(std::string& out, u64 arg)
 		switch (value)
 		{
 		case video_renderer::null: return "Null";
-#ifndef __ANDROID__
 		case video_renderer::opengl: return "OpenGL";
-#endif
 		case video_renderer::vulkan: return "Vulkan";
 		}
 
@@ -246,22 +197,6 @@ void fmt_class_string<screen_quadrant>::format(std::string& out, u64 arg)
 }
 
 template <>
-void fmt_class_string<tsx_usage>::format(std::string& out, u64 arg)
-{
-	format_enum(out, arg, [](tsx_usage value)
-	{
-		switch (value)
-		{
-		case tsx_usage::disabled: return "Disabled";
-		case tsx_usage::enabled: return "Enabled";
-		case tsx_usage::forced: return "Forced";
-		}
-
-		return unknown;
-	});
-}
-
-template <>
 void fmt_class_string<rsx_fifo_mode>::format(std::string& out, u64 arg)
 {
 	format_enum(out, arg, [](rsx_fifo_mode value)
@@ -423,6 +358,9 @@ void fmt_class_string<camera_handler>::format(std::string& out, u64 arg)
 		case camera_handler::null: return "Null";
 		case camera_handler::fake: return "Fake";
 		case camera_handler::qt: return "Qt";
+#ifdef HAVE_SDL3
+		case camera_handler::sdl: return "SDL";
+#endif
 		}
 
 		return unknown;
@@ -486,6 +424,7 @@ void fmt_class_string<move_handler>::format(std::string& out, u64 arg)
 		switch (value)
 		{
 		case move_handler::null: return "Null";
+		case move_handler::real: return "Real";
 		case move_handler::fake: return "Fake";
 		case move_handler::mouse: return "Mouse";
 		case move_handler::raw_mouse: return "Raw Mouse";
@@ -583,9 +522,9 @@ void fmt_class_string<shader_mode>::format(std::string& out, u64 arg)
 	{
 		switch (value)
 		{
-		case shader_mode::recompiler: return "Shader Recompiler";
-		case shader_mode::async_recompiler: return "Async Shader Recompiler";
-		case shader_mode::async_with_interpreter: return "Async with Shader Interpreter";
+		case shader_mode::recompiler: return "Legacy Recompiler (single-threaded)";
+		case shader_mode::async_recompiler: return "Async Recompiler (multi-threaded)";
+		case shader_mode::async_with_interpreter: return "Async Recompiler with Shader Interpreter";
 		case shader_mode::interpreter_only: return "Shader Interpreter only";
 		}
 
@@ -667,7 +606,8 @@ void fmt_class_string<thread_scheduler_mode>::format(std::string& out, u64 arg)
 	{
 		switch (value)
 		{
-		case thread_scheduler_mode::affinity: return "Affinity";
+		case thread_scheduler_mode::old: return "RPCS3 Scheduler";
+		case thread_scheduler_mode::alt: return "RPCS3 Alternative Scheduler";
 		case thread_scheduler_mode::os: return "Operating System";
 		}
 
@@ -762,4 +702,81 @@ void fmt_class_string<xfloat_accuracy>::format(std::string& out, u64 arg)
 
 		return unknown;
 	});
+}
+
+template <>
+void fmt_class_string<date_format>::format(std::string& out, u64 arg)
+{
+	format_enum(out, arg, [](date_format value)
+	{
+		switch (value)
+		{
+		case date_format::yyyymmdd: return "yyyymmdd";
+		case date_format::ddmmyyyy: return "ddmmyyyy";
+		case date_format::mmddyyyy: return "mmddyyyy";
+		}
+
+		return unknown;
+	});
+}
+
+template <>
+void fmt_class_string<time_format>::format(std::string& out, u64 arg)
+{
+	format_enum(out, arg, [](time_format value)
+	{
+		switch (value)
+		{
+		case time_format::clock12: return "clock12";
+		case time_format::clock24: return "clock24";
+		}
+
+		return unknown;
+	});
+}
+
+template <>
+void fmt_class_string<vsync_mode>::format(std::string& out, u64 arg)
+{
+	format_enum(out, arg, [](vsync_mode value)
+	{
+		switch (value)
+		{
+		case vsync_mode::off: return "Disabled";
+		case vsync_mode::adaptive: return "Adaptive";
+		case vsync_mode::full: return "Full";
+		}
+
+		return unknown;
+	});
+}
+template <>
+void fmt_class_string<vertex_buffer_upload_mode>::format(std::string& out, u64 arg)
+{
+    format_enum(out, arg, [](vertex_buffer_upload_mode value)
+    {
+        switch (value)
+        {
+            case vertex_buffer_upload_mode::_auto: return "Auto";
+            case vertex_buffer_upload_mode::buffer_view: return "Buffer View";
+            case vertex_buffer_upload_mode::buffer: return "Buffer";
+        }
+
+        return unknown;
+    });
+}
+
+template <>
+void fmt_class_string<font_file_selection>::format(std::string& out, u64 arg)
+{
+    format_enum(out, arg, [](font_file_selection value)
+    {
+        switch (value)
+        {
+            case font_file_selection::from_firmware: return "From Firmware";
+            case font_file_selection::custom: return "Custom";
+        }
+
+        return unknown;
+    });
 }

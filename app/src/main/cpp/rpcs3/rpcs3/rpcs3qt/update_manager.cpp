@@ -4,22 +4,21 @@
 #include "rpcs3_version.h"
 #include "downloader.h"
 #include "gui_settings.h"
-#include "Utilities/StrUtil.h"
 #include "Utilities/File.h"
 #include "Emu/System.h"
-#include "Emu/system_utils.hpp"
 #include "Crypto/utils.h"
 #include "util/logs.hpp"
 #include "util/types.hpp"
+#include "util/sysinfo.hpp"
 
 #include <QApplication>
+#include <QCheckBox>
 #include <QDateTime>
 #include <QMessageBox>
 #include <QLabel>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonDocument>
-#include <QThread>
 
 #if defined(_WIN32) || defined(__APPLE__)
 #include <7z.h>
@@ -39,19 +38,10 @@
 #define PATH_MAX MAX_PATH
 #endif
 
+#include "Utilities/StrUtil.h"
 #else
 #include <unistd.h>
 #include <sys/stat.h>
-#endif
-
-#if defined(__APPLE__)
-// sysinfo_darwin.mm
-namespace Darwin_Version
-{
-	extern int getNSmajorVersion();
-	extern int getNSminorVersion();
-	extern int getNSpatchVersion();
-}
 #endif
 
 LOG_CHANNEL(update_log, "UPDATER");
@@ -65,8 +55,7 @@ void update_manager::check_for_updates(bool automatic, bool check_only, bool aut
 {
 	update_log.notice("Checking for updates: automatic=%d, check_only=%d, auto_accept=%d", automatic, check_only, auto_accept);
 
-	m_update_message.clear();
-	m_changelog.clear();
+	m_update_info = {};
 
 	if (automatic)
 	{
@@ -112,30 +101,15 @@ void update_manager::check_for_updates(bool automatic, bool check_only, bool aut
 			}
 		}
 
-		Q_EMIT signal_update_available(result_json && !m_update_message.isEmpty());
+		Q_EMIT signal_update_available(result_json && m_update_info.update_found);
 	});
 
-#if defined(__APPLE__)
-	const std::string url = fmt::format("https://update.rpcs3.net/"
-		"?api=v3"
-		"&c=%s"
-		"&os_type=macos"
-		"&os_arch="
-#if defined(ARCH_X64)
-		"x64"
-#elif defined(ARCH_ARM64)
-		"arm64"
-#endif
-		"&os_version=%i.%i.%i",
-		rpcs3::get_commit_and_hash().second,
-		Darwin_Version::getNSmajorVersion(),
-		Darwin_Version::getNSminorVersion(),
-		Darwin_Version::getNSpatchVersion());
-#else
-	const std::string url = "https://update.rpcs3.net/?api=v2&c=" + rpcs3::get_commit_and_hash().second;
-#endif
-	
-	m_downloader->start(url, true, !automatic, tr("Checking For Updates"), true);
+	const utils::OS_version os = utils::get_OS_version();
+
+	const std::string url = fmt::format("https://update.rpcs3.net/?api=v3&c=%s&os_type=%s&os_arch=%s&os_version=%i.%i.%i",
+		rpcs3::get_commit_and_hash().second, os.type, os.arch, os.version_major, os.version_minor, os.version_patch);
+
+	m_downloader->start(url, true, !automatic, true, tr("Checking For Updates"), true);
 }
 
 bool update_manager::handle_json(bool automatic, bool check_only, bool auto_accept, const QByteArray& data)
@@ -145,7 +119,7 @@ bool update_manager::handle_json(bool automatic, bool check_only, bool auto_acce
 	const QJsonObject json_data = QJsonDocument::fromJson(data).object();
 	const int return_code       = json_data["return_code"].toInt(-255);
 
-	bool hash_found = true;
+	m_update_info.hash_found = true;
 
 	if (return_code < 0)
 	{
@@ -160,14 +134,14 @@ bool update_manager::handle_json(bool automatic, bool check_only, bool auto_acce
 		}
 
 		if (return_code != -1)
-			update_log.error("Update error: %s return code: %d", error_message, return_code);
+			update_log.error("Update error: %s, return code: %d", error_message, return_code);
 		else
-			update_log.warning("Update error: %s return code: %d", error_message, return_code);
+			update_log.warning("Update error: %s, return code: %d", error_message, return_code);
 
 		// If a user clicks "Check for Updates" with a custom build ask him if he's sure he wants to update to latest version
 		if (!automatic && return_code == -1)
 		{
-			hash_found = false;
+			m_update_info.hash_found = false;
 		}
 		else
 		{
@@ -198,15 +172,29 @@ bool update_manager::handle_json(bool automatic, bool check_only, bool auto_acce
 #endif
 
 	// Check that every bit of info we need is there
-	if (!latest[os].isObject() || !latest[os]["download"].isString() || !latest[os]["size"].isDouble() || !latest[os]["checksum"].isString() || !latest["version"].isString() ||
-	    !latest["datetime"].isString() ||
-	    (hash_found && (!current.isObject() || !current["version"].isString() || !current["datetime"].isString())))
+	const auto check_json = [](bool cond, std::string_view msg) -> bool
 	{
-		update_log.error("Some information seems unavailable");
+		if (cond) return true;
+		update_log.error("%s", msg);
+		return false;
+	};
+	if (!(check_json(latest[os].isObject(), fmt::format("Node 'latest_build: %s' not found", os)) &&
+	      check_json(latest[os]["download"].isString(), fmt::format("Node 'latest_build: %s: download' not found or not a string", os)) &&
+	      check_json(latest[os]["size"].isDouble(), fmt::format("Node 'latest_build: %s: size' not found or not a double", os)) &&
+	      check_json(latest[os]["checksum"].isString(), fmt::format("Node 'latest_build: %s: checksum' not found or not a string", os)) &&
+	      check_json(latest["version"].isString(), "Node 'latest_build: version' not found or not a string") &&
+	      check_json(latest["datetime"].isString(), "Node 'latest_build: datetime' not found or not a string")
+	     ) ||
+	     (m_update_info.hash_found && !(
+	      check_json(current.isObject(), "JSON doesn't contain current_build section") &&
+	      check_json(current["version"].isString(), "Node 'current_build: datetime' not found or not a string") &&
+	      check_json(current["datetime"].isString(), "Node 'current_build: version' not found or not a string")
+	     )))
+	{
 		return false;
 	}
 
-	if (hash_found && return_code == 0)
+	if (m_update_info.hash_found && return_code == 0)
 	{
 		update_log.success("RPCS3 is up to date!");
 		m_downloader->close_progress_dialog();
@@ -220,56 +208,25 @@ bool update_manager::handle_json(bool automatic, bool check_only, bool auto_acce
 	// Calculate how old the build is
 	const QString date_fmt = QStringLiteral("yyyy-MM-dd hh:mm:ss");
 
-	const QDateTime cur_date = hash_found ? QDateTime::fromString(current["datetime"].toString(), date_fmt) : QDateTime::currentDateTimeUtc();
+	const QDateTime cur_date = m_update_info.hash_found ? QDateTime::fromString(current["datetime"].toString(), date_fmt) : QDateTime::currentDateTimeUtc();
 	const QDateTime lts_date = QDateTime::fromString(latest["datetime"].toString(), date_fmt);
 
-	const QString cur_str = cur_date.toString(date_fmt);
-	const QString lts_str = lts_date.toString(date_fmt);
+	m_update_info.update_found = true;
+	m_update_info.cur_date = cur_date.toString(date_fmt);
+	m_update_info.lts_date = lts_date.toString(date_fmt);
+	m_update_info.diff_msec = cur_date.msecsTo(lts_date);
+	m_update_info.new_version = latest["version"].toString();
 
-	const qint64 diff_msec = cur_date.msecsTo(lts_date);
-
-	update_log.notice("Current: %s, latest: %s, difference: %lld ms", cur_str, lts_str, diff_msec);
-
-	const Localized localized;
-
-	m_new_version = latest["version"].toString().toStdString();
-	const QString support_message = tr("<br>You can empower our project at <a href=\"https://rpcs3.net/patreon\">RPCS3 Patreon</a>.<br>");
-
-	if (hash_found)
+	if (m_update_info.hash_found)
 	{
-		m_old_version = current["version"].toString().toStdString();
-
-		if (diff_msec < 0)
-		{
-			// This usually means that the current version was marked as broken and won't be shipped anymore, so we need to downgrade to avoid certain bugs.
-			m_update_message = tr("A better version of RPCS3 is available!<br><br>Current version: %0 (%1)<br>Better version: %2 (%3)<br>%4<br>Do you want to update?")
-				.arg(current["version"].toString())
-				.arg(cur_str)
-				.arg(latest["version"].toString())
-				.arg(lts_str)
-				.arg(support_message);
-		}
-		else
-		{
-			m_update_message = tr("A new version of RPCS3 is available!<br><br>Current version: %0 (%1)<br>Latest version: %2 (%3)<br>Your version is %4 behind.<br>%5<br>Do you want to update?")
-				.arg(current["version"].toString())
-				.arg(cur_str)
-				.arg(latest["version"].toString())
-				.arg(lts_str)
-				.arg(localized.GetVerboseTimeByMs(diff_msec, true))
-				.arg(support_message);
-		}
+		m_update_info.old_version = current["version"].toString();
 	}
 	else
 	{
-		m_old_version = fmt::format("%s-%s-%s", rpcs3::get_full_branch(), rpcs3::get_branch(), rpcs3::get_version().to_string());
-
-		m_update_message = tr("You're currently using a custom or PR build.<br><br>Latest version: %0 (%1)<br>The latest version is %2 old.<br>%3<br>Do you want to update to the latest official RPCS3 version?")
-			.arg(latest["version"].toString())
-			.arg(lts_str)
-			.arg(localized.GetVerboseTimeByMs(std::abs(diff_msec), true))
-			.arg(support_message);
+		m_update_info.old_version = QString::fromStdString(fmt::format("%s-%s-%s", rpcs3::get_full_branch(), rpcs3::get_branch(), rpcs3::get_version().to_string()));
 	}
+
+	update_log.notice("Current: %s, latest: %s, difference: %lld ms", m_update_info.cur_date, m_update_info.lts_date, m_update_info.diff_msec);
 
 	m_request_url   = latest[os]["download"].toString().toStdString();
 	m_expected_hash = latest[os]["checksum"].toString().toStdString();
@@ -285,6 +242,13 @@ bool update_manager::handle_json(bool automatic, bool check_only, bool auto_acce
 
 	if (!auto_accept)
 	{
+		if (automatic && m_gui_settings->GetValue(gui::ib_skip_version).toString() == m_update_info.new_version)
+		{
+			update_log.notice("Skipping automatic update notification for version '%s' due to user preference", m_update_info.new_version);
+			m_downloader->close_progress_dialog();
+			return true;
+		}
+
 		const auto& changelog = json_data["changelog"];
 
 		if (changelog.isArray())
@@ -301,7 +265,6 @@ bool update_manager::handle_json(bool automatic, bool check_only, bool auto_acce
 					}
 					else
 					{
-						entry.version = tr("N/A");
 						update_log.notice("JSON changelog entry does not contain a version string.");
 					}
 
@@ -311,11 +274,10 @@ bool update_manager::handle_json(bool automatic, bool check_only, bool auto_acce
 					}
 					else
 					{
-						entry.title = tr("N/A");
 						update_log.notice("JSON changelog entry does not contain a title string.");
 					}
 
-					m_changelog.push_back(entry);
+					m_update_info.changelog.push_back(std::move(entry));
 				}
 				else
 				{
@@ -352,26 +314,63 @@ void update_manager::update(bool auto_accept)
 
 	if (!auto_accept)
 	{
-		if (m_update_message.isEmpty())
+		if (!m_update_info.update_found)
 		{
 			// This can happen if we abort the check_for_updates download. Just check again in this case.
-			update_log.notice("Aborting update: Update message is empty. Trying again...");
+			update_log.notice("Aborting update: Update not found. Trying again...");
 			m_downloader->close_progress_dialog();
 			check_for_updates(false, false, false, m_parent);
 			return;
 		}
 
+		const Localized localized;
+		const QString support_message = tr("<br>You can empower our project at <a href=\"https://rpcs3.net/patreon\">RPCS3 Patreon</a>.<br>");
+		QString update_message;
+
+		if (m_update_info.hash_found)
+		{
+			if (m_update_info.diff_msec < 0)
+			{
+				// This usually means that the current version was marked as broken and won't be shipped anymore, so we need to downgrade to avoid certain bugs.
+				update_message = tr("A better version of RPCS3 is available!<br><br>Current version: %0 (%1)<br>Better version: %2 (%3)<br>%4<br>Do you want to update?")
+					.arg(m_update_info.old_version)
+					.arg(m_update_info.cur_date)
+					.arg(m_update_info.new_version)
+					.arg(m_update_info.lts_date)
+					.arg(support_message);
+			}
+			else
+			{
+				update_message = tr("A new version of RPCS3 is available!<br><br>Current version: %0 (%1)<br>Latest version: %2 (%3)<br>Your version is %4 behind.<br>%5<br>Do you want to update?")
+					.arg(m_update_info.old_version)
+					.arg(m_update_info.cur_date)
+					.arg(m_update_info.new_version)
+					.arg(m_update_info.lts_date)
+					.arg(localized.GetVerboseTimeByMs(m_update_info.diff_msec, true))
+					.arg(support_message);
+			}
+		}
+		else
+		{
+			update_message = tr("You're currently using a custom or PR build.<br><br>Latest version: %0 (%1)<br>The latest version is %2 old.<br>%3<br>Do you want to update to the latest official RPCS3 version?")
+				.arg(m_update_info.new_version)
+				.arg(m_update_info.lts_date)
+				.arg(localized.GetVerboseTimeByMs(std::abs(m_update_info.diff_msec), true))
+				.arg(support_message);
+		}
+
 		QString changelog_content;
 
-		for (const changelog_data& entry : m_changelog)
+		for (const changelog_data& entry : m_update_info.changelog)
 		{
 			if (!changelog_content.isEmpty())
 				changelog_content.append('\n');
-			changelog_content.append(tr("• %0: %1").arg(entry.version, entry.title));
+			changelog_content.append(tr("• %0: %1").arg(entry.version.isEmpty() ? tr("N/A") : entry.version, entry.title.isEmpty() ? tr("N/A") : entry.title));
 		}
 
-		QMessageBox mb(QMessageBox::Icon::Question, tr("Update Available"), m_update_message, QMessageBox::Yes | QMessageBox::No, m_downloader->get_progress_dialog() ? m_downloader->get_progress_dialog() : m_parent);
+		QMessageBox mb(QMessageBox::Icon::Question, tr("Update Available"), update_message, QMessageBox::Yes | QMessageBox::No, m_downloader->get_progress_dialog() ? m_downloader->get_progress_dialog() : m_parent);
 		mb.setTextFormat(Qt::RichText);
+		mb.setCheckBox(new QCheckBox(tr("Don't show again for this version")));
 
 		if (!changelog_content.isEmpty())
 		{
@@ -380,16 +379,16 @@ void update_manager::update(bool auto_accept)
 
 			// Smartass hack to make the unresizeable message box wide enough for the changelog
 			const int changelog_width = QLabel(changelog_content).sizeHint().width();
-			if (QLabel(m_update_message).sizeHint().width() < changelog_width)
+			if (QLabel(update_message).sizeHint().width() < changelog_width)
 			{
-				m_update_message += " &nbsp;";
-				while (QLabel(m_update_message).sizeHint().width() < changelog_width)
+				update_message += " &nbsp;";
+				while (QLabel(update_message).sizeHint().width() < changelog_width)
 				{
-					m_update_message += "&nbsp;";
+					update_message += "&nbsp;";
 				}
 			}
 
-			mb.setText(m_update_message);
+			mb.setText(update_message);
 		}
 
 		update_log.notice("Asking user for permission to update...");
@@ -397,6 +396,13 @@ void update_manager::update(bool auto_accept)
 		if (mb.exec() == QMessageBox::No)
 		{
 			update_log.notice("Aborting update: User declined update");
+
+			if (mb.checkBox()->isChecked())
+			{
+				update_log.notice("User requested to skip further automatic update notifications for version '%s'", m_update_info.new_version);
+				m_gui_settings->SetValue(gui::ib_skip_version, m_update_info.new_version);
+			}
+
 			m_downloader->close_progress_dialog();
 			return;
 		}
@@ -433,7 +439,7 @@ void update_manager::update(bool auto_accept)
 	});
 
 	update_log.notice("Downloading update...");
-	m_downloader->start(m_request_url, true, true, tr("Downloading Update"), true, m_expected_size);
+	m_downloader->start(m_request_url, true, true, false, tr("Downloading Update"), true, m_expected_size);
 }
 
 bool update_manager::handle_rpcs3(const QByteArray& data, bool auto_accept)
@@ -492,16 +498,34 @@ bool update_manager::handle_rpcs3(const QByteArray& data, bool auto_accept)
 	UInt16 temp_u16[PATH_MAX];
 	u8 temp_u8[PATH_MAX];
 	const usz kInputBufSize = static_cast<usz>(1u << 18u);
-	const ISzAlloc g_Alloc     = {SzAlloc, SzFree};
+	const ISzAlloc g_Alloc = {SzAlloc, SzFree};
 
 	ISzAlloc allocImp     = g_Alloc;
 	ISzAlloc allocTempImp = g_Alloc;
 
-	if (InFile_Open(&archiveStream.file, tmpfile_path.c_str()))
+	const auto WRes_to_string = [](WRes res)
 	{
-		update_log.error("Failed to open temporary storage file: %s", tmpfile_path);
+#ifdef _WIN32
+		return fmt::format("0x%x='%s'", res, std::system_category().message(HRESULT_FROM_WIN32(res)));
+#else
+		return fmt::format("0x%x='%s'", res, strerror(res));
+#endif
+	};
+
+#ifdef _WIN32
+	const std::wstring tmpfile_path_w = utf8_to_wchar(tmpfile_path);
+	if (const WRes res = InFile_OpenW(&archiveStream.file, tmpfile_path_w.c_str()))
+	{
+		update_log.error("Failed to open temporary storage file: '%s' (error=%s)", tmpfile_path_w.c_str(), WRes_to_string(res));
 		return false;
 	}
+#else
+	if (const WRes res = InFile_Open(&archiveStream.file, tmpfile_path.c_str()))
+	{
+		update_log.error("Failed to open temporary storage file: '%s' (error=%s)", tmpfile_path, WRes_to_string(res));
+		return false;
+	}
+#endif
 
 	FileInStream_CreateVTable(&archiveStream);
 	LookToRead2_CreateVTable(&lookStream, False);
@@ -522,21 +546,14 @@ bool update_manager::handle_rpcs3(const QByteArray& data, bool auto_accept)
 	CrcGenerateTable();
 	SzArEx_Init(&db);
 
-	auto error_free7z = [&]()
+	const auto error_free7z = [&]()
 	{
 		SzArEx_Free(&db, &allocImp);
 		ISzAlloc_Free(&allocImp, lookStream.buf);
 
-		File_Close(&archiveStream.file);
-
-		switch (res)
-		{
-		case SZ_OK: break;
-		case SZ_ERROR_UNSUPPORTED: update_log.error("7z decoder doesn't support this archive"); break;
-		case SZ_ERROR_MEM: update_log.error("7z decoder failed to allocate memory"); break;
-		case SZ_ERROR_CRC: update_log.error("7z decoder CRC error"); break;
-		default: update_log.error("7z decoder error: %d", static_cast<u64>(res)); break;
-		}
+		const WRes res2 = File_Close(&archiveStream.file);
+		if (res2) update_log.warning("7z failed to close file (error=%s)", WRes_to_string(res2));
+		if (res) update_log.error("7z decoder error: %s", WRes_to_string(res));
 	};
 
 	if (res != SZ_OK)
@@ -580,7 +597,7 @@ bool update_manager::handle_rpcs3(const QByteArray& data, bool auto_accept)
 		const DWORD permissions = (attribs >> 16) & (S_IRWXU | S_IRWXG | S_IRWXO);
 		const bool is_symlink = (attribs & FILE_ATTRIBUTE_UNIX_EXTENSION) != 0 && S_ISLNK(attribs >> 16);
 #endif
-		const usz len        = SzArEx_GetFileNameUtf16(&db, i, nullptr);
+		const usz len = SzArEx_GetFileNameUtf16(&db, i, nullptr);
 
 		if (len >= PATH_MAX)
 		{
@@ -590,7 +607,7 @@ bool update_manager::handle_rpcs3(const QByteArray& data, bool auto_accept)
 		}
 
 		SzArEx_GetFileNameUtf16(&db, i, temp_u16);
-		memset(temp_u8, 0, sizeof(temp_u8));
+		std::memset(temp_u8, 0, sizeof(temp_u8));
 		// Simplistic conversion to UTF-8
 		for (usz index = 0; index < len; index++)
 		{
@@ -733,7 +750,7 @@ bool update_manager::handle_rpcs3(const QByteArray& data, bool auto_accept)
 	if (fs::file update_file{fs::get_config_dir() + "update_history.log", fs::create + fs::write + fs::append})
 	{
 		const std::string update_time = QDateTime::currentDateTime().toString("yyyy/MM/dd hh:mm:ss").toStdString();
-		const std::string entry = fmt::format("%s: Updated from \"%s\" to \"%s\"", update_time, m_old_version, m_new_version);
+		const std::string entry = fmt::format("%s: Updated from \"%s\" to \"%s\"", update_time, m_update_info.old_version, m_update_info.new_version);
 		update_file.write(fmt::format("%s\n", entry));
 		update_log.notice("Added entry '%s' to update_history.log", entry);
 	}

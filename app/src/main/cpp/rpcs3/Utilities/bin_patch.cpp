@@ -125,19 +125,15 @@ patch_engine::patch_engine()
 
 std::string patch_engine::get_patch_config_path()
 {
-#ifdef _WIN32
-	const std::string config_dir = fs::get_config_dir() + "config/";
+	const std::string config_dir = fs::get_config_dir(true);
 	const std::string patch_path = config_dir + "patch_config.yml";
-
+#ifdef _WIN32
 	if (!fs::create_path(config_dir))
 	{
 		patch_log.error("Could not create path: %s (%s)", patch_path, fs::g_tls_error);
 	}
-
-	return patch_path;
-#else
-	return fs::get_config_dir() + "patch_config.yml";
 #endif
+	return patch_path;
 }
 
 std::string patch_engine::get_patches_path()
@@ -333,7 +329,7 @@ bool patch_engine::load(patch_map& patches_map, const std::string& path, std::st
 							is_valid = false;
 							continue;
 						}
-						else if (serial.size() != 9 || !std::all_of(serial.begin(), serial.end(), [](char c) { return std::isalnum(c); }))
+						else if (serial.size() != 9 || !std::all_of(serial.begin(), serial.end(), [](char c) { return std::isalnum(static_cast<unsigned char>(c)); }))
 						{
 							append_log_message(log_messages, fmt::format("Error: Serial '%s' invalid (patch: %s, key: %s, location: %s, file: %s)", serial, description, main_key, get_yaml_node_location(serial_node), path), &patch_log.error);
 							is_valid = false;
@@ -741,7 +737,7 @@ bool patch_engine::add_patch_data(YAML::Node node, patch_info& info, u32 modifie
 		return false;
 	}
 
-	struct patch_data p_data{};
+	patch_data p_data{};
 	p_data.type            = type;
 	p_data.offset          = addr_node.as<u32>(0) + modifier;
 	p_data.original_offset = addr_node.Scalar();
@@ -793,8 +789,14 @@ bool patch_engine::add_patch_data(YAML::Node node, patch_info& info, u32 modifie
 
 	switch (p_data.type)
 	{
+	case patch_type::invalid:
+	case patch_type::load:
+	{
+		fmt::throw_exception("Unreachable patch type: %s", p_data.type);
+	}
 	case patch_type::bp_exec:
 	case patch_type::utf8:
+	case patch_type::c_utf8:
 	case patch_type::jump_func:
 	case patch_type::move_file:
 	case patch_type::hide_file:
@@ -831,7 +833,13 @@ bool patch_engine::add_patch_data(YAML::Node node, patch_info& info, u32 modifie
 		get_node_value(u32{}, s32{});
 		break;
 	}
-	default:
+	case patch_type::alloc:
+	case patch_type::code_alloc:
+	case patch_type::jump:
+	case patch_type::jump_link:
+	case patch_type::le64:
+	case patch_type::be64:
+	case patch_type::bd64:
 	{
 		get_node_value(u64{}, s64{});
 		break;
@@ -1724,7 +1732,7 @@ void patch_engine::save_config(const patch_map& patches_map)
 
 	fs::pending_file file(path);
 
-	if (!file.file || (file.file.write(out.c_str(), out.size()), !file.commit()))
+	if (!file.file || file.file.write(out.c_str(), out.size()) < out.size() || !file.commit())
 	{
 		patch_log.error("Failed to create patch config file %s (error=%s)", path, fs::g_tls_error);
 	}

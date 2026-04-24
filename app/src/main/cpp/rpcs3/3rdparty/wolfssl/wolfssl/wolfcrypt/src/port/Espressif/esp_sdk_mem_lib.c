@@ -1,12 +1,12 @@
 /* esp_sdk_mem_lib.c
  *
- * Copyright (C) 2006-2024 wolfSSL Inc.
+ * Copyright (C) 2006-2026 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
  * wolfSSL is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * wolfSSL is distributed in the hope that it will be useful,
@@ -25,10 +25,10 @@
 
 /* wolfSSL */
 /* Always include wolfcrypt/settings.h before any other wolfSSL file.    */
-/* Reminder: settings.h pulls in user_settings.h; don't include it here. */
-#ifdef WOLFSSL_USER_SETTINGS
-    #include <wolfssl/wolfcrypt/settings.h>
-#endif
+/* Be sure to define WOLFSSL_USER_SETTINGS, typically in CMakeLists.txt  */
+/* Reminder: settings.h pulls in user_settings.h                         */
+/*   Do not explicitly include user_settings.h here.                     */
+#include <wolfssl/wolfcrypt/settings.h>
 
 #if defined(WOLFSSL_ESPIDF) /* Entire file is only for Espressif EDP-IDF */
 
@@ -71,8 +71,6 @@ extern wc_ptr_t _rodata_start[];
 extern wc_ptr_t _rodata_end[];
 extern wc_ptr_t _bss_start[];
 extern wc_ptr_t _bss_end[];
-extern wc_ptr_t _rtc_data_start[];
-extern wc_ptr_t _rtc_data_end[];
 extern wc_ptr_t _rtc_bss_start[];
 extern wc_ptr_t _rtc_bss_end[];
 extern wc_ptr_t _iram_start[];
@@ -83,18 +81,29 @@ extern wc_ptr_t _init_end[];
 #endif
 extern wc_ptr_t _iram_text_start[];
 extern wc_ptr_t _iram_text_end[];
-extern wc_ptr_t _iram_bss_start[];
-extern wc_ptr_t _iram_bss_end[];
+#if defined(CONFIG_IDF_TARGET_ESP32S2)
+    /* TODO: Find ESP32-S2 equivalent */
+#else
+    extern wc_ptr_t _iram_bss_start[];
+    extern wc_ptr_t _iram_bss_end[];
+#endif
 extern wc_ptr_t _noinit_start[];
 extern wc_ptr_t _noinit_end[];
 extern wc_ptr_t _text_start[];
 extern wc_ptr_t _text_end[];
 extern wc_ptr_t _heap_start[];
 extern wc_ptr_t _heap_end[];
-extern wc_ptr_t _rtc_data_start[];
-extern wc_ptr_t _rtc_data_end[];
-extern void* _thread_local_start;
-extern void* _thread_local_end;
+#ifdef CONFIG_IDF_TARGET_ESP32C2
+    /* no rtc_data on ESP32-C2*/
+#else
+    extern wc_ptr_t _rtc_data_start[];
+    extern wc_ptr_t _rtc_data_end[];
+#endif
+
+#if defined(CONFIG_IDF_TARGET_ARCH_XTENSA) && CONFIG_IDF_TARGET_ARCH_XTENSA == 1
+    extern void* _thread_local_start;
+    extern void* _thread_local_end;
+#endif
 
 /* See https://github.com/esp8266/esp8266-wiki/wiki/Memory-Map */
 #define MEM_MAP_IO_START  ((void*)(0x3FF00000))
@@ -110,6 +119,9 @@ extern void* _thread_local_end;
 #define IRAMF2_START      ((void*)(0x4010C000))
 #define IRAMF2_END        ((void*)(0x4010C000 + 0x4000))
 
+#if defined(ESP_IDF_VERSION) && (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0))
+    /* Skipping for ESP-IDF v6.0 */
+#else
 enum sdk_memory_segment
 {
     /* Ensure this list exactly matches order in sdk_memory_segment_text */
@@ -161,7 +173,7 @@ static const char* sdk_memory_segment_text[SDK_MEMORY_SEGMENT_COUNT + 1] = {
 int sdk_log_meminfo(enum sdk_memory_segment m, void* start, void* end)
 {
     const char* str;
-    int len = 0;
+    word32 len = 0;
     str = sdk_memory_segment_text[m];
     sdk_memory_segment_start[m] = start;
     sdk_memory_segment_end[m] = end;
@@ -173,23 +185,34 @@ int sdk_log_meminfo(enum sdk_memory_segment m, void* start, void* end)
         ESP_LOGI(TAG, "                  Start         End          Length");
     }
     else {
-        len = (uint32_t)end - (uint32_t)start;
+        len = (word32)end - (word32)start;
         ESP_LOGI(TAG, "%s: %p ~ %p : 0x%05x (%d)", str, start, end, len, len );
     }
     return ESP_OK;
 }
+#endif
 
 /* Show all known linker memory segment names, starting & ending addresses. */
-int sdk_init_meminfo(void) {
+int sdk_init_meminfo(void)
+{
+#if defined(ESP_IDF_VERSION) && (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0))
+    ESP_LOGI(TAG, "sdk_init_meminfo not available for ESP-IDF V6.0");
+#else
     void* sample_heap_var;
     int sample_stack_var = 0;
 
     sdk_log_meminfo(SDK_MEMORY_SEGMENT_COUNT, NULL, NULL); /* print header */
     sdk_log_meminfo(mem_map_io,    MEM_MAP_IO_START,    MEM_MAP_IO_END);
+#if defined(CONFIG_IDF_TARGET_ARCH_XTENSA) && CONFIG_IDF_TARGET_ARCH_XTENSA == 1
     sdk_log_meminfo(thread_local,  _thread_local_start, _thread_local_end);
+#endif
     sdk_log_meminfo(data,          _data_start,         _data_end);
     sdk_log_meminfo(user_data_ram, USER_DATA_START,     USER_DATA_END);
+#if defined(CONFIG_IDF_TARGET_ESP32S2)
+    /* TODO: Find ESP32-S2 equivalent of bss */
+#else
     sdk_log_meminfo(bss,           _bss_start,          _bss_end);
+#endif
     sdk_log_meminfo(noinit,        _noinit_start,       _noinit_end);
     sdk_log_meminfo(ets_system,    ETS_SYS_START,       ETS_SYS_END);
     sdk_log_meminfo(rodata,        _rodata_start,       _rodata_end);
@@ -198,12 +221,20 @@ int sdk_init_meminfo(void) {
     sdk_log_meminfo(iramf2,        IRAMF2_START,        IRAMF2_END);
     sdk_log_meminfo(iram,          _iram_start,         _iram_end);
     sdk_log_meminfo(iram_text,     _iram_text_start,    _iram_text_end);
+#if defined(CONFIG_IDF_TARGET_ESP32S2)
+    /* No iram_bss on ESP32-C2 at this time. TODO: something equivalent? */
+#else
     sdk_log_meminfo(iram_bss,      _iram_bss_start,     _iram_bss_end);
+#endif
 #if defined(CONFIG_IDF_TARGET_ESP8266)
     sdk_log_meminfo(init,          _init_start,         _init_end);
 #endif
     sdk_log_meminfo(text,          _text_start,         _text_end);
+#if defined(CONFIG_IDF_TARGET_ESP32C2)
+    /* No rtc_data on ESP32-C2 at this time. TODO: something equivalent? */
+#else
     sdk_log_meminfo(rtc_data,      _rtc_data_start,     _rtc_data_end);
+#endif
     ESP_LOGI(TAG, "-----------------------------------------------------");
     sample_heap_var = malloc(1);
     if (sample_heap_var == NULL) {
@@ -214,12 +245,17 @@ int sdk_init_meminfo(void) {
         sdk_var_whereis("sample_heap_var", sample_heap_var);
         free(sample_heap_var);
     }
+#endif
     return ESP_OK;
 }
 
 /* Returns ESP_OK if found in known memory map, ESP_FAIL otherwise */
-esp_err_t sdk_var_whereis(const char* v_name, void* v) {
+esp_err_t sdk_var_whereis(const char* v_name, void* v)
+{
     esp_err_t ret = ESP_FAIL;
+#if defined(ESP_IDF_VERSION) && (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0))
+    ESP_LOGI(TAG, "sdk_var_whereis not available for ESP-IDF V6.0");
+#else
 
     for (enum sdk_memory_segment m = 0 ;m < SDK_MEMORY_SEGMENT_COUNT; m++) {
         if (v >= sdk_memory_segment_start[m] &&
@@ -232,6 +268,7 @@ esp_err_t sdk_var_whereis(const char* v_name, void* v) {
                 }
             }
     }
+#endif
 
     if (ret == ESP_FAIL) {
         ESP_LOGW(TAG, "%s not found in known memory map: %p", v_name, v);
@@ -266,15 +303,110 @@ esp_err_t esp_sdk_mem_lib_init(void)
     return ret;
 }
 
+#if defined(DEBUG_WOLFSSL_MALLOC) || defined(DEBUG_WOLFSSL)
 void* wc_debug_pvPortMalloc(size_t size,
-                           const char* file, int line, const char* fname) {
+                           const char* file, int line, const char* fname)
+#else
+void* wc_pvPortMalloc(size_t size)
+#endif
+{
     void* ret = NULL;
-    ret = pvPortMalloc(size);
+    wolfSSL_Malloc_cb  mc;
+    wolfSSL_Free_cb    fc;
+    wolfSSL_Realloc_cb rc;
+    wolfSSL_GetAllocators(&mc, &fc, &rc);
+
+    if (mc == NULL) {
+        ret = pvPortMalloc(size);
+    }
+    else {
+#if defined(USE_WOLFSSL_MEMORY) && !defined(NO_WOLFSSL_MEMORY)
+        ret = mc(size);
+#else
+        ret = pvPortMalloc(size);
+#endif
+    }
+
+#if defined(DEBUG_WOLFSSL_MALLOC) || defined(DEBUG_WOLFSSL)
     if (ret == NULL) {
         ESP_LOGE("malloc", "%s:%d (%s)", file, line, fname);
         ESP_LOGE("malloc", "Failed Allocating memory of size: %d bytes", size);
     }
+#endif
     return ret;
-}
+} /* wc_debug_pvPortMalloc */
+
+#if defined(DEBUG_WOLFSSL_MALLOC) || defined(DEBUG_WOLFSSL)
+void wc_debug_pvPortFree(void *ptr,
+                        const char* file, int line, const char* fname)
+#else
+void wc_pvPortFree(void *ptr)
+#endif
+{
+    wolfSSL_Malloc_cb  mc;
+    wolfSSL_Free_cb    fc;
+    wolfSSL_Realloc_cb rc;
+    if (ptr == NULL) {
+#ifdef DEBUG_WOLFSSL_MALLOC
+        /* It's ok to free a null pointer, and that happens quite frequently */
+#endif
+    }
+    else {
+        wolfSSL_GetAllocators(&mc, &fc, &rc);
+
+        if (fc == NULL) {
+            vPortFree(ptr);
+        }
+        else {
+#if defined(USE_WOLFSSL_MEMORY) && !defined(NO_WOLFSSL_MEMORY)
+            fc(ptr);
+#else
+            vPortFree(ptr);
+#endif
+        }
+    }
+} /* wc_debug_pvPortFree */
+
+#ifndef WOLFSSL_NO_REALLOC
+/* see XREALLOC(p, n, h, t) */
+#if defined(DEBUG_WOLFSSL_MALLOC) || defined(DEBUG_WOLFSSL)
+void* wc_debug_pvPortRealloc(void* ptr, size_t size,
+                             const char* file, int line, const char* fname)
+#else
+void* wc_pvPortRealloc(void* ptr, size_t size)
+#endif
+{
+    void* ret = NULL;
+    wolfSSL_Malloc_cb  mc;
+    wolfSSL_Free_cb    fc;
+    wolfSSL_Realloc_cb rc;
+    wolfSSL_GetAllocators(&mc, &fc, &rc);
+
+    if (mc == NULL) {
+        ret = realloc(ptr, size);
+    }
+    else {
+#if defined(USE_WOLFSSL_MEMORY) && !defined(NO_WOLFSSL_MEMORY)
+        if (rc != NULL) {
+            ret = rc(ptr, size); /* (void *ptr, size_t size) */
+        }
+        else {
+            ret = realloc(ptr, size);
+        }
+#else
+        ret = realloc(ptr, size);
+#endif
+    }
+
+#if defined(DEBUG_WOLFSSL_MALLOC) || defined(DEBUG_WOLFSSL)
+    if (ret == NULL) {
+        ESP_LOGE("realloc", "%s:%d (%s)", file, line, fname);
+        ESP_LOGE("realloc", "Failed Re-allocating memory of size: %d bytes",
+                                                                  size);
+    }
+#endif
+    return ret;
+} /* wc_debug_pvPortRealloc */
+#endif /* WOLFSSL_NO_REALLOC */
 
 #endif

@@ -2,12 +2,9 @@
 #include "sys_event_flag.h"
 
 #include "Emu/IdManager.h"
-#include "Emu/IPC.h"
 
 #include "Emu/Cell/ErrorCodes.h"
 #include "Emu/Cell/PPUThread.h"
-
-#include <algorithm>
 
 #include "util/asm.hpp"
 
@@ -22,9 +19,25 @@ lv2_event_flag::lv2_event_flag(utils::serial& ar)
 	ar(pattern);
 }
 
+// Always set result
+struct sys_event_store_result
+{
+	vm::ptr<u64> ptr;
+	u64 val = 0;
+
+	~sys_event_store_result() noexcept
+	{
+		if (ptr)
+		{
+			cpu_thread::get_current()->check_state();
+			*ptr = val;
+		}
+	}
+};
+
 std::function<void(void*)> lv2_event_flag::load(utils::serial& ar)
 {
-	return load_func(make_shared<lv2_event_flag>(ar));
+	return load_func(make_shared<lv2_event_flag>(stx::exact_t<utils::serial&>(ar)));
 }
 
 void lv2_event_flag::save(utils::serial& ar)
@@ -123,21 +136,7 @@ error_code sys_event_flag_wait(ppu_thread& ppu, u32 id, u64 bitptn, u32 mode, vm
 	ppu.gpr[5] = mode;
 	ppu.gpr[6] = 0;
 
-	// Always set result
-	struct store_result
-	{
-		vm::ptr<u64> ptr;
-		u64 val = 0;
-
-		~store_result() noexcept
-		{
-			if (ptr)
-			{
-				cpu_thread::get_current()->check_state();
-				*ptr = val;
-			}
-		}
-	} store{result};
+	sys_event_store_result store{result};
 
 	if (!lv2_event_flag::check_mode(mode))
 	{
@@ -276,21 +275,7 @@ error_code sys_event_flag_trywait(ppu_thread& ppu, u32 id, u64 bitptn, u32 mode,
 
 	sys_event_flag.trace("sys_event_flag_trywait(id=0x%x, bitptn=0x%llx, mode=0x%x, result=*0x%x)", id, bitptn, mode, result);
 
-	// Always set result
-	struct store_result
-	{
-		vm::ptr<u64> ptr;
-		u64 val = 0;
-
-		~store_result() noexcept
-		{
-			if (ptr)
-			{
-				cpu_thread::get_current()->check_state();
-				*ptr = val;
-			}
-		}
-	} store{result};
+	sys_event_store_result store{result};
 
 	if (!lv2_event_flag::check_mode(mode))
 	{
@@ -559,8 +544,6 @@ error_code sys_event_flag_get(ppu_thread& ppu, u32 id, vm::ptr<u64> flags)
 		return +flag.pattern;
 	});
 
-	ppu.check_state();
-
 	if (!flag)
 	{
 		if (flags) *flags = 0;
@@ -571,6 +554,8 @@ error_code sys_event_flag_get(ppu_thread& ppu, u32 id, vm::ptr<u64> flags)
 	{
 		return CELL_EFAULT;
 	}
+
+	ppu.check_state();
 
 	*flags = flag.ret;
 	return CELL_OK;

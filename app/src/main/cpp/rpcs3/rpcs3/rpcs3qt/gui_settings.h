@@ -13,6 +13,7 @@ namespace gui
 {
 	extern QString stylesheet;
 	extern bool custom_stylesheet_active;
+	extern f32 volume;
 
 	enum custom_roles
 	{
@@ -64,6 +65,27 @@ namespace gui
 		count
 	};
 
+	enum class savestate_game_list_columns
+	{
+		icon = 0,
+		name = 1,
+		savestates = 2,
+
+		count
+	};
+
+	enum class savestate_list_columns
+	{
+		name = 0,
+		compatible = 1,
+		date = 2,
+		path = 3,
+
+		count
+	};
+
+	QString get_savestate_game_list_column_name(savestate_game_list_columns col);
+	QString get_savestate_list_column_name(savestate_list_columns col);
 	QString get_trophy_game_list_column_name(trophy_game_list_columns col);
 	QString get_trophy_list_column_name(trophy_list_columns col);
 	QString get_game_list_column_name(game_list_columns col);
@@ -87,10 +109,11 @@ namespace gui
 		return q_string_pair(path, title.simplified()); // simplified() forces single line text
 	}
 
-	const QString Settings = "CurrentSettings";
+	const QString Settings          = "CurrentSettings";
 	const QString DefaultStylesheet = "default";
-	const QString NoStylesheet = "none";
-	const QString NativeStylesheet = "native";
+	const QString NoStylesheet      = "none";
+	const QString NativeStylesheet  = "native";
+	const QString DarkStylesheet    = "Darker Style by TheMitoSan";
 
 	const QString main_window  = "main_window";
 	const QString game_list    = "GameList";
@@ -108,6 +131,7 @@ namespace gui
 	const QString log_viewer   = "LogViewer";
 	const QString sc           = "Shortcuts";
 	const QString navigation   = "PadNavigation";
+	const QString savestate    = "Savestate";
 
 	const QString update_on   = "true";
 	const QString update_off  = "false";
@@ -116,9 +140,15 @@ namespace gui
 
 	const QColor gl_icon_color = QColor(240, 240, 240, 255);
 
+	const gui_save gui_volume = gui_save(main_window, "guiVolume", 1.0f);
+
 	const gui_save rg_freeze  = gui_save(main_window, "recentGamesFrozen", false);
 	const gui_save rg_entries = gui_save(main_window, "recentGamesNames",  QVariant::fromValue(q_pair_list()));
 
+	const gui_save rs_freeze  = gui_save(main_window, "recentSavestatesFrozen", false);
+	const gui_save rs_entries = gui_save(main_window, "recentSavestatesNames",  QVariant::fromValue(q_pair_list()));
+
+	const gui_save ib_skip_version = gui_save(main_window, "infoBoxSkipVersion",       "");
 	const gui_save ib_pkg_success  = gui_save(main_window, "infoBoxEnabledInstallPKG", true);
 	const gui_save ib_pup_success  = gui_save(main_window, "infoBoxEnabledInstallPUP", true);
 	const gui_save ib_show_welcome = gui_save(main_window, "infoBoxEnabledWelcome",    true);
@@ -143,7 +173,7 @@ namespace gui
 	const gui_save fd_save_log     = gui_save(main_window, "lastExplorePathSaveLog", "");
 
 	const gui_save mw_debugger         = gui_save(main_window, "debuggerVisible",  false);
-	const gui_save mw_logger           = gui_save(main_window, "loggerVisible",    true);
+	const gui_save mw_logger           = gui_save(main_window, "loggerVisible",    false);
 	const gui_save mw_gamelist         = gui_save(main_window, "gamelistVisible",  true);
 	const gui_save mw_toolBarVisible   = gui_save(main_window, "toolBarVisible",   true);
 	const gui_save mw_titleBarsVisible = gui_save(main_window, "titleBarsVisible", true);
@@ -159,6 +189,7 @@ namespace gui
 	const gui_save cat_home        = gui_save(game_list, "categoryVisibleHome",       true);
 	const gui_save cat_audio_video = gui_save(game_list, "categoryVisibleAudioVideo", true);
 	const gui_save cat_game_data   = gui_save(game_list, "categoryVisibleGameData",   false);
+	const gui_save cat_os          = gui_save(game_list, "categoryVisibleOS",         false);
 	const gui_save cat_unknown     = gui_save(game_list, "categoryVisibleUnknown",    true);
 	const gui_save cat_other       = gui_save(game_list, "categoryVisibleOther",      true);
 
@@ -170,6 +201,7 @@ namespace gui
 	const gui_save grid_cat_home        = gui_save(game_list, "gridCategoryVisibleHome",       true);
 	const gui_save grid_cat_audio_video = gui_save(game_list, "gridCategoryVisibleAudioVideo", true);
 	const gui_save grid_cat_game_data   = gui_save(game_list, "gridCategoryVisibleGameData",   false);
+	const gui_save grid_cat_os          = gui_save(game_list, "gridCategoryVisibleOS",         false);
 	const gui_save grid_cat_unknown     = gui_save(game_list, "gridCategoryVisibleUnknown",    true);
 	const gui_save grid_cat_other       = gui_save(game_list, "gridCategoryVisibleOther",      true);
 
@@ -185,8 +217,10 @@ namespace gui
 	const gui_save gl_show_hidden  = gui_save(game_list, "show_hidden",  false);
 	const gui_save gl_hidden_list  = gui_save(game_list, "hidden_list",  QStringList());
 	const gui_save gl_draw_compat  = gui_save(game_list, "draw_compat",  false);
+	const gui_save gl_pref_gd_icon = gui_save(game_list, "pref_gd_icon", false);
 	const gui_save gl_custom_icon  = gui_save(game_list, "custom_icon",  true);
 	const gui_save gl_hover_gifs   = gui_save(game_list, "hover_gifs",   true);
+	const gui_save gl_hover_music  = gui_save(game_list, "hover_music",  true);
 
 	const gui_save fs_emulator_dir_list = gui_save(fs, "emulator_dir_list", QStringList());
 	const gui_save fs_dev_hdd0_list     = gui_save(fs, "dev_hdd0_list",     QStringList());
@@ -207,6 +241,7 @@ namespace gui
 	const gui_save l_ansi_code = gui_save(logger, "ANSI_code", true);
 	const gui_save l_limit     = gui_save(logger, "limit",     1000);
 	const gui_save l_limit_tty = gui_save(logger, "TTY_limit", 1000);
+	const gui_save l_log_hide  = gui_save(logger, "Log hide",  false);
 
 	const gui_save d_splitterState = gui_save(debugger, "splitterState", QByteArray());
 
@@ -225,7 +260,7 @@ namespace gui
 	const gui_save m_discordState      = gui_save(meta, "discordState",      "");
 	const gui_save m_check_upd_start   = gui_save(meta, "checkUpdateStart",  update_on);
 
-	const gui_save gs_disableMouse      = gui_save(gs_frame, "disableMouse",          false);
+	const gui_save gs_disableMouse      = gui_save(gs_frame, "disableMouse",          true);
 	const gui_save gs_disableKbHotkeys  = gui_save(gs_frame, "disableKbHotkeys",      false);
 	const gui_save gs_showMouseFs       = gui_save(gs_frame, "showMouseInFullscreen", false);
 	const gui_save gs_lockMouseFs       = gui_save(gs_frame, "lockMouseInFullscreen", true);
@@ -238,6 +273,13 @@ namespace gui
 	const gui_save gs_hideMouseIdleTime = gui_save(gs_frame, "hideMouseOnIdleTime",   2000);
 	const gui_save gs_geometry          = gui_save(gs_frame, "geometry",              QRect());
 	const gui_save gs_visibility        = gui_save(gs_frame, "visibility",            QWindow::Visibility::AutomaticVisibility);
+
+	const gui_save ss_icon_color      = gui_save(trophy, "icon_color",    gl_icon_color);
+	const gui_save ss_game_icon_size  = gui_save(trophy, "game_icon_size",  25);
+	const gui_save ss_geometry        = gui_save(trophy, "geometry",        QByteArray());
+	const gui_save ss_splitterState   = gui_save(trophy, "splitterState",   QByteArray());
+	const gui_save ss_games_state     = gui_save(trophy, "games_state",     QByteArray());
+	const gui_save ss_savestate_state = gui_save(trophy, "savestate_state", QByteArray());
 
 	const gui_save tr_icon_color    = gui_save(trophy, "icon_color",    gl_icon_color);
 	const gui_save tr_icon_height   = gui_save(trophy, "icon_height",   75);
@@ -277,7 +319,7 @@ namespace gui
 
 	const gui_save sc_shortcuts = gui_save(sc, "shortcuts", QVariantMap());
 
-	const gui_save nav_enabled = gui_save(navigation, "pad_input_enabled",      false);
+	const gui_save nav_enabled = gui_save(navigation, "pad_input_enabled",      true);
 	const gui_save nav_global  = gui_save(navigation, "allow_global_pad_input", false);
 }
 
@@ -297,6 +339,8 @@ public:
 	bool GetBootConfirmation(QWidget* parent, const gui_save& gui_save_entry = gui_save());
 
 	logs::level GetLogLevel() const;
+	bool GetSavestateGamelistColVisibility(gui::savestate_game_list_columns col) const;
+	bool GetSavestateListColVisibility(gui::savestate_list_columns col) const;
 	bool GetTrophyGamelistColVisibility(gui::trophy_game_list_columns col) const;
 	bool GetTrophylistColVisibility(gui::trophy_list_columns col) const;
 	bool GetGamelistColVisibility(gui::game_list_columns col) const;
@@ -309,6 +353,8 @@ public:
 	/** Sets the visibility of the chosen category. */
 	void SetCategoryVisibility(int cat, bool val, bool is_list_mode) const;
 
+	void SetSavestateGamelistColVisibility(gui::savestate_game_list_columns col, bool val) const;
+	void SetSavestateListColVisibility(gui::savestate_list_columns col, bool val) const;
 	void SetTrophyGamelistColVisibility(gui::trophy_game_list_columns col, bool val) const;
 	void SetTrophylistColVisibility(gui::trophy_list_columns col, bool val) const;
 	void SetGamelistColVisibility(gui::game_list_columns col, bool val) const;
@@ -316,6 +362,8 @@ public:
 	void SetCustomColor(int col, const QColor& val) const;
 
 private:
+	static gui_save GetGuiSaveForSavestateGameColumn(gui::savestate_game_list_columns col);
+	static gui_save GetGuiSaveForSavestateColumn(gui::savestate_list_columns col);
 	static gui_save GetGuiSaveForTrophyGameColumn(gui::trophy_game_list_columns col);
 	static gui_save GetGuiSaveForTrophyColumn(gui::trophy_list_columns col);
 	static gui_save GetGuiSaveForGameColumn(gui::game_list_columns col);

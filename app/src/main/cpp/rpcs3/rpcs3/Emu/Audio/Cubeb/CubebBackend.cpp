@@ -1,6 +1,7 @@
 #include "Emu/Audio/Cubeb/CubebBackend.h"
 
 #include <algorithm>
+#include <cstdarg>
 #include "util/logs.hpp"
 #include "Emu/Audio/audio_device_enumerator.h"
 
@@ -23,7 +24,11 @@ CubebBackend::CubebBackend()
 #endif
 
 	cubeb *ctx{};
-	if (int err = cubeb_init(&ctx, "RPCS3", "aaudio"))
+#ifdef __ANDROID__
+    if (int err = cubeb_init(&ctx, "RPCS3", "aaudio"))
+#else
+        if (int err = cubeb_init(&ctx, "RPCS3", nullptr))
+#endif
 	{
 		Cubeb.error("cubeb_init() failed: %i", err);
 		return;
@@ -37,6 +42,8 @@ CubebBackend::CubebBackend()
 	{
 		m_dev_collection_cb_enabled = true;
 	}
+
+	cubeb_set_log_callback(CUBEB_LOG_NORMAL, log_cb);
 
 	Cubeb.notice("Using backend %s", cubeb_get_backend_id(ctx));
 
@@ -567,4 +574,16 @@ void CubebBackend::device_collection_changed_cb(cubeb* context, void* user_ptr)
 	{
 		cubeb->m_state_callback(AudioStateEvent::DEFAULT_DEVICE_MAYBE_CHANGED);
 	}
+}
+
+void CubebBackend::log_cb(const char* fmt, ...)
+{
+	char buf[256]{};
+
+	va_list va;
+	va_start(va, fmt);
+	vsnprintf(buf, sizeof(buf) - 1, fmt, va);
+	va_end(va);
+
+	Cubeb.notice("Cubeb log: %s", buf);
 }

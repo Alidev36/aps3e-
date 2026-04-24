@@ -4,12 +4,13 @@
 #include "breakpoint_handler.h"
 
 #include "Emu/Cell/SPUThread.h"
-#include "Emu/Cell/PPUThread.h"
 #include "Emu/CPU/CPUDisAsm.h"
 #include "Emu/CPU/CPUThread.h"
 #include "Emu/RSX/RSXDisAsm.h"
 #include "Emu/RSX/RSXThread.h"
 #include "Emu/System.h"
+
+#include "util/asm.hpp"
 
 #include <QMouseEvent>
 #include <QWheelEvent>
@@ -17,8 +18,6 @@
 #include <QLabel>
 
 #include <memory>
-
-constexpr auto qstr = QString::fromStdString;
 
 debugger_list::debugger_list(QWidget* parent, std::shared_ptr<gui_settings> gui_settings, breakpoint_handler* handler)
 	: QListWidget(parent)
@@ -156,7 +155,7 @@ void debugger_list::ShowAddress(u32 addr, bool select_addr, bool direct)
 		{
 		case thread_class::ppu:
 		{
-			return m_ppu_breakpoint_handler->HasBreakpoint(pc);
+			return m_ppu_breakpoint_handler->HasBreakpoint(pc, breakpoint_types::bp_exec);
 		}
 		case thread_class::spu:
 		{
@@ -207,7 +206,7 @@ void debugger_list::ShowAddress(u32 addr, bool select_addr, bool direct)
 		for (uint i = 0; i < m_item_count; ++i)
 		{
 			QListWidgetItem* list_item = item(i);
-			list_item->setText(qstr(fmt::format("   [%08x]  ?? ?? ?? ??:", 0)));
+			list_item->setText(QString::fromStdString(fmt::format("   [%08x]  ?? ?? ?? ??:", 0)));
 			list_item->setForeground(default_foreground);
 			list_item->setBackground(default_background);
 		}
@@ -252,7 +251,7 @@ void debugger_list::ShowAddress(u32 addr, bool select_addr, bool direct)
 
 			if (cpu && cpu->get_class() == thread_class::ppu && !vm::check_addr(pc, 0))
 			{
-				list_item->setText((IsBreakpoint(pc) ? ">> " : "   ") + qstr(fmt::format("[%08x]  ?? ?? ?? ??:", pc)));
+				list_item->setText((IsBreakpoint(pc) ? ">> " : "   ") + QString::fromStdString(fmt::format("[%08x]  ?? ?? ?? ??:", pc)));
 				count = 4;
 				continue;
 			}
@@ -260,7 +259,7 @@ void debugger_list::ShowAddress(u32 addr, bool select_addr, bool direct)
 			if (cpu && cpu->get_class() == thread_class::ppu && !vm::check_addr(pc, vm::page_executable))
 			{
 				const u32 data = *vm::get_super_ptr<atomic_be_t<u32>>(pc);
-				list_item->setText((IsBreakpoint(pc) ? ">> " : "   ") + qstr(fmt::format("[%08x]  %02x %02x %02x %02x:", pc,
+				list_item->setText((IsBreakpoint(pc) ? ">> " : "   ") + QString::fromStdString(fmt::format("[%08x]  %02x %02x %02x %02x:", pc,
 				static_cast<u8>(data >> 24),
 				static_cast<u8>(data >> 16),
 				static_cast<u8>(data >> 8),
@@ -273,12 +272,12 @@ void debugger_list::ShowAddress(u32 addr, bool select_addr, bool direct)
 
 			if (!count)
 			{
-				list_item->setText((IsBreakpoint(pc) ? ">> " : "   ") + qstr(fmt::format("[%08x] ???     ?? ??", pc)));
+				list_item->setText((IsBreakpoint(pc) ? ">> " : "   ") + QString::fromStdString(fmt::format("[%08x] ???     ?? ??", pc)));
 				count = 4;
 				continue;
 			}
 
-			list_item->setText((IsBreakpoint(pc) ? ">> " : "   ") + qstr(m_disasm->last_opcode));
+			list_item->setText((IsBreakpoint(pc) ? ">> " : "   ") + QString::fromStdString(m_disasm->last_opcode));
 		}
 	}
 

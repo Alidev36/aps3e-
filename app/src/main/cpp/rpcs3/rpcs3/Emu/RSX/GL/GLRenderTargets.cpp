@@ -14,13 +14,8 @@ color_format rsx::internals::surface_color_format_to_gl(rsx::surface_color_forma
 		return{ ::gl::texture::type::ushort_5_6_5, ::gl::texture::format::rgb, ::gl::texture::internal_format::rgb565, true };
 
 	case rsx::surface_color_format::a8r8g8b8:
-
-#ifdef USE_GLES
-
-		return {::gl::texture::type::ubyte, ::gl::texture::format::rgba, ::gl::texture::internal_format::bgra8, true};
-		#else
 		return{ ::gl::texture::type::uint_8_8_8_8_rev, ::gl::texture::format::bgra, ::gl::texture::internal_format::bgra8, true };
-		#endif
+
 	//These formats discard their alpha component, forced to 0 or 1
 	//All XBGR formats will have remapping before they can be read back in shaders as DRGB8
 	//Prefix o = 1, z = 0
@@ -33,45 +28,20 @@ color_format rsx::internals::surface_color_format_to_gl(rsx::surface_color_forma
 		{ ::gl::texture::channel::zero, ::gl::texture::channel::r, ::gl::texture::channel::g, ::gl::texture::channel::b } };
 
 	case rsx::surface_color_format::x8r8g8b8_z8r8g8b8:
-
-#ifdef USE_GLES
-
-		return {::gl::texture::type::ubyte, ::gl::texture::format::rgba, ::gl::texture::internal_format::bgra8, true,
-			{::gl::texture::channel::zero, ::gl::texture::channel::r, ::gl::texture::channel::g, ::gl::texture::channel::b}};
-		#else
 		return{ ::gl::texture::type::uint_8_8_8_8_rev, ::gl::texture::format::bgra, ::gl::texture::internal_format::bgra8, true,
 		{ ::gl::texture::channel::zero, ::gl::texture::channel::r, ::gl::texture::channel::g, ::gl::texture::channel::b } };
-		#endif
 
 	case rsx::surface_color_format::x8b8g8r8_o8b8g8r8:
-
-#ifdef USE_GLES
-		return {::gl::texture::type::ubyte, ::gl::texture::format::rgba, ::gl::texture::internal_format::rgba8, true,
-			{::gl::texture::channel::one, ::gl::texture::channel::r, ::gl::texture::channel::g, ::gl::texture::channel::b}};
-#else
 		return{ ::gl::texture::type::uint_8_8_8_8_rev, ::gl::texture::format::rgba, ::gl::texture::internal_format::rgba8, true,
 		{ ::gl::texture::channel::one, ::gl::texture::channel::r, ::gl::texture::channel::g, ::gl::texture::channel::b } };
-		#endif
+
 	case rsx::surface_color_format::x8b8g8r8_z8b8g8r8:
-
-#ifdef USE_GLES
-
-		return {::gl::texture::type::ubyte, ::gl::texture::format::rgba, ::gl::texture::internal_format::rgba8, true,
-			{::gl::texture::channel::zero, ::gl::texture::channel::r, ::gl::texture::channel::g, ::gl::texture::channel::b}};
-		#else
 		return{ ::gl::texture::type::uint_8_8_8_8_rev, ::gl::texture::format::rgba, ::gl::texture::internal_format::rgba8, true,
 		{ ::gl::texture::channel::zero, ::gl::texture::channel::r, ::gl::texture::channel::g, ::gl::texture::channel::b } };
-		#endif
+
 	case rsx::surface_color_format::x8r8g8b8_o8r8g8b8:
-
-#ifdef USE_GLES
-
-		return {::gl::texture::type::ubyte, ::gl::texture::format::rgba, ::gl::texture::internal_format::bgra8, true,
-			{::gl::texture::channel::one, ::gl::texture::channel::r, ::gl::texture::channel::g, ::gl::texture::channel::b}};
-		#else
 		return{ ::gl::texture::type::uint_8_8_8_8_rev, ::gl::texture::format::bgra, ::gl::texture::internal_format::bgra8, true,
 		{ ::gl::texture::channel::one, ::gl::texture::channel::r, ::gl::texture::channel::g, ::gl::texture::channel::b } };
-		#endif
 
 	case rsx::surface_color_format::w16z16y16x16:
 		return{ ::gl::texture::type::f16, ::gl::texture::format::rgba, ::gl::texture::internal_format::rgba16f, true};
@@ -92,12 +62,7 @@ color_format rsx::internals::surface_color_format_to_gl(rsx::surface_color_forma
 		{ ::gl::texture::channel::r, ::gl::texture::channel::r, ::gl::texture::channel::r, ::gl::texture::channel::r } };
 
 	case rsx::surface_color_format::a8b8g8r8:
-
-#ifdef USE_GLES
-		return {::gl::texture::type::ubyte, ::gl::texture::format::rgba, ::gl::texture::internal_format::rgba8, true};
-		#else
 		return{ ::gl::texture::type::uint_8_8_8_8_rev, ::gl::texture::format::rgba, ::gl::texture::internal_format::rgba8, true };
-		#endif
 
 	default:
 		fmt::throw_exception("Unsupported surface color format 0x%x", static_cast<u32>(color_format));
@@ -176,7 +141,8 @@ void GLGSRender::init_buffers(rsx::framebuffer_creation_context context, bool /*
 		m_framebuffer_layout.width, m_framebuffer_layout.height,
 		m_framebuffer_layout.target, m_framebuffer_layout.aa_mode, m_framebuffer_layout.raster_type,
 		m_framebuffer_layout.color_addresses, m_framebuffer_layout.zeta_address,
-		m_framebuffer_layout.actual_color_pitch, m_framebuffer_layout.actual_zeta_pitch);
+		m_framebuffer_layout.actual_color_pitch, m_framebuffer_layout.actual_zeta_pitch,
+		resolution_scaling_config);
 
 	std::array<GLuint, 4> color_targets;
 	GLuint depth_stencil_target;
@@ -188,7 +154,7 @@ void GLGSRender::init_buffers(rsx::framebuffer_creation_context context, bool /*
 	{
 		if (m_surface_info[i].pitch && g_cfg.video.write_color_buffers)
 		{
-			const utils::address_range surface_range = m_surface_info[i].get_memory_range();
+			const utils::address_range32 surface_range = m_surface_info[i].get_memory_range();
 			m_gl_texture_cache.set_memory_read_flags(surface_range, rsx::memory_read_flags::flush_once);
 			m_gl_texture_cache.flush_if_cache_miss_likely(cmd, surface_range);
 		}
@@ -217,7 +183,7 @@ void GLGSRender::init_buffers(rsx::framebuffer_creation_context context, bool /*
 
 	if (m_depth_surface_info.pitch && g_cfg.video.write_depth_buffer)
 	{
-		const utils::address_range surface_range = m_depth_surface_info.get_memory_range();
+		const utils::address_range32 surface_range = m_depth_surface_info.get_memory_range();
 		m_gl_texture_cache.set_memory_read_flags(surface_range, rsx::memory_read_flags::flush_once);
 		m_gl_texture_cache.flush_if_cache_miss_likely(cmd, surface_range);
 	}
@@ -253,7 +219,7 @@ void GLGSRender::init_buffers(rsx::framebuffer_creation_context context, bool /*
 		static_cast<gl::framebuffer_holder*>(m_draw_fbo)->release();
 	}
 
-	for (auto &fbo : m_framebuffer_cache)
+	for (auto& fbo : m_framebuffer_cache)
 	{
 		if (fbo.matches(color_targets, depth_stencil_target))
 		{
@@ -299,6 +265,8 @@ void GLGSRender::init_buffers(rsx::framebuffer_creation_context context, bool /*
 		}
 	}
 
+	ensure(m_draw_fbo);
+
 	switch (rsx::method_registers.surface_color_target())
 	{
 	case rsx::surface_target::none: break;
@@ -336,6 +304,7 @@ void GLGSRender::init_buffers(rsx::framebuffer_creation_context context, bool /*
 	}
 
 	m_graphics_state.set(rsx::rtt_config_valid);
+	on_framebuffer_layout_updated();
 
 	check_zcull_status(true);
 	set_viewport();
@@ -480,7 +449,7 @@ void gl::render_target::load_memory(gl::command_context& cmd)
 	subres.data = { vm::get_super_ptr<const std::byte>(base_addr), static_cast<std::span<const std::byte>::size_type>(rsx_pitch * surface_height * samples_y) };
 
 	// TODO: MSAA support
-	if (g_cfg.video.resolution_scale_percent == 100 && spp == 1) [[likely]]
+	if (resolution_scaling_config.scale_percent == 100 && spp == 1) [[likely]]
 	{
 		gl::upload_texture(cmd, this, get_gcm_format(), is_swizzled, { subres });
 	}
@@ -721,6 +690,8 @@ gl::viewable_image* gl::render_target::get_resolve_target_safe(gl::command_conte
 			static_cast<GLenum>(get_internal_format()),
 			format_class()
 		));
+
+		resolve_surface->set_name(fmt::format("MSAA_Resolve_%u@0x%x", resolve_surface->id(), base_addr));
 	}
 
 	return static_cast<gl::viewable_image*>(resolve_surface.get());

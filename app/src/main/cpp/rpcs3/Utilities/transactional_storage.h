@@ -1,6 +1,7 @@
 #include "util/types.hpp"
 #include <vector>
 #include <mutex>
+#include "Emu/Cell/timers.hpp"
 
 // Thread-safe object pool with garbage collection
 class universal_pool
@@ -83,9 +84,8 @@ public:
 	transactional_storage& operator=(const transactional_storage&) = delete;
 
 	transactional_storage(transactional_storage&& other)
+		: pool(std::move(other.pool))
 	{
-		pool = std::move(other.pool);
-
 		std::unique_lock lock_other{other.current_mutex};
 		const std::shared_ptr<T> other_current = other.current;
 		other.current = nullptr;

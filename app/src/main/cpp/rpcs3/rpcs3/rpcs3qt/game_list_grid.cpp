@@ -1,13 +1,12 @@
 #include "stdafx.h"
 #include "game_list_grid.h"
 #include "game_list_grid_item.h"
-#include "movie_item.h"
 #include "gui_settings.h"
 #include "qt_utils.h"
-#include "Utilities/File.h"
+
+#include "Loader/ISO.h"
 
 #include <QApplication>
-#include <QStringBuilder>
 
 game_list_grid::game_list_grid()
 	: flow_widget(nullptr), game_list_base()
@@ -15,15 +14,16 @@ game_list_grid::game_list_grid()
 	setObjectName("game_list_grid");
 	setContextMenuPolicy(Qt::CustomContextMenu);
 
-	m_icon_ready_callback = [this](const game_info& game)
+	set_multi_selection_enabled(true);
+
+	m_icon_ready_callback = [this](const game_info& game, const movie_item_base* item)
 	{
-		Q_EMIT IconReady(game);
+		Q_EMIT IconReady(game, item);
 	};
 
-	connect(this, &game_list_grid::IconReady, this, [this](const game_info& game)
+	connect(this, &game_list_grid::IconReady, this, [](const game_info& game, const movie_item_base* item)
 	{
-		if (!game || !game->item) return;
-		game->item->call_icon_func();
+		if (game && item && game->item == item) item->image_change_callback();
 	}, Qt::QueuedConnection); // The default 'AutoConnection' doesn't seem to work in this specific case...
 
 	connect(this, &flow_widget::ItemSelectionChanged, this, [this](int index)
@@ -42,23 +42,32 @@ void game_list_grid::clear_list()
 
 void game_list_grid::populate(
 	const std::vector<game_info>& game_data,
-	const QMap<QString, QString>& notes_map,
-	const QMap<QString, QString>& title_map,
-	const std::string& selected_item_id,
-	bool play_hover_movies)
+	const std::map<QString, QString>& notes_map,
+	const std::map<QString, QString>& title_map,
+	const std::set<std::string>& selected_item_ids,
+	bool play_hover_movies,
+	bool play_hover_music)
 {
 	clear_list();
 
-	const QString game_icon_path = play_hover_movies ? QString::fromStdString(fs::get_config_dir() + "/Icons/game_icons/") : "";
-	game_list_grid_item* selected_item = nullptr;
+	std::set<flow_widget_item*> selected_items;
 
 	blockSignals(true);
+
+	const auto get_title = [&title_map](const QString& serial, const std::string& name) -> QString
+	{
+		if (const auto it = title_map.find(serial); it != title_map.cend())
+		{
+			return it->second.simplified();
+		}
+
+		return QString::fromStdString(name).simplified();
+	};
 
 	for (const auto& game : game_data)
 	{
 		const QString serial = QString::fromStdString(game->info.serial);
-		const QString title = title_map.value(serial, QString::fromStdString(game->info.name)).simplified();
-		const QString notes = notes_map.value(serial);
+		const QString title = get_title(serial, game->info.name);
 
 		game_list_grid_item* item = new game_list_grid_item(this, game, title);
 		item->installEventFilter(this);
@@ -66,16 +75,16 @@ void game_list_grid::populate(
 
 		game->item = item;
 
-		if (notes.isEmpty())
+		if (const auto it = notes_map.find(serial); it != notes_map.cend() && !it->second.isEmpty())
 		{
-			item->setToolTip(tr("%0 [%1]").arg(title).arg(serial));
+			item->setToolTip(tr("%0 [%1]\n\nNotes:\n%2").arg(title).arg(serial).arg(it->second));
 		}
 		else
 		{
-			item->setToolTip(tr("%0 [%1]\n\nNotes:\n%2").arg(title).arg(serial).arg(notes));
+			item->setToolTip(tr("%0 [%1]").arg(title).arg(serial));
 		}
 
-		item->set_icon_func([this, item, game](const QVideoFrame& frame)
+		item->set_image_change_callback([this, item, game](const QVideoFrame& frame)
 		{
 			if (!item || !game)
 			{
@@ -84,35 +93,45 @@ void game_list_grid::populate(
 
 			if (const QPixmap pixmap = item->get_movie_image(frame); item->get_active() && !pixmap.isNull())
 			{
-				item->set_icon(gui::utils::get_centered_pixmap(pixmap, m_icon_size, 0, 0, 1.0, Qt::FastTransformation));
+				item->set_icon(gui::utils::get_aligned_pixmap(pixmap, m_icon_size, 1.0, Qt::FastTransformation, gui::utils::align_h::center, gui::utils::align_v::center));
+				return;
 			}
-			else
-			{
-				std::lock_guard lock(item->pixmap_mutex);
 
+			std::lock_guard lock(item->pixmap_mutex);
+
+			if (!game->pxmap.isNull())
+			{
 				item->set_icon(game->pxmap);
 
 				if (!game->has_hover_gif && !game->has_hover_pam)
 				{
 					game->pxmap = {};
 				}
-
-				item->stop_movie();
 			}
 		});
 
-		if (play_hover_movies && game->has_hover_gif)
+		bool check_iso = false;
+
+		if (play_hover_movies && (game->has_hover_gif || game->has_hover_pam))
 		{
-			item->set_movie_path(game_icon_path % serial % "/hover.gif");
-		}
-		else if (play_hover_movies && game->has_hover_pam)
-		{
-			item->set_movie_path(QString::fromStdString(game->info.movie_path));
+			item->set_video_path(game->info.movie_path);
+			check_iso |= !fs::exists(game->info.movie_path);
 		}
 
-		if (selected_item_id == game->info.path + game->info.icon_path)
+		if (play_hover_music && game->has_audio_file)
 		{
-			selected_item = item;
+			item->set_audio_path(game->info.audio_path);
+			check_iso |= !fs::exists(game->info.audio_path);
+		}
+
+		if (check_iso && is_file_iso(game->info.path))
+		{
+			item->set_iso_path(game->info.path);
+		}
+
+		if (selected_item_ids.contains(game->info.path + game->info.icon_path))
+		{
+			selected_items.insert(item);
 		}
 
 		add_widget(item);
@@ -125,10 +144,10 @@ void game_list_grid::populate(
 
 	QApplication::processEvents();
 
-	select_item(selected_item);
+	select_items(selected_items);
 }
 
-void game_list_grid::repaint_icons(QList<game_info>& game_data, const QColor& icon_color, const QSize& icon_size, qreal device_pixel_ratio)
+void game_list_grid::repaint_icons(std::vector<game_info>& game_data, const QColor& icon_color, const QSize& icon_size, qreal device_pixel_ratio)
 {
 	m_icon_size = icon_size;
 	m_icon_color = icon_color;
@@ -152,7 +171,7 @@ void game_list_grid::repaint_icons(QList<game_info>& game_data, const QColor& ic
 			{
 				// We don't have an icon. Set a placeholder to initialize the layout.
 				game->pxmap = placeholder;
-				item->call_icon_func();
+				item->image_change_callback();
 			}
 
 			item->set_icon_load_func([this, game, device_pixel_ratio, cancel = item->icon_loading_aborted()](int)
@@ -169,9 +188,9 @@ void game_list_grid::repaint_icons(QList<game_info>& game_data, const QColor& ic
 
 void game_list_grid::FocusAndSelectFirstEntryIfNoneIs()
 {
-	if (items().empty() == false)
+	if (!items().empty())
 	{
-		items().first()->setFocus();
+		items().front()->setFocus();
 	}
 }
 

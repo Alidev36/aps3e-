@@ -49,6 +49,7 @@ extern "C" {
     output_params.channels = 2;
     output_params.layout = CUBEB_LAYOUT_UNDEFINED;
     output_params.prefs = CUBEB_STREAM_PREF_NONE;
+    output_params.input_params = CUBEB_INPUT_PROCESSING_PARAM_NONE;
 
     rv = cubeb_get_min_latency(app_ctx, &output_params, &latency_frames);
     if (rv != CUBEB_OK) {
@@ -62,6 +63,7 @@ extern "C" {
     input_params.channels = 1;
     input_params.layout = CUBEB_LAYOUT_UNDEFINED;
     input_params.prefs = CUBEB_STREAM_PREF_NONE;
+    input_params.input_params = CUBEB_INPUT_PROCESSING_PARAM_NONE;
 
     cubeb_stream * stm;
     rv = cubeb_stream_init(app_ctx, &stm, "Example Stream 1",
@@ -163,6 +165,7 @@ typedef enum {
                             implications. */
 } cubeb_log_level;
 
+/// A single channel position, to be used in a bitmask.
 typedef enum {
   CHANNEL_UNKNOWN = 0,
   CHANNEL_FRONT_LEFT = 1 << 0,
@@ -185,6 +188,9 @@ typedef enum {
   CHANNEL_TOP_BACK_RIGHT = 1 << 17
 } cubeb_channel;
 
+/// A bitmask representing the channel layout of a cubeb stream. This is
+/// bit-compatible with WAVEFORMATEXENSIBLE and in the same order as the SMPTE
+/// ordering.
 typedef uint32_t cubeb_channel_layout;
 // Some common layout definitions.
 enum {
@@ -254,16 +260,31 @@ typedef enum {
                                                    the jack backend. */
 } cubeb_stream_prefs;
 
+/**
+ * Input stream audio processing parameters. Only applicable with
+ * CUBEB_STREAM_PREF_VOICE.
+ */
+typedef enum {
+  CUBEB_INPUT_PROCESSING_PARAM_NONE = 0x00,
+  CUBEB_INPUT_PROCESSING_PARAM_ECHO_CANCELLATION = 0x01,
+  CUBEB_INPUT_PROCESSING_PARAM_NOISE_SUPPRESSION = 0x02,
+  CUBEB_INPUT_PROCESSING_PARAM_AUTOMATIC_GAIN_CONTROL = 0x04,
+  CUBEB_INPUT_PROCESSING_PARAM_VOICE_ISOLATION = 0x08,
+} cubeb_input_processing_params;
+
 /** Stream format initialization parameters. */
 typedef struct {
   cubeb_sample_format format; /**< Requested sample format.  One of
                                    #cubeb_sample_format. */
-  uint32_t rate; /**< Requested sample rate.  Valid range is [1000, 192000]. */
+  uint32_t rate; /**< Requested sample rate.  Valid range is [1000, 384000]. */
   uint32_t channels; /**< Requested channel count.  Valid range is [1, 8]. */
   cubeb_channel_layout
       layout; /**< Requested channel layout. This must be consistent with the
                  provided channels. CUBEB_LAYOUT_UNDEFINED if unknown */
-  cubeb_stream_prefs prefs; /**< Requested preferences. */
+  cubeb_stream_prefs prefs;                   /**< Requested preferences. */
+  cubeb_input_processing_params input_params; /**< Requested input processing
+     params. Ignored for output streams. At present, only supported on the
+     WASAPI backend; others should use cubeb_set_input_processing_params.  */
 } cubeb_stream_params;
 
 /** Audio device description */
@@ -398,6 +419,13 @@ typedef struct {
   size_t count;               /**< Device count in collection. */
 } cubeb_device_collection;
 
+/** Array of compiled backends returned by `cubeb_get_backend_names`. */
+typedef struct {
+  const char * const *
+      names;    /**< Array of strings representing backend names. */
+  size_t count; /**< Length of the array. */
+} cubeb_backend_names;
+
 /** User supplied data callback.
     - Calling other cubeb functions from this callback is unsafe.
     - The code in the callback should be non-blocking.
@@ -433,11 +461,13 @@ typedef void (*cubeb_state_callback)(cubeb_stream * stream, void * user_ptr,
 
 /**
  * User supplied callback called when the underlying device changed.
- * @param user The pointer passed to cubeb_stream_init. */
+ * @param user_ptr The pointer passed to cubeb_stream_init. */
 typedef void (*cubeb_device_changed_callback)(void * user_ptr);
 
 /**
  * User supplied callback called when the underlying device collection changed.
+ * This callback will be called when devices are added or removed from the
+ * system, or when the default device changes for the specified device type.
  * @param context A pointer to the cubeb context.
  * @param user_ptr The pointer passed to
  * cubeb_register_device_collection_changed. */
@@ -475,6 +505,12 @@ cubeb_init(cubeb ** context, char const * context_name,
 CUBEB_EXPORT char const *
 cubeb_get_backend_id(cubeb * context);
 
+/** Get a read-only array of strings identifying available backends.
+    These can be passed as `backend_name` parameter to `cubeb_init`.
+    @retval Struct containing the array with backend names. */
+CUBEB_EXPORT cubeb_backend_names
+cubeb_get_backend_names();
+
 /** Get the maximum possible number of channels.
     @param context A pointer to the cubeb context.
     @param max_channels The maximum number of channels.
@@ -509,6 +545,18 @@ cubeb_get_min_latency(cubeb * context, cubeb_stream_params * params,
     @retval CUBEB_ERROR_NOT_SUPPORTED */
 CUBEB_EXPORT int
 cubeb_get_preferred_sample_rate(cubeb * context, uint32_t * rate);
+
+/** Get the supported input processing features for this backend. See
+    cubeb_stream_set_input_processing for how to set them for a particular input
+    stream.
+    @param context A pointer to the cubeb context.
+    @param params Out parameter for the input processing params supported by
+                  this backend.
+    @retval CUBEB_OK
+    @retval CUBEB_ERROR_NOT_SUPPORTED */
+CUBEB_EXPORT int
+cubeb_get_supported_input_processing_params(
+    cubeb * context, cubeb_input_processing_params * params);
 
 /** Destroy an application context. This must be called after all stream have
  *  been destroyed.
@@ -637,6 +685,30 @@ CUBEB_EXPORT int
 cubeb_stream_get_current_device(cubeb_stream * stm,
                                 cubeb_device ** const device);
 
+/** Set input mute state for this stream. Some platforms notify the user when an
+    application is accessing audio input. When all inputs are muted they can
+    prove to the user that the application is not actively capturing any input.
+    @param stream the stream for which to set input mute state
+    @param mute whether the input should mute or not
+    @retval CUBEB_OK
+    @retval CUBEB_ERROR_INVALID_PARAMETER if this stream does not have an input
+            device
+    @retval CUBEB_ERROR_NOT_SUPPORTED */
+CUBEB_EXPORT int
+cubeb_stream_set_input_mute(cubeb_stream * stream, int mute);
+
+/** Set what input processing features to enable for this stream.
+    @param stream the stream for which to set input processing features.
+    @param params what input processing features to use
+    @retval CUBEB_OK
+    @retval CUBEB_ERROR if params could not be applied
+    @retval CUBEB_ERROR_INVALID_PARAMETER if a given param is not supported by
+            this backend, or if this stream does not have an input device
+    @retval CUBEB_ERROR_NOT_SUPPORTED */
+CUBEB_EXPORT int
+cubeb_stream_set_input_processing_params(cubeb_stream * stream,
+                                         cubeb_input_processing_params params);
+
 /** Destroy a cubeb_device structure.
     @param stream the stream passed in cubeb_stream_get_current_device
     @param devices the devices to destroy
@@ -688,14 +760,16 @@ cubeb_device_collection_destroy(cubeb * context,
                                 cubeb_device_collection * collection);
 
 /** Registers a callback which is called when the system detects
-    a new device or a device is removed.
+    a new device or a device is removed, or when the default device
+    changes for the specified device type.
     @param context
     @param devtype device type to include. Different callbacks and user pointers
            can be registered for each devtype. The hybrid devtype
            `CUBEB_DEVICE_TYPE_INPUT | CUBEB_DEVICE_TYPE_OUTPUT` is also valid
            and will register the provided callback and user pointer in both
    sides.
-    @param callback a function called whenever the system device list changes.
+    @param callback a function called whenever the system device list changes,
+           including when default devices change.
            Passing NULL allow to unregister a function. You have to unregister
            first before you register a new callback.
     @param user_ptr pointer to user specified data which will be present in

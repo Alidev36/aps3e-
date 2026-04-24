@@ -13,8 +13,6 @@
 
 LOG_CHANNEL(compat_log, "Compat");
 
-constexpr auto qstr = QString::fromStdString;
-
 game_compatibility::game_compatibility(std::shared_ptr<gui_settings> gui_settings, QWidget* parent)
 	: QObject(parent)
 	, m_gui_settings(std::move(gui_settings))
@@ -38,7 +36,7 @@ void game_compatibility::handle_download_finished(const QByteArray& content)
 	compat_log.notice("Database download finished");
 
 	// Create new map from database and write database to file if database was valid
-	if (ReadJSON(QJsonDocument::fromJson(content).object(), true))
+	if (handle_json(content, true))
 	{
 		// Write database to file
 		QFile file(m_filepath);
@@ -69,9 +67,10 @@ void game_compatibility::handle_download_canceled()
 	Q_EMIT DownloadCanceled();
 }
 
-bool game_compatibility::ReadJSON(const QJsonObject& json_data, bool after_download)
+bool game_compatibility::handle_json(const QByteArray& data, bool after_download)
 {
-	const int return_code = json_data["return_code"].toInt();
+	const QJsonObject json_data = QJsonDocument::fromJson(data).object();
+	const int return_code = json_data["return_code"].toInt(-255);
 
 	if (return_code < 0)
 	{
@@ -80,18 +79,13 @@ bool game_compatibility::ReadJSON(const QJsonObject& json_data, bool after_downl
 			std::string error_message;
 			switch (return_code)
 			{
-			case -1:
-				error_message = "Server Error - Internal Error";
-				break;
-			case -2:
-				error_message = "Server Error - Maintenance Mode";
-				break;
-			default:
-				error_message = "Server Error - Unknown Error";
-				break;
+			case -1: error_message = "Server Error - Internal Error"; break;
+			case -2: error_message = "Server Error - Maintenance Mode"; break;
+			case -255: error_message = "Server Error - Return code not found"; break;
+			default: error_message = "Server Error - Unknown Error"; break;
 			}
 			compat_log.error("%s: return code %d", error_message, return_code);
-			Q_EMIT DownloadError(qstr(error_message) + " " + QString::number(return_code));
+			Q_EMIT DownloadError(QString::fromStdString(error_message) + " " + QString::number(return_code));
 		}
 		else
 		{
@@ -108,7 +102,7 @@ bool game_compatibility::ReadJSON(const QJsonObject& json_data, bool after_downl
 
 	m_compat_database.clear();
 
-	QJsonObject json_results = json_data["results"].toObject();
+	const QJsonObject json_results = json_data["results"].toObject();
 
 	// Retrieve status data for every valid entry
 	for (const auto& key : json_results.keys())
@@ -119,7 +113,7 @@ bool game_compatibility::ReadJSON(const QJsonObject& json_data, bool after_downl
 			continue;
 		}
 
-		QJsonObject json_result = json_results[key].toObject();
+		const QJsonObject json_result = json_results[key].toObject();
 
 		// Retrieve compatibility information from json
 		compat::status status = ::at32(Status_Data, json_result.value("status").toString("NoResult"));
@@ -186,7 +180,7 @@ bool game_compatibility::ReadJSON(const QJsonObject& json_data, bool after_downl
 		}
 
 		// Add status to map
-		m_compat_database.emplace(std::pair<std::string, compat::status>(key.toStdString(), status));
+		m_compat_database.emplace(key.toStdString(), std::move(status));
 	}
 
 	return true;
@@ -217,15 +211,14 @@ void game_compatibility::RequestCompatibility(bool online)
 		compat_log.notice("Finished reading database from file: %s", m_filepath);
 
 		// Create new map from database
-		ReadJSON(QJsonDocument::fromJson(content).object(), online);
-
+		handle_json(content, online);
 		return;
 	}
 
 	const std::string url = "https://rpcs3.net/compatibility?api=v1&export";
 	compat_log.notice("Beginning compatibility database download from: %s", url);
 
-	m_downloader->start(url, true, true, tr("Downloading Database"));
+	m_downloader->start(url, true, true, true, tr("Downloading Database"));
 
 	// We want to retrieve a new database, therefore refresh gamelist and indicate that
 	Q_EMIT DownloadStarted();
@@ -262,17 +255,21 @@ compat::package_info game_compatibility::GetPkgInfo(const QString& pkg_path, gam
 		return info;
 	}
 
-	const psf::registry psf = reader.get_psf();
+	const psf::registry& psf = reader.get_psf();
 
 	// TODO: localization of title and changelog
 	const std::string title_key     = "TITLE";
 	const std::string changelog_key = "paramhip";
 
 	info.path     = pkg_path;
-	info.title    = qstr(std::string(psf::get_string(psf, title_key))); // Let's read this from the psf first
-	info.title_id = qstr(std::string(psf::get_string(psf, "TITLE_ID")));
-	info.category = qstr(std::string(psf::get_string(psf, "CATEGORY")));
-	info.version  = qstr(std::string(psf::get_string(psf, "APP_VER")));
+	info.title    = QString::fromStdString(std::string(psf::get_string(psf, title_key))); // Let's read this from the psf first
+	info.title_id = QString::fromStdString(std::string(psf::get_string(psf, "TITLE_ID")));
+	info.category = QString::fromStdString(std::string(psf::get_string(psf, "CATEGORY")));
+	info.version  = QString::fromStdString(std::string(psf::get_string(psf, "APP_VER")));
+
+	// Technically, there is no specific package's header info providing its installation size on disk.
+	// We use "data_size" header as an approximation (a bit larger) for this purpose
+	info.data_size = reader.get_header().data_size.value();
 
 	if (!info.category.isEmpty())
 	{
@@ -306,7 +303,7 @@ compat::package_info game_compatibility::GetPkgInfo(const QString& pkg_path, gam
 	if (info.version.isEmpty())
 	{
 		// Fallback to VERSION
-		info.version = qstr(std::string(psf::get_string(psf, "VERSION")));
+		info.version = QString::fromStdString(std::string(psf::get_string(psf, "VERSION")));
 	}
 
 	if (compat)
@@ -321,12 +318,12 @@ compat::package_info game_compatibility::GetPkgInfo(const QString& pkg_path, gam
 				{
 					if (const std::string localized_title = package.get_title(title_key); !localized_title.empty())
 					{
-						info.title= qstr(localized_title);
+						info.title = QString::fromStdString(localized_title);
 					}
 
 					if (const std::string localized_changelog = package.get_changelog(changelog_key); !localized_changelog.empty())
 					{
-						info.changelog = qstr(localized_changelog);
+						info.changelog = QString::fromStdString(localized_changelog);
 					}
 
 					// This should be an update since it was found in a patch set

@@ -318,16 +318,24 @@ vk::vertex_upload_info VKGSRender::upload_vertex_data()
 	{
 		// Check for validity
 		if (m_persistent_attribute_storage &&
-			!m_persistent_attribute_storage->is(m_attrib_ring_info.heap->value))
+                !m_persistent_attribute_storage->is(m_attrib_ring_info.heap->value))
 		{
-			m_current_frame->buffer_views_to_clean.push_back(std::move(m_persistent_attribute_storage));
+			vk::get_resource_manager()->dispose(m_persistent_attribute_storage);
 		}
 
 		if (m_volatile_attribute_storage &&
-			!m_volatile_attribute_storage->is(m_attrib_ring_info.heap->value))
+                !m_volatile_attribute_storage->is(m_attrib_ring_info.heap->value))
 		{
-			m_current_frame->buffer_views_to_clean.push_back(std::move(m_volatile_attribute_storage));
+			vk::get_resource_manager()->dispose(m_volatile_attribute_storage);
 		}
+
+		m_vertex_env_buffer_info = { *m_vertex_env_ring_info.heap, 0, VK_WHOLE_SIZE };
+		m_vertex_constants_buffer_info = { *m_transform_constants_ring_info.heap, 0, VK_WHOLE_SIZE };
+		m_fragment_env_buffer_info = { *m_fragment_env_ring_info.heap, 0, VK_WHOLE_SIZE };
+		m_fragment_texture_params_buffer_info = { *m_fragment_texture_params_ring_info.heap, 0, VK_WHOLE_SIZE };
+		m_raster_env_buffer_info = { *m_raster_env_ring_info.heap, 0, VK_WHOLE_SIZE };
+		m_vertex_layout_stream_info = { *m_vertex_layout_ring_info.heap, 0, VK_WHOLE_SIZE };
+		m_fragment_constants_buffer_info = { *m_fragment_constants_ring_info.heap, 0, VK_WHOLE_SIZE };
 
 		vk::clear_status_interrupt(vk::heap_changed);
 	}
@@ -337,13 +345,11 @@ vk::vertex_upload_info VKGSRender::upload_vertex_data()
 		if (!m_persistent_attribute_storage || !m_persistent_attribute_storage->in_range(persistent_range_base, required.first, persistent_range_base))
 		{
 			//ensure(m_texbuffer_view_size >= required.first); // "Incompatible driver (MacOS?)"
-
-			if (m_persistent_attribute_storage)
-				m_current_frame->buffer_views_to_clean.push_back(std::move(m_persistent_attribute_storage));
+			vk::get_resource_manager()->dispose(m_persistent_attribute_storage);
 
 			//View 64M blocks at a time (different drivers will only allow a fixed viewable heap size, 64M should be safe)
 			const usz view_size = (persistent_range_base + m_texbuffer_view_size) > m_attrib_ring_info.size() ? m_attrib_ring_info.size() - persistent_range_base : m_texbuffer_view_size;
-			m_persistent_attribute_storage = vk::buffer_upload::create(*m_device,*m_attrib_ring_info.heap, VK_FORMAT_R8_UINT, persistent_range_base, view_size);
+			m_persistent_attribute_storage = vk::buffer_upload::create(*m_device, *m_attrib_ring_info.heap, VK_FORMAT_R8_UINT, persistent_range_base, view_size);
 			persistent_range_base = 0;
 		}
 	}
@@ -353,12 +359,10 @@ vk::vertex_upload_info VKGSRender::upload_vertex_data()
 		if (!m_volatile_attribute_storage || !m_volatile_attribute_storage->in_range(volatile_range_base, required.second, volatile_range_base))
 		{
 			//ensure(m_texbuffer_view_size >= required.second); // "Incompatible driver (MacOS?)"
-
-			if (m_volatile_attribute_storage)
-				m_current_frame->buffer_views_to_clean.push_back(std::move(m_volatile_attribute_storage));
+			vk::get_resource_manager()->dispose(m_volatile_attribute_storage);
 
 			const usz view_size = (volatile_range_base + m_texbuffer_view_size) > m_attrib_ring_info.size() ? m_attrib_ring_info.size() - volatile_range_base : m_texbuffer_view_size;
-			m_volatile_attribute_storage = vk::buffer_upload::create(*m_device,*m_attrib_ring_info.heap, VK_FORMAT_R8_UINT, volatile_range_base, view_size);
+			m_volatile_attribute_storage = vk::buffer_upload::create(*m_device, *m_attrib_ring_info.heap, VK_FORMAT_R8_UINT, volatile_range_base, view_size);
 			volatile_range_base = 0;
 		}
 	}

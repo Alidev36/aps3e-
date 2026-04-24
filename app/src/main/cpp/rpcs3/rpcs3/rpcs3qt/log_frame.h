@@ -12,6 +12,8 @@
 #include <QPlainTextEdit>
 #include <QActionGroup>
 
+class AnsiHighlighter;
+
 class gui_settings;
 
 class log_frame : public custom_dock_widget
@@ -49,7 +51,7 @@ private:
 
 	QTimer* m_timer = nullptr;
 
-	QList<QColor> m_color;
+	std::vector<QColor> m_color;
 	QColor m_color_stack;
 	QPlainTextEdit* m_log = nullptr;
 	std::string m_old_log_text;
@@ -69,11 +71,13 @@ private:
 	QPlainTextEdit* m_tty = nullptr;
 	QLineEdit* m_tty_input = nullptr;
 	int m_tty_channel = -1;
+	AnsiHighlighter* m_tty_ansi_highlighter = nullptr;
 
 	QAction* m_clear_act = nullptr;
 	QAction* m_clear_tty_act = nullptr;
 	QAction* m_perform_goto_on_debugger = nullptr;
 	QAction* m_perform_goto_thread_on_debugger = nullptr;
+	QAction* m_perform_show_in_mem_viewer = nullptr;
 
 	QActionGroup* m_log_level_acts = nullptr;
 	QAction* m_nothing_act = nullptr;
@@ -91,6 +95,7 @@ private:
 	QAction* m_stack_act_err = nullptr;
 
 	QAction* m_show_prefix_act = nullptr;
+	QAction* m_log_while_hidden_act = nullptr;
 
 	QAction* m_tty_act = nullptr;
 

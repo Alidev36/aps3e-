@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -60,6 +60,7 @@
     <ClInclude Include="Emu\RSX\GL\GLGSRender.h" />
     <ClInclude Include="Emu\RSX\GL\GLProcTable.h" />
     <ClInclude Include="Emu\RSX\GL\GLProgramBuffer.h" />
+    <ClInclude Include="Emu\RSX\GL\GLResolveHelper.h" />
     <ClInclude Include="Emu\RSX\GL\glutils\blitter.h" />
     <ClInclude Include="Emu\RSX\GL\glutils\buffer_object.h" />
     <ClInclude Include="Emu\RSX\GL\glutils\capabilities.h" />
@@ -95,6 +96,7 @@
     <ClCompile Include="Emu\RSX\GL\GLGSRender.cpp" />
     <ClCompile Include="Emu\RSX\GL\GLOverlays.cpp" />
     <ClCompile Include="Emu\RSX\GL\GLPipelineCompiler.cpp" />
+    <ClCompile Include="Emu\RSX\GL\GLResolveHelper.cpp" />
     <ClCompile Include="Emu\RSX\GL\glutils\blitter.cpp" />
     <ClCompile Include="Emu\RSX\GL\glutils\buffer_object.cpp" />
     <ClCompile Include="Emu\RSX\GL\glutils\capabilities.cpp" />

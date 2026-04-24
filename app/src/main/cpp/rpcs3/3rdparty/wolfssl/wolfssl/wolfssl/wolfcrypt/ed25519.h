@@ -1,12 +1,12 @@
 /* ed25519.h
  *
- * Copyright (C) 2006-2023 wolfSSL Inc.
+ * Copyright (C) 2006-2026 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
  * wolfSSL is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * wolfSSL is distributed in the hope that it will be useful,
@@ -29,7 +29,7 @@
 
 #include <wolfssl/wolfcrypt/types.h>
 
-#ifdef HAVE_ED25519
+#if defined(HAVE_ED25519) || defined(WOLFSSL_CURVE25519_USE_ED25519)
 
 #include <wolfssl/wolfcrypt/random.h>
 #ifndef WOLFSSL_SHA512
@@ -94,8 +94,9 @@ struct ed25519_key {
     word32 flags;
     byte   keyIdSet;
 #endif
-    word16 privKeySet:1;
-    word16 pubKeySet:1;
+    WC_BITFIELD privKeySet:1;
+    WC_BITFIELD pubKeySet:1;
+    WC_BITFIELD sha_clean_flag:1; /* only used if WOLFSSL_ED25519_PERSISTENT_SHA */
 #ifdef WOLFSSL_ASYNC_CRYPT
     WC_ASYNC_DEV asyncDev;
 #endif
@@ -106,7 +107,6 @@ struct ed25519_key {
     void *heap;
 #ifdef WOLFSSL_ED25519_PERSISTENT_SHA
     wc_Sha512 sha;
-    int sha_clean_flag;
 #endif
 };
 
@@ -175,13 +175,19 @@ int wc_ed25519_verify_msg_final(const byte* sig, word32 sigLen, int* res,
 #endif /* WOLFSSL_ED25519_STREAMING_VERIFY */
 #endif /* HAVE_ED25519_VERIFY */
 
-
 WOLFSSL_API
 int wc_ed25519_init(ed25519_key* key);
 WOLFSSL_API
 int wc_ed25519_init_ex(ed25519_key* key, void* heap, int devId);
 WOLFSSL_API
 void wc_ed25519_free(ed25519_key* key);
+#ifndef WC_NO_CONSTRUCTORS
+WOLFSSL_API
+ed25519_key* wc_ed25519_new(void* heap, int devId, int *result_code);
+WOLFSSL_API
+int wc_ed25519_delete(ed25519_key* key, ed25519_key** key_p);
+#endif
+
 #ifdef HAVE_ED25519_KEY_IMPORT
 WOLFSSL_API
 int wc_ed25519_import_public(const byte* in, word32 inLen, ed25519_key* key);
@@ -201,13 +207,13 @@ int wc_ed25519_import_private_key_ex(const byte* priv, word32 privSz,
 
 #ifdef HAVE_ED25519_KEY_EXPORT
 WOLFSSL_API
-int wc_ed25519_export_public(ed25519_key* key, byte* out, word32* outLen);
+int wc_ed25519_export_public(const ed25519_key* key, byte* out, word32* outLen);
 WOLFSSL_API
-int wc_ed25519_export_private_only(ed25519_key* key, byte* out, word32* outLen);
+int wc_ed25519_export_private_only(const ed25519_key* key, byte* out, word32* outLen);
 WOLFSSL_API
-int wc_ed25519_export_private(ed25519_key* key, byte* out, word32* outLen);
+int wc_ed25519_export_private(const ed25519_key* key, byte* out, word32* outLen);
 WOLFSSL_API
-int wc_ed25519_export_key(ed25519_key* key,
+int wc_ed25519_export_key(const ed25519_key* key,
                           byte* priv, word32 *privSz,
                           byte* pub, word32 *pubSz);
 #endif /* HAVE_ED25519_KEY_EXPORT */
@@ -217,13 +223,13 @@ int wc_ed25519_check_key(ed25519_key* key);
 
 /* size helper */
 WOLFSSL_API
-int wc_ed25519_size(ed25519_key* key);
+int wc_ed25519_size(const ed25519_key* key);
 WOLFSSL_API
-int wc_ed25519_priv_size(ed25519_key* key);
+int wc_ed25519_priv_size(const ed25519_key* key);
 WOLFSSL_API
-int wc_ed25519_pub_size(ed25519_key* key);
+int wc_ed25519_pub_size(const ed25519_key* key);
 WOLFSSL_API
-int wc_ed25519_sig_size(ed25519_key* key);
+int wc_ed25519_sig_size(const ed25519_key* key);
 
 #ifdef __cplusplus
     }    /* extern "C" */

@@ -48,6 +48,12 @@ openssl x509 -in root-ca-cert.pem -text > tmp.pem
 check_result $? ""
 mv tmp.pem root-ca-cert.pem
 
+echo "OCSP renew certs Step 4"
+openssl x509 -in root-ca-cert.pem -outform DER -out root-ca-cert.der
+check_result $? ""
+openssl rsa -in root-ca-key.pem -outform DER -out root-ca-key.der
+check_result $? ""
+
 # $1 cert, $2 name, $3 ca, $4 extensions, $5 serial
 update_cert() {
     echo "Updating certificate \"$1-cert.pem\""
@@ -75,6 +81,11 @@ update_cert() {
     check_result $? "Step 3"
     mv "$1"_tmp.pem "$1"-cert.pem
     cat "$3"-cert.pem >> "$1"-cert.pem
+
+    openssl x509 -in "$1"-cert.pem -outform DER -out "$1"-cert.der
+    check_result $? "Step 4"
+    openssl rsa -in "$1"-key.pem -outform DER -out "$1"-key.der
+    check_result $? "Step 5"
 }
 
 update_cert intermediate1-ca "wolfSSL intermediate CA 1"       root-ca          v3_ca   01
@@ -89,6 +100,11 @@ update_cert server3          "www3.wolfssl.com"                intermediate2-ca 
 update_cert server4          "www4.wolfssl.com"                intermediate2-ca v3_req2 08 # REVOKED
 update_cert server5          "www5.wolfssl.com"                intermediate3-ca v3_req3 09
 
+# server1-chain-noroot.pem: server1 + intermediate1 without root-ca
+# (used by tests that need a chain where the root is not sent by the server)
+head -n "$(grep -n 'END CERTIFICATE' server1-cert.pem | head -2 | tail -1 | cut -d: -f1)" server1-cert.pem > server1-chain-noroot.pem
+check_result $? ""
+
 # Create response DER buffer for test
 openssl ocsp -port 22221 -ndays 1000 -index index-ca-and-intermediate-cas.txt -rsigner ocsp-responder-cert.pem -rkey ocsp-responder-key.pem -CA root-ca-cert.pem -partial_chain &
 PID=$!
@@ -100,6 +116,16 @@ openssl ocsp -issuer ./root-ca-cert.pem -cert ./intermediate1-ca-cert.pem -cert 
 kill $PID
 wait $PID
 
+# Create a response DER buffer for testing leaf certificate
+openssl ocsp -port 22221 -ndays 1000 -index \
+./index-intermediate1-ca-issued-certs.txt -rsigner ocsp-responder-cert.pem \
+-rkey ocsp-responder-key.pem -CA intermediate1-ca-cert.pem -partial_chain &
+PID=$!
+sleep 1 # Make sure server is ready
+
+openssl ocsp -issuer ./intermediate1-ca-cert.pem -cert ./server1-cert.pem -url http://localhost:22221/ -respout test-leaf-response.der -noverify
+kill $PID
+wait $PID
 
 # now start up a responder that signs using rsa-pss
 openssl ocsp -port 22221 -ndays 1000 -index index-ca-and-intermediate-cas.txt -rsigner ocsp-responder-cert.pem -rkey ocsp-responder-key.pem -CA root-ca-cert.pem -rsigopt rsa_padding_mode:pss &

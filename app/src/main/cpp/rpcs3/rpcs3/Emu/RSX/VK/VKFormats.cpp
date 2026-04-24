@@ -191,26 +191,33 @@ namespace vk
 
 		return mapping;
 	}
+
 	VkFormat get_compatible_sampler_format(const gpu_formats_support& support, u32 format)
 	{
-		static const bool supports_dxt = vk::get_current_renderer()->get_texture_compression_bc_support();
-        static const VkFormat default_sampler_format=g_cfg.video.bgra_format.get()?VK_FORMAT_B8G8R8A8_UNORM:VK_FORMAT_R8G8B8A8_UNORM;
-
-        static const bool convert_texture=g_cfg.video.force_convert_texture.get();
+		const bool supports_dxt = vk::get_current_renderer()->get_texture_compression_bc_support();
 		switch (format)
 		{
-            case CELL_GCM_TEXTURE_R5G6B5: return convert_texture?default_sampler_format:VK_FORMAT_R5G6B5_UNORM_PACK16;
-            case CELL_GCM_TEXTURE_R6G5B5: return convert_texture?default_sampler_format:VK_FORMAT_R5G6B5_UNORM_PACK16; // Expand, discard high bit?
-            case CELL_GCM_TEXTURE_R5G5B5A1: return convert_texture?default_sampler_format:VK_FORMAT_R5G5B5A1_UNORM_PACK16;
-            case CELL_GCM_TEXTURE_D1R5G5B5: return convert_texture?default_sampler_format:VK_FORMAT_A1R5G5B5_UNORM_PACK16;
-            case CELL_GCM_TEXTURE_A1R5G5B5: return convert_texture?default_sampler_format:VK_FORMAT_A1R5G5B5_UNORM_PACK16;
-            case CELL_GCM_TEXTURE_A4R4G4B4: return convert_texture?default_sampler_format:VK_FORMAT_R4G4B4A4_UNORM_PACK16;
-
+#ifndef __APPLE__
+		case CELL_GCM_TEXTURE_R5G6B5: return VK_FORMAT_R5G6B5_UNORM_PACK16;
+		case CELL_GCM_TEXTURE_R6G5B5: return VK_FORMAT_R5G6B5_UNORM_PACK16; // Expand, discard high bit?
+		case CELL_GCM_TEXTURE_R5G5B5A1: return VK_FORMAT_R5G5B5A1_UNORM_PACK16;
+		case CELL_GCM_TEXTURE_D1R5G5B5: return VK_FORMAT_A1R5G5B5_UNORM_PACK16;
+		case CELL_GCM_TEXTURE_A1R5G5B5: return VK_FORMAT_A1R5G5B5_UNORM_PACK16;
+		case CELL_GCM_TEXTURE_A4R4G4B4: return VK_FORMAT_R4G4B4A4_UNORM_PACK16;
+#else
+		// assign B8G8R8A8_UNORM to formats that are not supported by Metal
+		case CELL_GCM_TEXTURE_R6G5B5: return VK_FORMAT_B8G8R8A8_UNORM;
+		case CELL_GCM_TEXTURE_R5G6B5: return VK_FORMAT_B8G8R8A8_UNORM;
+		case CELL_GCM_TEXTURE_R5G5B5A1: return VK_FORMAT_B8G8R8A8_UNORM;
+		case CELL_GCM_TEXTURE_D1R5G5B5: return VK_FORMAT_B8G8R8A8_UNORM;
+		case CELL_GCM_TEXTURE_A1R5G5B5: return VK_FORMAT_B8G8R8A8_UNORM;
+		case CELL_GCM_TEXTURE_A4R4G4B4: return VK_FORMAT_B8G8R8A8_UNORM;
+#endif
 		case CELL_GCM_TEXTURE_B8: return VK_FORMAT_R8_UNORM;
-        case CELL_GCM_TEXTURE_A8R8G8B8: return default_sampler_format;
-		case CELL_GCM_TEXTURE_COMPRESSED_DXT1: return supports_dxt ? VK_FORMAT_BC1_RGBA_UNORM_BLOCK : default_sampler_format;
-		case CELL_GCM_TEXTURE_COMPRESSED_DXT23: return supports_dxt ? VK_FORMAT_BC2_UNORM_BLOCK : default_sampler_format;
-		case CELL_GCM_TEXTURE_COMPRESSED_DXT45: return supports_dxt ? VK_FORMAT_BC3_UNORM_BLOCK : default_sampler_format;
+		case CELL_GCM_TEXTURE_A8R8G8B8: return VK_FORMAT_B8G8R8A8_UNORM;
+		case CELL_GCM_TEXTURE_COMPRESSED_DXT1: return supports_dxt ? VK_FORMAT_BC1_RGBA_UNORM_BLOCK : VK_FORMAT_B8G8R8A8_UNORM;
+		case CELL_GCM_TEXTURE_COMPRESSED_DXT23: return supports_dxt ? VK_FORMAT_BC2_UNORM_BLOCK : VK_FORMAT_B8G8R8A8_UNORM;
+		case CELL_GCM_TEXTURE_COMPRESSED_DXT45: return supports_dxt ? VK_FORMAT_BC3_UNORM_BLOCK : VK_FORMAT_B8G8R8A8_UNORM;
 		case CELL_GCM_TEXTURE_G8B8: return VK_FORMAT_R8G8_UNORM;
 		case CELL_GCM_TEXTURE_DEPTH24_D8: return support.d24_unorm_s8? VK_FORMAT_D24_UNORM_S8_UINT : VK_FORMAT_D32_SFLOAT_S8_UINT;
 		case CELL_GCM_TEXTURE_DEPTH24_D8_FLOAT:	return VK_FORMAT_D32_SFLOAT_S8_UINT;
@@ -222,11 +229,11 @@ namespace vk
 		case CELL_GCM_TEXTURE_W16_Z16_Y16_X16_FLOAT: return VK_FORMAT_R16G16B16A16_SFLOAT;
 		case CELL_GCM_TEXTURE_W32_Z32_Y32_X32_FLOAT: return VK_FORMAT_R32G32B32A32_SFLOAT;
 		case CELL_GCM_TEXTURE_X32_FLOAT: return VK_FORMAT_R32_SFLOAT;
-		case CELL_GCM_TEXTURE_D8R8G8B8: return default_sampler_format;
+		case CELL_GCM_TEXTURE_D8R8G8B8: return VK_FORMAT_B8G8R8A8_UNORM;
 		case CELL_GCM_TEXTURE_COMPRESSED_HILO8: return VK_FORMAT_R8G8_UNORM;
 		case CELL_GCM_TEXTURE_COMPRESSED_HILO_S8: return VK_FORMAT_R8G8_SNORM;
-        case CELL_GCM_TEXTURE_COMPRESSED_B8R8_G8R8: return default_sampler_format;
-        case CELL_GCM_TEXTURE_COMPRESSED_R8B8_R8G8: return default_sampler_format;
+		case CELL_GCM_TEXTURE_COMPRESSED_B8R8_G8R8: return VK_FORMAT_B8G8R8A8_UNORM;
+		case CELL_GCM_TEXTURE_COMPRESSED_R8B8_R8G8: return VK_FORMAT_B8G8R8A8_UNORM;
 		default:
 			break;
 		}
@@ -237,10 +244,16 @@ namespace vk
 	{
 		switch (rgb_format)
 		{
-		/*case VK_FORMAT_B8G8R8A8_UNORM:
-            return VK_FORMAT_B8G8R8A8_SRGB;*/
+		// 8-bit
+		case VK_FORMAT_R8_UNORM:
+			return VK_FORMAT_R8_SRGB;
+		case VK_FORMAT_R8G8_UNORM:
+			return VK_FORMAT_R8G8_SRGB;
 		case VK_FORMAT_R8G8B8A8_UNORM:
 			return VK_FORMAT_R8G8B8A8_SRGB;
+		case VK_FORMAT_B8G8R8A8_UNORM:
+			return VK_FORMAT_B8G8R8A8_SRGB;
+		// DXT
 		case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
 			return VK_FORMAT_BC1_RGBA_SRGB_BLOCK;
 		case VK_FORMAT_BC2_UNORM_BLOCK:
@@ -248,7 +261,30 @@ namespace vk
 		case VK_FORMAT_BC3_UNORM_BLOCK:
 			return VK_FORMAT_BC3_SRGB_BLOCK;
 		default:
-			return rgb_format;
+			return VK_FORMAT_UNDEFINED;
+		}
+	}
+
+	VkFormat get_compatible_snorm_format(VkFormat rgb_format)
+	{
+		switch (rgb_format)
+		{
+		// 8-bit
+		case VK_FORMAT_R8_UNORM:
+			return VK_FORMAT_R8_SNORM;
+		case VK_FORMAT_R8G8_UNORM:
+			return VK_FORMAT_R8G8_SNORM;
+		case VK_FORMAT_R8G8B8A8_UNORM:
+			return VK_FORMAT_R8G8B8A8_SNORM;
+		case VK_FORMAT_B8G8R8A8_UNORM:
+			return VK_FORMAT_B8G8R8A8_SNORM;
+		// 16-bit
+		case VK_FORMAT_R16_UNORM:
+			return VK_FORMAT_R16_SNORM;
+		case VK_FORMAT_R16G16_UNORM:
+			return VK_FORMAT_R16G16_SNORM;
+		default:
+			return VK_FORMAT_UNDEFINED;
 		}
 	}
 
@@ -273,9 +309,8 @@ namespace vk
 		case VK_FORMAT_R16G16_UNORM:
 		case VK_FORMAT_R16G16_SFLOAT:
 		case VK_FORMAT_R8G8B8A8_UNORM:
-		case VK_FORMAT_R8G8B8A8_SRGB:
 		case VK_FORMAT_B8G8R8A8_UNORM:
-		//case VK_FORMAT_B8G8R8A8_SRGB:
+		case VK_FORMAT_B8G8R8A8_SRGB:
 		case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
 		case VK_FORMAT_BC2_UNORM_BLOCK:
 		case VK_FORMAT_BC3_UNORM_BLOCK:
@@ -297,7 +332,7 @@ namespace vk
 			break;
 		}
 
-		fmt::throw_exception("Unexpected _vkFormat 0x%X", static_cast<u32>(format));
+		fmt::throw_exception("Unexpected vkFormat 0x%X", static_cast<u32>(format));
 	}
 
 	std::pair<u8, u8> get_format_element_size(VkFormat format)
@@ -315,9 +350,8 @@ namespace vk
 		case VK_FORMAT_R8G8_SNORM:
 			return{ 2, 1 }; //UNSIGNED_SHORT_8_8
 		case VK_FORMAT_R8G8B8A8_UNORM:
-		case VK_FORMAT_R8G8B8A8_SRGB:
 		case VK_FORMAT_B8G8R8A8_UNORM:
-		//case VK_FORMAT_B8G8R8A8_SRGB:
+		case VK_FORMAT_B8G8R8A8_SRGB:
 			return{ 4, 1 }; //UNSIGNED_INT_8_8_8_8
 		//16-bit
 		case VK_FORMAT_R16_UINT:
@@ -359,7 +393,7 @@ namespace vk
 			break;
 		}
 
-		fmt::throw_exception("Unexpected _vkFormat 0x%X", static_cast<u32>(format));
+		fmt::throw_exception("Unexpected vkFormat 0x%X", static_cast<u32>(format));
 	}
 
 	std::pair<bool, u32> get_format_convert_flags(VkFormat format)
@@ -371,7 +405,7 @@ namespace vk
 			return{ false, 1 };
 		case VK_FORMAT_B8G8R8A8_UNORM:
 		case VK_FORMAT_R8G8B8A8_UNORM:
-		//case VK_FORMAT_B8G8R8A8_SRGB:
+		case VK_FORMAT_B8G8R8A8_SRGB:
 		case VK_FORMAT_R8G8B8A8_SRGB:
 			return{ true, 4 };
 			//16-bit
@@ -412,7 +446,7 @@ namespace vk
 			break;
 		}
 
-		fmt::throw_exception("Unknown _vkFormat 0x%x", static_cast<u32>(format));
+		fmt::throw_exception("Unknown vkFormat 0x%x", static_cast<u32>(format));
 	}
 
 	bool formats_are_bitcast_compatible(VkFormat format1, VkFormat format2)

@@ -28,6 +28,7 @@ namespace vk
 		NV_turing,
 		NV_ampere,
 		NV_lovelace,
+		NV_blackwell,
 		_NV_ENUM_MAX_, // Do not insert NV enums beyond this point
 
 		// APPLE
@@ -56,8 +57,7 @@ namespace vk
 		V3DV,
 		HONEYKRISP,
 		PANVK,
-		ARM_MALI,
-        ADRENO,
+		ARM_MALI
 	};
 
 	driver_vendor get_driver_vendor();

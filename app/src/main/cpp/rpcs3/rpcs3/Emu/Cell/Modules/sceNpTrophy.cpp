@@ -592,21 +592,13 @@ error_code sceNpTrophyRegisterContext(ppu_thread& ppu, u32 context, u32 handle, 
 
 	// open trophy pack file
 	std::string trp_path = vfs::get(Emu.GetDir() + "TROPDIR/" + ctxt->trp_name + "/TROPHY.TRP");
-    fs::file stream;
-    if(Emu.GetIsoFs()&&trp_path[0]==':')
-        stream=fs::file(*Emu.GetIsoFs(), trp_path);
-    else
-        stream=fs::file(trp_path);
+	fs::file stream(trp_path);
 
-    if (!stream && Emu.GetCat() == "GD")
+	if (!stream && Emu.GetCat() == "GD")
 	{
 		sceNpTrophy.warning("sceNpTrophyRegisterContext failed to open trophy file from boot path: '%s' (%s)", trp_path, fs::g_tls_error);
 		trp_path = vfs::get("/dev_bdvd/PS3_GAME/TROPDIR/" + ctxt->trp_name + "/TROPHY.TRP");
-
-        if(Emu.GetIsoFs()&&trp_path[0]==':')
-            stream=fs::file(*Emu.GetIsoFs(), trp_path);
-        else
-            stream=fs::file(trp_path);
+		stream.open(trp_path);
 	}
 
 	// check if exists and opened
@@ -835,21 +827,13 @@ error_code sceNpTrophyGetRequiredDiskSpace(u32 context, u32 handle, vm::ptr<u64>
 	{
 		// open trophy pack file
 		std::string trophy_path = vfs::get(Emu.GetDir() + "TROPDIR/" + ctxt->trp_name + "/TROPHY.TRP");
-        fs::file stream;
-        if(Emu.GetIsoFs()&&trophy_path[0]==':')
-            stream=fs::file(*Emu.GetIsoFs(), trophy_path);
-        else
-            stream=fs::file(trophy_path);
+		fs::file stream(trophy_path);
 
-        if (!stream && Emu.GetCat() == "GD")
+		if (!stream && Emu.GetCat() == "GD")
 		{
 			sceNpTrophy.warning("sceNpTrophyGetRequiredDiskSpace failed to open trophy file from boot path: '%s'", trophy_path);
 			trophy_path = vfs::get("/dev_bdvd/PS3_GAME/TROPDIR/" + ctxt->trp_name + "/TROPHY.TRP");
-
-            if(Emu.GetIsoFs()&&trophy_path[0]==':')
-                stream=fs::file(*Emu.GetIsoFs(), trophy_path);
-            else
-                stream=fs::file(trophy_path);
+			stream.open(trophy_path);
 		}
 
 		// check if exists and opened
@@ -1042,14 +1026,14 @@ error_code sceNpTrophyUnlockTrophy(ppu_thread& ppu, u32 context, u32 handle, s32
 
 	auto& trophy_manager = g_fxo->get<sce_np_trophy_manager>();
 
-	reader_lock lock(trophy_manager.mtx);
+	std::scoped_lock lock(trophy_manager.mtx);
 
 	if (!trophy_manager.is_initialized)
 	{
 		return SCE_NP_TROPHY_ERROR_NOT_INITIALIZED;
 	}
 
-	const auto [ctxt, error] = trophy_manager.get_context_ex(context, handle);
+	const auto [ctxt, error] = trophy_manager.get_context_ex(context, handle, true);
 
 	if (error)
 	{
@@ -1200,9 +1184,9 @@ error_code sceNpTrophyGetTrophyUnlockState(u32 context, u32 handle, vm::ptr<SceN
 	for (u32 id = 0; id < count_; id++)
 	{
 		if (tropusr->GetTrophyUnlockState(id))
-			flags->flag_bits[id / 32] |= 1 << (id % 32);
+			flags->flag_bits[id / 32] |= 1u << (id % 32);
 		else
-			flags->flag_bits[id / 32] &= ~(1 << (id % 32));
+			flags->flag_bits[id / 32] &= ~(1u << (id % 32));
 	}
 
 	return CELL_OK;
@@ -1545,6 +1529,11 @@ error_code sceNpTrophyGetTrophyIcon(u32 context, u32 handle, s32 trophyId, vm::p
 	return CELL_OK;
 }
 
+error_code sceNpTrophyNetworkSync()
+{
+	UNIMPLEMENTED_FUNC(sceNpTrophy);
+	return CELL_OK;
+}
 
 DECLARE(ppu_module_manager::sceNpTrophy)("sceNpTrophy", []()
 {
@@ -1569,4 +1558,5 @@ DECLARE(ppu_module_manager::sceNpTrophy)("sceNpTrophy", []()
 	REG_FUNC(sceNpTrophy, sceNpTrophyGetTrophyDetails);
 	REG_FUNC(sceNpTrophy, sceNpTrophyGetTrophyInfo);
 	REG_FUNC(sceNpTrophy, sceNpTrophyGetGameIcon);
+	REG_FUNC(sceNpTrophy, sceNpTrophyNetworkSync);
 });

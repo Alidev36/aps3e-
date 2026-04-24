@@ -8,7 +8,7 @@ OS: Android 14 (Samsung A15 variant)
 The most critical error identified in the logs originates from the mali_gralloc driver and the emulator's native engine (libe.so).
 
 * Error Signature: E/mali_gralloc: ERROR: Unrecognized and/or unsupported format 0x38 and usage 0xb00.
-* Analysis: The emulator is attempting to allocate a memory buffer using format 0x38 (Decimal 56). In the Vulkan specification, this often corresponds to VK_FORMAT_R8G8B8A8_UNORM. 
+* Analysis: The emulator is attempting to allocate a memory buffer using format 0x38 (Decimal 56). In the Vulkan specification, this often corresponds to VK_FORMAT_R8G8B8A8_UNORM.
 * Conflict: The Mali-G57 (Valhall architecture) driver is rejecting this specific format when combined with the memory usage flags 0xb00. This usually happens when the emulator tries to create a surface for the "Blit" operation (rendering the PS3 frame to the Android screen) using a format that the mobile GPU's hardware composer cannot handle.
 
 2. Native Library Linkage Issues

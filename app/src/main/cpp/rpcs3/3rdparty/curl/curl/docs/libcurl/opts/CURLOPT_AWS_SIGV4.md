@@ -62,8 +62,8 @@ Example with "Test:Try", when curl uses the algorithm, it generates
 for "date", **"test4_request"** for "request type",
 **"SignedHeaders=content-type;host;x-try-date"** for "signed headers"
 
-If you use just "test", instead of "test:try", test is used for every
-generated string.
+If you use "test", instead of "test:try", test is used for every generated
+string.
 
 Setting CURLOPT_HTTPAUTH(3) with the CURLAUTH_AWS_SIGV4 bit set is the same as
 setting this option with a **"aws:amz"** parameter.
@@ -123,4 +123,7 @@ the special value "UNSIGNED-PAYLOAD".
 
 # RETURN VALUE
 
-Returns CURLE_OK if the option is supported, and CURLE_UNKNOWN_OPTION if not.
+curl_easy_setopt(3) returns a CURLcode indicating success or error.
+
+CURLE_OK (0) means everything was OK, non-zero means an error occurred, see
+libcurl-errors(3).

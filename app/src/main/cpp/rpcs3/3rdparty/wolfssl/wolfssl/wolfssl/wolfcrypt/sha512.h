@@ -1,12 +1,12 @@
 /* sha512.h
  *
- * Copyright (C) 2006-2023 wolfSSL Inc.
+ * Copyright (C) 2006-2026 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
  * wolfSSL is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation; either version 3 of the License, or
  * (at your option) any later version.
  *
  * wolfSSL is distributed in the hope that it will be useful,
@@ -59,11 +59,14 @@
     #include <wolfssl/wolfcrypt/port/silabs/silabs_hash.h>
 #endif
 #if defined(WOLFSSL_PSOC6_CRYPTO)
+    #include <wolfssl/wolfcrypt/port/cypress/psoc6_crypto.h>
+
     #include "cy_crypto_core_sha.h"
     #include "cy_device_headers.h"
     #include "cy_crypto_common.h"
     #include "cy_crypto_core.h"
 #endif
+
 #if defined(WOLFSSL_KCAPI_HASH)
     #include <wolfssl/wolfcrypt/port/kcapi/kcapi_hash.h>
 #endif
@@ -73,13 +76,11 @@
     #include "fsl_caam.h"
 #endif
 
-#if defined(_MSC_VER)
-    #define SHA512_NOINLINE __declspec(noinline)
-#elif defined(__IAR_SYSTEMS_ICC__) || defined(__GNUC__)
-    #define SHA512_NOINLINE __attribute__((noinline))
-#else
-    #define SHA512_NOINLINE
+#ifdef STM32_HASH
+    #include <wolfssl/wolfcrypt/port/st/stm32.h>
 #endif
+
+#define SHA512_NOINLINE WC_NO_INLINE
 
 #ifdef WOLFSSL_SHA512
 
@@ -125,7 +126,7 @@ enum {
     #include "wolfssl/wolfcrypt/port/caam/wolfcaam_sha.h"
 #elif defined(WOLFSSL_RENESAS_RSIP) && \
      !defined(NO_WOLFSSL_RENESAS_FSPSM_HASH)
-    #include "wolfssl/wolfcrypt/port/Renesas/renesas-fspsm-crypt.h"
+    #include "wolfssl/wolfcrypt/port/Renesas/renesas_fspsm_internal.h"
 
 #else
 #if defined(WOLFSSL_SE050) && defined(WOLFSSL_SE050_HASH)
@@ -135,12 +136,15 @@ enum {
     #include "mcapi.h"
     #include "mcapi_error.h"
 #endif
+#if defined(WOLFSSL_MAX3266X) || defined(WOLFSSL_MAX3266X_OLD)
+    #include "wolfssl/wolfcrypt/port/maxim/max3266x.h"
+#endif
 /* wc_Sha512 digest */
 struct wc_Sha512 {
-#ifdef WOLFSSL_PSOC6_CRYPTO
+#if defined(PSOC6_HASH_SHA2)
     cy_stc_crypto_sha_state_t hash_state;
-    cy_en_crypto_sha_mode_t sha_mode;
     cy_stc_crypto_v2_sha512_buffers_t sha_buffers;
+    void*   heap;
 #else
     word64  digest[WC_SHA512_DIGEST_SIZE / sizeof(word64)];
     word64  buffer[WC_SHA512_BLOCK_SIZE  / sizeof(word64)];
@@ -195,6 +199,12 @@ struct wc_Sha512 {
 #ifdef HAVE_ARIA
     MC_HSESSION hSession;
 #endif
+#if defined(STM32_HASH_SHA512)
+    STM32_HASH_Context stmCtx;
+#endif
+#if defined(WOLFSSL_SHA512_HASHTYPE)
+    int hashType; /* used to determine which SHA512 is used */
+#endif /* WOLFSSL_SHA512_HASHTYPE */
 #endif /* WOLFSSL_PSOC6_CRYPTO */
 };
 
@@ -210,22 +220,20 @@ struct wc_Sha512 {
 
 #endif /* HAVE_FIPS */
 
-#ifdef WOLFSSL_SHA512
+#if defined(WOLFSSL_SHA512)
 
 #ifdef WOLFSSL_ARMASM
-#ifdef __aarch64__
-#ifndef WOLFSSL_ARMASM_CRYPTO_SHA512
-    void Transform_Sha512_Len_neon(wc_Sha512* sha512, const byte* data,
-        word32 len);
-    #define Transform_Sha512_Len    Transform_Sha512_Len_neon
-#else
-    void Transform_Sha512_Len_crypto(wc_Sha512* sha512, const byte* data,
-        word32 len);
-    #define Transform_Sha512_Len    Transform_Sha512_Len_crypto
+#if !defined(WOLFSSL_ARMASM_NO_NEON)
+WOLFSSL_LOCAL void Transform_Sha512_Len_neon(wc_Sha512* sha512,
+    const byte* data, word32 len);
+#ifdef WOLFSSL_ARMASM_CRYPTO_SHA512
+WOLFSSL_LOCAL void Transform_Sha512_Len_crypto(wc_Sha512* sha512,
+    const byte* data, word32 len);
 #endif
-#else
-extern void Transform_Sha512_Len(wc_Sha512* sha512, const byte* data,
-    word32 len);
+#endif
+#ifndef __aarch64__
+WOLFSSL_LOCAL void Transform_Sha512_Len_base(wc_Sha512* sha512,
+    const byte* data, word32 len);
 #endif
 #endif
 

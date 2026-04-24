@@ -3,6 +3,7 @@
 #include "overlay_message_dialog.h"
 #include "Emu/System.h"
 #include "Emu/system_config.h"
+#include "Emu/system_utils.hpp"
 #include "Emu/Cell/ErrorCodes.h"
 #include "Emu/IdManager.h"
 #include "Utilities/Thread.h"
@@ -19,11 +20,9 @@ namespace rsx
 			background.set_size(virtual_width, virtual_height);
 			background.back_color.a = 0.85f;
 
-            const u32 font_size=g_cfg.misc.font_size.get();
-
 			text_display.set_size(1100, 40);
 			text_display.set_pos(90, 364);
-			text_display.set_font("Arial", font_size);
+			text_display.set_font("Arial", 16);
 			text_display.align_text(overlay_element::text_align::center);
 			text_display.set_wrap_text(true);
 			text_display.back_color.a = 0.f;
@@ -41,12 +40,12 @@ namespace rsx
 			btn_ok.set_text(localized_string_id::RSX_OVERLAYS_MSG_DIALOG_YES);
 			btn_ok.set_size(140, 30);
 			btn_ok.set_pos(545, 420);
-			btn_ok.set_font("Arial", font_size);
+			btn_ok.set_font("Arial", 16);
 
 			btn_cancel.set_text(localized_string_id::RSX_OVERLAYS_MSG_DIALOG_NO);
 			btn_cancel.set_size(140, 30);
 			btn_cancel.set_pos(685, 420);
-			btn_cancel.set_font("Arial", font_size);
+			btn_cancel.set_font("Arial", 16);
 
 			if (g_cfg.sys.enter_button_assignment == enter_button_assign::circle)
 			{
@@ -78,7 +77,6 @@ namespace rsx
 				u16 text_w, text_h;
 				text_display.set_pos(90, 364);
 				text_display.set_text(text);
-                text_display.auto_resize(true);
 				text_display.measure_text(text_w, text_h);
 				text_display.translate(0, -(text_h - 16));
 			}
@@ -98,6 +96,11 @@ namespace rsx
 			if (background_image && background_image->get_data())
 			{
 				result.add(background_poster.get_compiled());
+
+				if (background_overlay_image && background_overlay_image->get_data())
+				{
+					result.add(background_overlay_poster.get_compiled());
+				}
 			}
 
 			result.add(background.get_compiled());
@@ -152,7 +155,7 @@ namespace rsx
 					return_code = CELL_MSGDIALOG_BUTTON_YES;
 				}
 
-				Emu.GetCallbacks().play_sound(fs::get_config_dir() + "sounds/snd_decide.wav");
+				play_sound(sound_effect::accept);
 				break;
 			}
 			case pad_button::circle:
@@ -172,7 +175,7 @@ namespace rsx
 					return_code = CELL_MSGDIALOG_BUTTON_NO;
 				}
 
-				Emu.GetCallbacks().play_sound(fs::get_config_dir() + "sounds/snd_cancel.wav");
+				play_sound(sound_effect::cancel);
 				break;
 			}
 			default: return;
@@ -235,10 +238,7 @@ namespace rsx
 
 			if (!type.se_mute_on)
 			{
-				if (type.se_normal)
-					Emu.GetCallbacks().play_sound(fs::get_config_dir() + "sounds/snd_system_ok.wav");
-				else
-					Emu.GetCallbacks().play_sound(fs::get_config_dir() + "sounds/snd_system_ng.wav");
+				play_sound(type.se_normal ? sound_effect::dialog_ok : sound_effect::dialog_error);
 			}
 
 			set_text(text);
@@ -352,7 +352,6 @@ namespace rsx
 
 		void message_dialog::update_custom_background()
 		{
-
 			if (custom_background_allowed && g_cfg.video.shader_preloading_dialog.use_custom_background)
 			{
 				bool dirty = std::exchange(background_blur_strength, g_cfg.video.shader_preloading_dialog.blur_strength.get()) != background_blur_strength;
@@ -360,12 +359,28 @@ namespace rsx
 
 				if (!background_image)
 				{
-					if (const auto picture_path = Emu.GetBackgroundPicturePath(); fs::exists(picture_path))
+					// Search for any useable background picture in the given order
+					game_content_type content_type = game_content_type::background_picture;
+
+					for (game_content_type type : { game_content_type::background_picture, game_content_type::overlay_picture, game_content_type::content_icon })
 					{
-                        if(Emu.GetIsoFs()&&picture_path[0]==':') background_image = std::make_unique<image_info>(Emu.GetIsoFs()->get_data_tiny(picture_path));
-                        else
-						background_image = std::make_unique<image_info>(picture_path.c_str());
-						dirty |= !!background_image->get_data();
+						if (const std::string picture_path = rpcs3::utils::get_game_content_path(type); !picture_path.empty())
+						{
+							content_type = type;
+							background_image = std::make_unique<image_info>(picture_path);
+							dirty |= !!background_image->get_data();
+							break;
+						}
+					}
+
+					// Search for an overlay picture in the same dir in case we found a real background picture
+					if (background_image && !background_overlay_image && content_type == game_content_type::background_picture)
+					{
+						if (const std::string picture_path = rpcs3::utils::get_game_content_path(game_content_type::overlay_picture); !picture_path.empty())
+						{
+							background_overlay_image = std::make_unique<image_info>(picture_path);
+							dirty |= !!background_overlay_image->get_data();
+						}
 					}
 				}
 
@@ -394,6 +409,23 @@ namespace rsx
 						const int padding = (background_poster.w - static_cast<int>(background_image->w * (background_poster.h / static_cast<double>(background_image->h)))) / 2;
 						background_poster.set_padding(padding, padding, 0, 0);
 					}
+
+					if (background_overlay_image && background_overlay_image->get_data())
+					{
+						constexpr f32 reference_factor = 2.0f / 3.0f;
+						const f32 image_aspect = background_overlay_image->w / static_cast<f32>(background_overlay_image->h);
+						const f32 overlay_width = background_overlay_image->w * reference_factor;
+						const f32 overlay_height = overlay_width / image_aspect;
+						const u16 overlay_x = static_cast<u16>(std::min(virtual_width - overlay_width, (virtual_width * reference_factor) - (overlay_width / 2.0f)));
+						const u16 overlay_y = static_cast<u16>(std::min(virtual_height - overlay_height, (virtual_height * reference_factor) - (overlay_height / 2.0f)));
+						const f32 color = (100 - background_darkening_strength) / 100.f;
+
+						background_overlay_poster.fore_color = color4f(color, color, color, 1.);
+						background_overlay_poster.set_size(static_cast<u16>(overlay_width), static_cast<u16>(overlay_height));
+						background_overlay_poster.set_pos(overlay_x, overlay_y);
+						background_overlay_poster.set_raw_image(background_overlay_image.get());
+						background_overlay_poster.set_blur_strength(static_cast<u8>(background_blur_strength));
+					}
 				}
 			}
 			else
@@ -403,6 +435,13 @@ namespace rsx
 					background_poster.clear_image();
 					background_image.reset();
 				}
+
+				if (background_overlay_image)
+				{
+					background_overlay_poster.clear_image();
+					background_overlay_image.reset();
+				}
+
 				background.back_color.a = 0.85f;
 			}
 		}

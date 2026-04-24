@@ -4,11 +4,8 @@
 #include "util/atomic.hpp"
 #include "util/shared_ptr.hpp"
 
+#include <thread>
 #include <string>
-#include <concepts>
-
-#include "mutex.h"
-#include "lockless.h"
 
 // Hardware core layout
 enum class native_core_arrangement : u32
@@ -100,7 +97,7 @@ class thread_future
 	thread_future* prev{};
 
 protected:
-	atomic_t<void(*)(thread_base*, thread_future*)> exec{};
+	atomic_t<void(*)(const thread_base*, thread_future*)> exec{};
 
 	atomic_t<u32> done{0};
 
@@ -378,13 +375,23 @@ private:
 	static const u64 process_affinity_mask;
 };
 
+#if defined(__has_cpp_attribute)
+#if __has_cpp_attribute(no_unique_address)
+#define NO_UNIQUE_ADDRESS [[no_unique_address]]
+#else
+#define NO_UNIQUE_ADDRESS
+#endif
+#else
+#define NO_UNIQUE_ADDRESS
+#endif
+
 // Used internally
 template <bool Discard, typename Ctx, typename... Args>
 class thread_future_t : public thread_future, result_storage<Ctx, std::conditional_t<Discard, int, void>, Args...>
 {
-	[[no_unique_address]] decltype(std::make_tuple(std::forward<Args>(std::declval<Args>())...)) m_args;
+	NO_UNIQUE_ADDRESS decltype(std::make_tuple(std::forward<Args>(std::declval<Args>())...)) m_args;
 
-	[[no_unique_address]] Ctx m_func;
+	NO_UNIQUE_ADDRESS Ctx m_func;
 
 	using future = thread_future_t;
 
@@ -393,7 +400,7 @@ public:
 		: m_args(std::forward<Args>(args)...)
 		, m_func(std::forward<Ctx>(func))
 	{
-		thread_future::exec.raw() = +[](thread_base* tb, thread_future* tf)
+		thread_future::exec.raw() = +[](const thread_base* tb, thread_future* tf)
 		{
 			const auto _this = static_cast<future*>(tf);
 
@@ -459,6 +466,8 @@ public:
 namespace stx
 {
 	struct launch_retainer;
+
+	extern atomic_t<u32> g_launch_retainer;
 }
 
 // Derived from the callable object Context, possibly a lambda
@@ -475,6 +484,11 @@ class named_thread final : public Context, result_storage<Context>, thread_base
 
 	u64 entry_point2()
 	{
+		while (u32 value = stx::g_launch_retainer)
+		{
+			stx::g_launch_retainer.wait(value);
+		}
+
 		thread::initialize([]()
 		{
 			if constexpr (!result::empty)

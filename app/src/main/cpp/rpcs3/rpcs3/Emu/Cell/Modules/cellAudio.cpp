@@ -1,10 +1,11 @@
 #include "stdafx.h"
 #include "Emu/System.h"
 #include "Emu/system_config.h"
+#include "Emu/Audio/audio_utils.h"
 #include "Emu/Cell/PPUModule.h"
+#include "Emu/Cell/timers.hpp"
 #include "Emu/Cell/lv2/sys_process.h"
 #include "Emu/Cell/lv2/sys_event.h"
-#include "Emu/Cell/Modules/cellAudioOut.h"
 #include "cellAudio.h"
 #include "util/video_provider.h"
 
@@ -300,7 +301,7 @@ void audio_ringbuffer::commit_data(f32* buf, u32 sample_cnt)
 	if (g_recording_mode != recording_mode::stopped)
 	{
 		utils::video_provider& provider = g_fxo->get<utils::video_provider>();
-		provider.present_samples(reinterpret_cast<u8*>(buf), sample_cnt, cfg.audio_channels);
+		provider.present_samples(reinterpret_cast<const u8*>(buf), sample_cnt, cfg.audio_channels);
 	}
 
 	// Downmix if necessary
@@ -1041,7 +1042,7 @@ void cell_audio_thread::mix(float* out_buffer, s32 offset)
 	constexpr u32 out_channels = static_cast<u32>(channels);
 	constexpr u32 out_buffer_sz = out_channels * AUDIO_BUFFER_SAMPLES;
 
-	const float master_volume = g_cfg.audio.volume / 100.0f;
+	const float master_volume = audio::get_volume();
 
 	// Reset out_buffer
 	std::memset(out_buffer, 0, out_buffer_sz * sizeof(float));

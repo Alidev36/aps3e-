@@ -6,6 +6,7 @@
 #include "Emu/IdManager.h"
 #include "Emu/Cell/ErrorCodes.h"
 #include "Emu/Cell/PPUModule.h"
+#include "Emu/Cell/timers.hpp"
 #include "Emu/Cell/lv2/sys_fs.h"
 #include "Emu/Cell/lv2/sys_sync.h"
 
@@ -463,6 +464,8 @@ error_code cellHddGameCheck(ppu_thread& ppu, u32 version, vm::cptr<char> dirName
 	{
 		get->isNewData = CELL_HDDGAME_ISNEWDATA_NODIR;
 		get->getParam = {};
+
+		cellGame.warning("cellHddGameCheck(): New data.");
 	}
 	else
 	{
@@ -475,13 +478,22 @@ error_code cellHddGameCheck(ppu_thread& ppu, u32 version, vm::cptr<char> dirName
 		if (psf.contains("RESOLUTION")) get->getParam.resolution = ::at32(psf, "RESOLUTION").as_integer();
 		if (psf.contains("SOUND_FORMAT")) get->getParam.soundFormat = ::at32(psf, "SOUND_FORMAT").as_integer();
 		if (psf.contains("TITLE")) strcpy_trunc(get->getParam.title, ::at32(psf, "TITLE").as_string());
-		if (psf.contains("APP_VER")) strcpy_trunc(get->getParam.dataVersion, ::at32(psf, "APP_VER").as_string());
-		if (psf.contains("TITLE_ID")) strcpy_trunc(get->getParam.titleId, ::at32(psf, "TITLE_ID").as_string());
+
+		// Old games do not have APP_VER key
+		strcpy_trunc(get->getParam.dataVersion, psf::get_string(psf, "APP_VER", psf::get_string(sfo, "VERSION", "")));
+
+		if (psf.contains("TITLE_ID"))
+		{
+			strcpy_trunc(get->getParam.titleId, ::at32(psf, "TITLE_ID").as_string());
+		}
 
 		for (u32 i = 0; i < CELL_HDDGAME_SYSP_LANGUAGE_NUM; i++)
 		{
 			strcpy_trunc(get->getParam.titleLang[i], psf::get_string(psf, fmt::format("TITLE_%02d", i)));
 		}
+
+		cellGame.warning("cellHddGameCheck(): Data exists:\nATTRIBUTE: 0x%x, RESOLUTION: 0x%x, SOUND_FORMAT: 0x%x, dataVersion: %s"
+			, get->getParam.attribute, get->getParam.resolution, get->getParam.soundFormat, std::span<const u8>(reinterpret_cast<const u8*>(get->getParam.dataVersion), 6));
 	}
 
 	// TODO ?
@@ -549,7 +561,7 @@ error_code cellHddGameCheck(ppu_thread& ppu, u32 version, vm::cptr<char> dirName
 
 	case CELL_HDDGAME_CBRESULT_ERR_NOSPACE:
 		cellGame.error("cellHddGameCheck(): callback returned CELL_HDDGAME_CBRESULT_ERR_NOSPACE. Space Needed: %d KB", result->errNeedSizeKB);
-		error_msg = get_localized_string(localized_string_id::CELL_HDD_GAME_CHECK_NOSPACE, fmt::format("%d", result->errNeedSizeKB).c_str());
+		error_msg = get_localized_string(localized_string_id::CELL_HDD_GAME_CHECK_NOSPACE, "%d", result->errNeedSizeKB);
 		break;
 
 	case CELL_HDDGAME_CBRESULT_ERR_BROKEN:
@@ -564,12 +576,12 @@ error_code cellHddGameCheck(ppu_thread& ppu, u32 version, vm::cptr<char> dirName
 
 	case CELL_HDDGAME_CBRESULT_ERR_INVALID:
 		cellGame.error("cellHddGameCheck(): callback returned CELL_HDDGAME_CBRESULT_ERR_INVALID. Error message: %s", result->invalidMsg);
-		error_msg = get_localized_string(localized_string_id::CELL_HDD_GAME_CHECK_INVALID, fmt::format("%s", result->invalidMsg).c_str());
+		error_msg = get_localized_string(localized_string_id::CELL_HDD_GAME_CHECK_INVALID, "%s", result->invalidMsg);
 		break;
 
 	default:
-		cellGame.error("cellHddGameCheck(): callback returned unknown error (code=0x%x). Error message: %s", result->invalidMsg);
-		error_msg = get_localized_string(localized_string_id::CELL_HDD_GAME_CHECK_INVALID, fmt::format("%s", result->invalidMsg).c_str());
+		cellGame.error("cellHddGameCheck(): callback returned unknown error (code=0x%x). Error message: %s", result->result, result->invalidMsg);
+		error_msg = get_localized_string(localized_string_id::CELL_HDD_GAME_CHECK_INVALID, "%s", result->invalidMsg);
 		break;
 	}
 
@@ -761,8 +773,7 @@ error_code cellGameBootCheck(vm::ptr<u32> type, vm::ptr<u32> attributes, vm::ptr
 		*attributes = 0; // TODO
 		// TODO: dirName might be a read only string when BootCheck is called on a disc game. (e.g. Ben 10 Ultimate Alien: Cosmic Destruction)
 
-		sfo = Emu.GetIsoFs()?psf::load_object(fs::file(*Emu.GetIsoFs(),":PS3_GAME/PARAM.SFO"),"PS3_GAME/PARAM.SFO")
-                :psf::load_object(vfs::get("/dev_bdvd/PS3_GAME/PARAM.SFO"));
+		sfo = psf::load_object(vfs::get("/dev_bdvd/PS3_GAME/PARAM.SFO"));
 	}
 	else if (cat == "GD")
 	{
@@ -883,9 +894,7 @@ error_code cellGameDataCheck(u32 type, vm::cptr<char> dirName, vm::ptr<CellGameC
 	// Null size does not change it
 	lv2_sleep(type == CELL_GAME_GAMETYPE_DISC ? 300000 : 120000);
 
-    std::string local_sfo_path=vfs::get(dir + "/PARAM.SFO");
-	auto [sfo, psf_error] = type == CELL_GAME_GAMETYPE_DISC&&Emu.GetIsoFs() ?psf::load(fs::file(*Emu.GetIsoFs(),local_sfo_path),local_sfo_path.substr(1))
-            :psf::load(local_sfo_path);
+	auto [sfo, psf_error] = psf::load(vfs::get(dir + "/PARAM.SFO"));
 
 	if (const std::string_view cat = psf::get_string(sfo, "CATEGORY"); [&]()
 	{
@@ -1171,7 +1180,7 @@ error_code cellGameDataCheckCreate2(ppu_thread& ppu, u32 version, vm::cptr<char>
 	}
 	case CELL_GAMEDATA_CBRESULT_ERR_NOSPACE:
 		cellGame.error("cellGameDataCheckCreate2(): callback returned CELL_GAMEDATA_CBRESULT_ERR_NOSPACE. Space Needed: %d KB", cbResult->errNeedSizeKB);
-		error_msg = get_localized_string(localized_string_id::CELL_GAMEDATA_CHECK_NOSPACE, fmt::format("%d", cbResult->errNeedSizeKB).c_str());
+		error_msg = get_localized_string(localized_string_id::CELL_GAMEDATA_CHECK_NOSPACE, "%d", cbResult->errNeedSizeKB);
 		break;
 
 	case CELL_GAMEDATA_CBRESULT_ERR_BROKEN:
@@ -1186,12 +1195,12 @@ error_code cellGameDataCheckCreate2(ppu_thread& ppu, u32 version, vm::cptr<char>
 
 	case CELL_GAMEDATA_CBRESULT_ERR_INVALID:
 		cellGame.error("cellGameDataCheckCreate2(): callback returned CELL_GAMEDATA_CBRESULT_ERR_INVALID. Error message: %s", cbResult->invalidMsg);
-		error_msg = get_localized_string(localized_string_id::CELL_GAMEDATA_CHECK_INVALID, fmt::format("%s", cbResult->invalidMsg).c_str());
+		error_msg = get_localized_string(localized_string_id::CELL_GAMEDATA_CHECK_INVALID, "%s", cbResult->invalidMsg);
 		break;
 
 	default:
-		cellGame.error("cellGameDataCheckCreate2(): callback returned unknown error (code=0x%x). Error message: %s", cbResult->invalidMsg);
-		error_msg = get_localized_string(localized_string_id::CELL_GAMEDATA_CHECK_INVALID, fmt::format("%s", cbResult->invalidMsg).c_str());
+		cellGame.error("cellGameDataCheckCreate2(): callback returned unknown error (code=0x%x). Error message: %s", cbResult->result, cbResult->invalidMsg);
+		error_msg = get_localized_string(localized_string_id::CELL_GAMEDATA_CHECK_INVALID, "%s", cbResult->invalidMsg);
 		break;
 	}
 
@@ -1688,7 +1697,7 @@ error_code cellGameContentErrorDialog(s32 type, s32 errNeedSizeKB, vm::cptr<char
 		break;
 	case CELL_GAME_ERRDIALOG_NOSPACE:
 		// Not enough available space. The application will continue.
-		error_msg = get_localized_string(localized_string_id::CELL_GAME_ERROR_NOSPACE, fmt::format("%d", errNeedSizeKB).c_str());
+		error_msg = get_localized_string(localized_string_id::CELL_GAME_ERROR_NOSPACE, "%d", errNeedSizeKB);
 		break;
 	case CELL_GAME_ERRDIALOG_BROKEN_EXIT_GAMEDATA:
 		// Game data is corrupted. The application will be terminated.
@@ -1700,7 +1709,7 @@ error_code cellGameContentErrorDialog(s32 type, s32 errNeedSizeKB, vm::cptr<char
 		break;
 	case CELL_GAME_ERRDIALOG_NOSPACE_EXIT:
 		// Not enough available space. The application will be terminated.
-		error_msg = get_localized_string(localized_string_id::CELL_GAME_ERROR_NOSPACE_EXIT, fmt::format("%d", errNeedSizeKB).c_str());
+		error_msg = get_localized_string(localized_string_id::CELL_GAME_ERROR_NOSPACE_EXIT, "%d", errNeedSizeKB);
 		break;
 	default:
 		return CELL_GAME_ERROR_PARAM;
@@ -1714,7 +1723,7 @@ error_code cellGameContentErrorDialog(s32 type, s32 errNeedSizeKB, vm::cptr<char
 		}
 
 		error_msg += '\n';
-		error_msg += get_localized_string(localized_string_id::CELL_GAME_ERROR_DIR_NAME, fmt::format("%s", dirName).c_str());
+		error_msg += get_localized_string(localized_string_id::CELL_GAME_ERROR_DIR_NAME, "%s", dirName);
 	}
 
 	return open_exit_dialog(error_msg, type > CELL_GAME_ERRDIALOG_NOSPACE, msg_dialog_source::_cellGame);
@@ -1738,7 +1747,7 @@ error_code cellGameThemeInstall(vm::cptr<char> usrdirPath, vm::cptr<char> fileNa
 	{
 		u32 magic{};
 
-		if (src_path.ends_with(".p3t") || !theme.read(magic) || magic != "P3TF"_u32)
+		if (!fmt::to_lower(src_path).ends_with(".p3t") || !theme.read(magic) || magic != "P3TF"_u32)
 		{
 			return CELL_GAME_ERROR_INVALID_THEME_FILE;
 		}
@@ -1810,7 +1819,7 @@ error_code cellGameThemeInstallFromBuffer(ppu_thread& ppu, u32 fileSize, u32 buf
 				const u32 read_size = std::min(bufSize, fileSize - file_offset);
 				cellGame.notice("cellGameThemeInstallFromBuffer: writing %d bytes at pos %d", read_size, file_offset);
 
-				if (theme.write(reinterpret_cast<u8*>(buf.get_ptr()) + file_offset, read_size) != read_size)
+				if (theme.write(reinterpret_cast<u8*>(buf.get_ptr()), read_size) != read_size)
 				{
 					cellGame.error("cellGameThemeInstallFromBuffer: failed to write to destination file '%s' (error=%s)", dst_path, fs::g_tls_error);
 
@@ -1892,8 +1901,7 @@ error_code cellDiscGameGetBootDiscInfo(vm::ptr<CellDiscGameSystemFileParam> getP
 		return CELL_DISCGAME_ERROR_NOT_DISCBOOT;
 	}
 
-	const psf::registry psf = Emu.GetIsoFs()?psf::load_object(fs::file(*Emu.GetIsoFs(),vfs::get(dir + "/PARAM.SFO")),"PS3_GAME/PARAM.SFO")
-            :psf::load_object(vfs::get(dir + "/PARAM.SFO"));
+	const psf::registry psf = psf::load_object(vfs::get(dir + "/PARAM.SFO"));
 
 	if (psf.contains("PARENTAL_LEVEL")) getParam->parentalLevel = ::at32(psf, "PARENTAL_LEVEL").as_integer();
 	if (psf.contains("TITLE_ID")) strcpy_trunc(getParam->titleId, ::at32(psf, "TITLE_ID").as_string());

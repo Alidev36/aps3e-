@@ -1,12 +1,13 @@
 #pragma once
 
-#include "util/types.hpp"
-#include "gui_settings.h"
+#include "gui_save.h"
 
 #include <QListWidget>
 #include <QLabel>
 
 #include <memory>
+
+class gui_settings;
 
 namespace cfg
 {
@@ -23,11 +24,14 @@ public:
 	std::string get_selected_path() const;
 
 	// Reset this widget without saving the settings yet
-	void reset() const;
+	void reset();
 
 protected:
-	void add_new_directory() const;
-	void remove_directory() const;
+	QListWidgetItem* add_directory(const QString& path);
+	void add_new_directory();
+	void remove_directory();
+
+	void update_selection();
 
 	const QString EmptyPath = tr("Empty Path");
 
@@ -36,6 +40,7 @@ protected:
 	std::shared_ptr<gui_settings> m_gui_settings;
 
 	// UI variables needed in higher scope
-	QListWidget* m_dir_list;
-	QLabel* m_selected_config_label;
+	QListWidget* m_dir_list = nullptr;
+	QLabel* m_selected_config_label = nullptr;
+	bool m_is_changing_data = false;
 };

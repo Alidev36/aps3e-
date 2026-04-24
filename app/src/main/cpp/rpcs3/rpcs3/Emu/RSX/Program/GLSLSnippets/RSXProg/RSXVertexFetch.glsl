@@ -311,13 +311,7 @@ attribute_desc fetch_desc(const in int location)
 
 #ifdef VULKAN
 	// Fetch parameters streamed separately from draw parameters
-
-#ifdef FETCH_FROM_TEXEL
-uvec2 attrib = texelFetch(vertex_layout_stream, location + int(layout_ptr_offset)).xy;
-#else
-	uvec2 attrib = vertex_layout_stream[location + int(layout_ptr_offset)].xy;
-#endif
-
+	uvec2 attrib = get_draw_params().attrib_data[location];
 #else
 	// Data is packed into a ubo
 	const int block = (location >> 1);
@@ -338,6 +332,11 @@ uvec2 attrib = texelFetch(vertex_layout_stream, location + int(layout_ptr_offset
 	result.modulo = _test_bit(attrib.y, 31);
 	return result;
 }
+
+#ifdef VULKAN
+#define vertex_index_offset get_draw_params().vertex_index_offset
+#define vertex_base_index get_draw_params().vertex_base_index
+#endif
 
 vec4 read_location(const in int location)
 {

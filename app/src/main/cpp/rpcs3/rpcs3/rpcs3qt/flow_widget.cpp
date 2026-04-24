@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "flow_widget.h"
 
+#include <QApplication>
 #include <QScrollArea>
 #include <QVBoxLayout>
 #include <QStyleOption>
@@ -34,7 +35,7 @@ void flow_widget::add_widget(flow_widget_item* widget)
 {
 	if (widget)
 	{
-		m_widgets << widget;
+		m_widgets.push_back(widget);
 		m_flow_layout->addWidget(widget);
 
 		connect(widget, &flow_widget_item::navigate, this, &flow_widget::on_navigate);
@@ -48,24 +49,24 @@ void flow_widget::clear()
 	m_flow_layout->clear();
 }
 
-QList<flow_widget_item*>& flow_widget::items()
+std::set<flow_widget_item*> flow_widget::selected_items() const
 {
-	return m_widgets;
-}
+	std::set<flow_widget_item*> items;
 
-flow_widget_item* flow_widget::selected_item() const
-{
-	if (m_selected_index >= 0 && m_selected_index < m_widgets.size())
+	for (s64 index : m_selected_items)
 	{
-		return ::at32(m_widgets, m_selected_index);
+		if (index >= 0 && static_cast<usz>(index) < m_widgets.size())
+		{
+			items.insert(::at32(m_widgets, index));
+
+			if (!m_allow_multi_selection)
+			{
+				return items;
+			}
+		}
 	}
 
-	return nullptr;
-}
-
-QScrollArea* flow_widget::scroll_area() const
-{
-	return m_scroll_area;
+	return items;
 }
 
 void flow_widget::paintEvent(QPaintEvent* /*event*/)
@@ -77,16 +78,16 @@ void flow_widget::paintEvent(QPaintEvent* /*event*/)
 	style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);
 }
 
-int flow_widget::find_item(const flow_layout::position& pos)
+s64 flow_widget::find_item(const flow_layout::position& pos)
 {
-	if (pos.row < 0 || pos.col < 0)
+	if (!pos)
 	{
 		return -1;
 	}
 
 	const auto& positions = m_flow_layout->positions();
 
-	for (int i = 0; i < positions.size(); i++)
+	for (s64 i = 0; i < positions.size(); i++)
 	{
 		if (const auto& other = ::at32(positions, i); other.row == pos.row && other.col == pos.col)
 		{
@@ -97,7 +98,7 @@ int flow_widget::find_item(const flow_layout::position& pos)
 	return -1;
 }
 
- flow_layout::position flow_widget::find_item(flow_widget_item* item)
+flow_layout::position flow_widget::find_item(flow_widget_item* item)
 {
 	if (item)
 	{
@@ -105,7 +106,7 @@ int flow_widget::find_item(const flow_layout::position& pos)
 		const auto& positions = m_flow_layout->positions();
 		ensure(item_list.size() == positions.size());
 
-		for (int i = 0; i < item_list.size(); i++)
+		for (s64 i = 0; i < item_list.size(); i++)
 		{
 			if (const auto& layout_item = ::at32(item_list, i); layout_item && layout_item->widget() == item)
 			{
@@ -119,7 +120,7 @@ int flow_widget::find_item(const flow_layout::position& pos)
 
 flow_layout::position flow_widget::find_next_item(flow_layout::position current_pos, flow_navigation value)
 {
-	if (current_pos.row >= 0 && current_pos.col >= 0 && m_flow_layout->rows() > 0 && m_flow_layout->cols() > 0)
+	if (current_pos && m_flow_layout->rows() > 0 && m_flow_layout->cols() > 0)
 	{
 		switch (value)
 		{
@@ -193,54 +194,160 @@ flow_layout::position flow_widget::find_next_item(flow_layout::position current_
 	return current_pos;
 }
 
-void flow_widget::select_item(flow_widget_item* item)
+void flow_widget::select_items(const std::set<flow_widget_item*>& selected_items, flow_widget_item* current_item)
 {
-	const flow_layout::position selected_pos = find_item(item);
-	const int selected_index = find_item(selected_pos);
+	m_selected_items.clear();
 
-	if (selected_index < 0 || selected_index >= items().size())
+	for (flow_widget_item* item : selected_items)
 	{
-		m_selected_index = -1;
-		return;
+		const flow_layout::position selected_pos = find_item(item);
+		const s64 selected_index = find_item(selected_pos);
+
+		if (selected_index < 0 || static_cast<usz>(selected_index) >= items().size())
+		{
+			continue;
+		}
+
+		m_selected_items.insert(selected_index);
+
+		if (!m_allow_multi_selection)
+		{
+			break;
+		}
 	}
 
-	m_selected_index = selected_index;
-	Q_EMIT ItemSelectionChanged(m_selected_index);
-
-	for (int i = 0; i < items().size(); i++)
+	for (usz i = 0; i < items().size(); i++)
 	{
 		if (flow_widget_item* item = items().at(i))
 		{
 			// We need to polish the widgets in order to re-apply any stylesheet changes for the selected property.
-			item->selected = i == m_selected_index;
+			item->selected = m_selected_items.contains(i);
 			item->polish_style();
 		}
 	}
 
-	// Make sure we see the focused widget
-	m_scroll_area->ensureWidgetVisible(::at32(items(), m_selected_index));
+	if (m_selected_items.empty())
+	{
+		m_last_selected_item = -1;
+	}
+	else
+	{
+		if (!m_selected_items.contains(m_last_selected_item))
+		{
+			m_last_selected_item = *m_selected_items.cbegin();
+		}
+
+		s64 selected_item = m_last_selected_item;
+		s64 focused_item = selected_item;
+
+		if (current_item)
+		{
+			if (const flow_layout::position selected_pos = find_item(current_item))
+			{
+				focused_item = find_item(selected_pos);
+
+				if (current_item->selected)
+				{
+					selected_item = focused_item;
+				}
+			}
+		}
+
+		// Make sure we see the focused widget
+		m_scroll_area->ensureWidgetVisible(::at32(items(), focused_item));
+
+		Q_EMIT ItemSelectionChanged(selected_item);
+	}
+}
+
+void flow_widget::update_selection(flow_widget_item* current_item)
+{
+	std::set<flow_widget_item*> selected_items;
+	const Qt::KeyboardModifiers modifiers = QApplication::keyboardModifiers();
+
+	if (current_item)
+	{
+		if (!m_allow_multi_selection || !current_item->selected || modifiers != Qt::ControlModifier)
+		{
+			selected_items.insert(current_item);
+		}
+	}
+
+	if (m_allow_multi_selection)
+	{
+		flow_layout::position selected_pos;
+		flow_layout::position last_selected_pos;
+
+		if (modifiers == Qt::ShiftModifier && m_last_selected_item >= 0 && static_cast<usz>(m_last_selected_item) < items().size())
+		{
+			selected_pos = find_item(current_item);
+			last_selected_pos = find_item(::at32(m_widgets, m_last_selected_item));
+		}
+
+		flow_layout::position pos_min = last_selected_pos;
+		flow_layout::position pos_max = selected_pos;
+
+		if (pos_min.row > pos_max.row)
+		{
+			std::swap(pos_min, pos_max);
+		}
+
+		// Check if the item is between the last and the current selection
+		const auto item_between = [this, &pos_min, &pos_max](flow_widget_item* item)
+		{
+			if (!pos_min || !pos_max) return false;
+
+			const flow_layout::position pos = find_item(item);
+			if (!pos) return false; // pos invalid
+			if (pos.row < pos_min.row || pos.row > pos_max.row) return false; // not in any relevant row
+			if (pos.row > pos_min.row && pos.row < pos_max.row) return true; // in a row between the items -> match
+
+			const bool in_min_row = pos.row == pos_min.row && pos.col >= pos_min.col;
+			const bool in_max_row = pos.row == pos_max.row && pos.col <= pos_max.col;
+
+			if (pos_min.row == pos_max.row) return in_min_row && in_max_row; // in the only row at a relevant col -> match
+
+			return in_min_row || in_max_row; // in either min or max row at a relevant col -> match
+		};
+
+		for (usz i = 0; i < items().size(); i++)
+		{
+			if (flow_widget_item* item = items().at(i))
+			{
+				if (item == current_item) continue;
+
+				if (modifiers == Qt::ControlModifier && item->selected)
+				{
+					selected_items.insert(item);
+				}
+				else if (modifiers == Qt::ShiftModifier && item_between(item))
+				{
+					selected_items.insert(item);
+				}
+			}
+		}
+	}
+
+	select_items(selected_items, current_item);
 }
 
 void flow_widget::on_item_focus()
 {
-	select_item(static_cast<flow_widget_item*>(QObject::sender()));
+	update_selection(static_cast<flow_widget_item*>(QObject::sender()));
 }
 
 void flow_widget::on_navigate(flow_navigation value)
 {
 	const flow_layout::position selected_pos = find_next_item(find_item(static_cast<flow_widget_item*>(QObject::sender())), value);
-	const int selected_index = find_item(selected_pos);
-	if (selected_index < 0 || selected_index >= items().size())
-	{
-		return;
-	}
+	const s64 selected_index = find_item(selected_pos);
 
-	if (flow_widget_item* item = items().at(selected_index))
+	if (selected_index >= 0 && static_cast<usz>(selected_index) < items().size())
 	{
-		item->setFocus();
+		if (flow_widget_item* item = items().at(selected_index))
+		{
+			item->setFocus();
+		}
 	}
-
-	m_selected_index = selected_index;
 }
 
 void flow_widget::mouseDoubleClickEvent(QMouseEvent* ev)
