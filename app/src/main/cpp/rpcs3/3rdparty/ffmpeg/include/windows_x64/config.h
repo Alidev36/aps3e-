@@ -6,7 +6,7 @@
 #define CONFIG_THIS_YEAR 2025
 #define FFMPEG_DATADIR "/usr/local/share/ffmpeg"
 #define AVCONV_DATADIR "/usr/local/share/ffmpeg"
-#define CC_IDENT "ÓÃÓÚ x86 µÄ Microsoft (R) C/C++ ÓÅ»¯±àÒëÆ÷ 19.44.35215 °æ"
+#define CC_IDENT "ç”¨äºŽ x86 çš„ Microsoft (R) C/C++ ä¼˜åŒ–ç¼–è¯‘å™¨ 19.44.35215 ç‰ˆ"
 #define OS_NAME win32
 #define av_restrict restrict
 #define EXTERN_PREFIX "_"

@@ -30,6 +30,10 @@ constexpr int averror_invalid_data = AVERROR_INVALIDDATA; // workaround for old-
 #pragma GCC diagnostic pop
 #endif
 
+#if defined(__ANDROID__)||defined(_WIN32)
+#define USE_FFMPEG_5 1
+#endif
+
 LOG_CHANNEL(media_log, "Media");
 
 namespace utils
@@ -346,7 +350,7 @@ namespace utils
 	static bool check_sample_fmt(const AVCodec* codec, enum AVSampleFormat sample_fmt)
 	{
 		if (!codec) return false;
-#if __ANDROID__
+#if USE_FFMPEG_5
         for (const AVSampleFormat* p = codec->sample_fmts; p && *p != AV_SAMPLE_FMT_NONE; p++)
         {
             if (*p == sample_fmt)
@@ -382,7 +386,7 @@ namespace utils
 	// just pick the highest supported samplerate
 	static int select_sample_rate(const AVCodec* codec)
 	{
-#if __ANDROID__
+#if USE_FFMPEG_5
         if (!codec || !codec->supported_samplerates)
             return 48000;
 
@@ -448,7 +452,7 @@ namespace utils
 	static const AVChannelLayout* select_channel_layout(const AVCodec* codec, int channels)
 	{
 		if (!codec) return nullptr;
-#if __ANDROID__
+#if USE_FFMPEG_5
         const AVChannelLayout preferred_ch_layout = get_preferred_channel_layout(channels);
         const AVChannelLayout* found_ch_layout = nullptr;
 
@@ -616,7 +620,7 @@ namespace utils
 				has_error = true;
 				return;
 			}
-#if __ANDROID__
+#if USE_FFMPEG_5
 
             // Prepare resampler
             av.swr = swr_alloc();
@@ -631,7 +635,7 @@ namespace utils
 			const int dst_channels = 2;
 			const AVChannelLayout dst_channel_layout = AV_CHANNEL_LAYOUT_STEREO;
 			const AVSampleFormat dst_format = AV_SAMPLE_FMT_FLT;
-#if __ANDROID__
+#if USE_FFMPEG_5
 
             int set_err = 0;
             if ((set_err = av_opt_set_int(av.swr, "in_channel_count", stream->codecpar->ch_layout.nb_channels, 0)) ||
@@ -655,7 +659,7 @@ namespace utils
 				has_error = true;
 				return;
 			}
-#ifndef __ANDROID__
+#ifndef USE_FFMPEG_5
 			if (!av.swr)
 			{
 				media_log.error("audio_decoder: Failed to allocate resampler for stream #%u in file '%s'", stream_index, path);
@@ -927,7 +931,7 @@ namespace utils
 					std::this_thread::sleep_for(1ms);
 				}
 			}
-#if __ANDROID__
+#if USE_FFMPEG_5
             auto& thread = *m_thread;
             thread = thread_state::aborting;
             thread();

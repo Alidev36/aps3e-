@@ -23,7 +23,11 @@
 #ifndef AVCODEC_HEVCDEC_H
 #define AVCODEC_HEVCDEC_H
 
+#if _WIN32
+#include "../compat/atomics/win32/stdatomic.h"
+#else
 #include <stdatomic.h>
+#endif
 
 #include "libavutil/buffer.h"
 #include "libavutil/mem_internal.h"

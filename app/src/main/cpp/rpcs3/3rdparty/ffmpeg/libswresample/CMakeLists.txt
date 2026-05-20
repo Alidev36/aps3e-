@@ -5,24 +5,38 @@ set(CMAKE_C_STANDARD 11)
 
 if(ANDROID)
 
-    set(libswresample_aarch64
+    add_library(libswresample STATIC
             ${FFMPEG_DIR}/libswresample/aarch64/audio_convert_init.c
             ${FFMPEG_DIR}/libswresample/aarch64/audio_convert_neon.S
             ${FFMPEG_DIR}/libswresample/aarch64/resample_init.c
-            ${FFMPEG_DIR}/libswresample/aarch64/resample.S)
+            ${FFMPEG_DIR}/libswresample/aarch64/resample.S
+            ${FFMPEG_DIR}/libswresample/audioconvert.c
+            ${FFMPEG_DIR}/libswresample/dither.c
+            ${FFMPEG_DIR}/libswresample/options.c
+            ${FFMPEG_DIR}/libswresample/rematrix.c
+            ${FFMPEG_DIR}/libswresample/resample.c
+            ${FFMPEG_DIR}/libswresample/resample_dsp.c
+            ${FFMPEG_DIR}/libswresample/swresample.c
+            ${FFMPEG_DIR}/libswresample/swresample_frame.c
+            ${FFMPEG_DIR}/libswresample/version.c
+    )
+
+elseif (WIN32)
+    add_library(libswresample STATIC
+            ${FFMPEG_DIR}/libswresample/audioconvert.c
+            ${FFMPEG_DIR}/libswresample/dither.c
+            ${FFMPEG_DIR}/libswresample/options.c
+            ${FFMPEG_DIR}/libswresample/rematrix.c
+            ${FFMPEG_DIR}/libswresample/resample.c
+            ${FFMPEG_DIR}/libswresample/resample_dsp.c
+            ${FFMPEG_DIR}/libswresample/swresample.c
+            ${FFMPEG_DIR}/libswresample/swresample_frame.c
+            ${FFMPEG_DIR}/libswresample/version.c
+            ${FFMPEG_DIR}/libswresample/x86/audio_convert_init.c
+            ${FFMPEG_DIR}/libswresample/x86/rematrix_init.c
+            ${FFMPEG_DIR}/libswresample/x86/resample_init.c
+    )
 endif ()
-add_library(libswresample STATIC
-        ${libswresample_aarch64}
-        ${FFMPEG_DIR}/libswresample/audioconvert.c
-        ${FFMPEG_DIR}/libswresample/dither.c
-        ${FFMPEG_DIR}/libswresample/options.c
-        ${FFMPEG_DIR}/libswresample/rematrix.c
-        ${FFMPEG_DIR}/libswresample/resample.c
-        ${FFMPEG_DIR}/libswresample/resample_dsp.c
-        ${FFMPEG_DIR}/libswresample/swresample.c
-        ${FFMPEG_DIR}/libswresample/swresample_frame.c
-        ${FFMPEG_DIR}/libswresample/version.c
-)
 
 target_include_directories(libswresample PRIVATE
         ${FFMPEG_DIR}

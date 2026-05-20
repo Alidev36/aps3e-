@@ -17,6 +17,9 @@
  * License along with FFmpeg; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
+#if _WIN32
+#define _USE_MATH_DEFINES 1
+#endif
 
 #include "libavutil/avassert.h"
 #include "libavutil/channel_layout.h"

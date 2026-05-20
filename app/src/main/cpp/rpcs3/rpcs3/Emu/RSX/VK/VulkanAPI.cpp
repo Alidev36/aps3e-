@@ -2,9 +2,11 @@
 #include "VulkanAPI.h"
 
 #include "vkutils/device.h"
+#if __ANDROID__
 #include "libadrenotools/include/adrenotools/priv.h"
 #include "libadrenotools/include/adrenotools/driver.h"
 #include <dlfcn.h>
+#endif
 #include <filesystem>
 
 #define DEF_VK_FUNCTION
@@ -35,6 +37,7 @@ namespace vk
 {
     void init_base_pfn()
     {
+#if __ANDROID__
         static void* vk_lib_handle=nullptr;
         if(vk_lib_handle){
             dlclose(vk_lib_handle);
@@ -72,12 +75,22 @@ namespace vk
 #include "VKPFNTable.h"
 #undef LOAD_VK_FUNCTION
         }
+
+#elif _WIN32
+#define LOAD_VK_FUNCTION
+#include "VKPFNTable.h"
+#undef LOAD_VK_FUNCTION
+#endif
     }
 
 
     void init_instance_pfn(VkInstance instance){
 #define INSTANCE_VK_FUNCTION
+#if __ANDROID__
 #define VK_FUNC(func) _##func = reinterpret_cast<PFN_##func>(_vkGetInstanceProcAddr(instance, #func))
+#elif _WIN32
+#define VK_FUNC(func) _##func=reinterpret_cast<PFN_##func>(##func)
+#endif
 #include "VKPFNTableEXT.h"
 
 #undef INSTANCE_VK_FUNCTION
@@ -85,7 +98,11 @@ namespace vk
     }
     void init_device_pfn(VkDevice device){
 #define DEVICE_VK_FUNCTION
+#if __ANDROID__
 #define VK_FUNC(func) _##func = reinterpret_cast<PFN_##func>(_vkGetDeviceProcAddr(device, #func))
+#elif _WIN32
+#define VK_FUNC(func) _##func=reinterpret_cast<PFN_##func>(##func)
+#endif
 #include "VKPFNTableEXT.h"
 
 #undef DEVICE_VK_FUNCTION

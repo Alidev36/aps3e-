@@ -20,7 +20,11 @@
 #define AVCODEC_ERROR_RESILIENCE_H
 
 #include <stdint.h>
+#if _WIN32
+#include "../compat/atomics/win32/stdatomic.h"
+#else
 #include <stdatomic.h>
+#endif
 
 #include "avcodec.h"
 #include "me_cmp.h"

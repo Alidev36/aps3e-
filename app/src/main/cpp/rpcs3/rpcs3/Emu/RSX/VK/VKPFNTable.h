@@ -8,7 +8,15 @@
 #elif defined(DEF_VK_FUNCTION)
 #define VK_FUNC(func) PFN_##func _##func
 #elif defined(LOAD_VK_FUNCTION)
+
+#if __ANDROID__
 #define VK_FUNC(func) _##func=reinterpret_cast<PFN_##func>(dlsym(vk_lib_handle, #func))
+#elif _WIN32
+#define VK_FUNC(func) _##func=reinterpret_cast<PFN_##func>(##func)
+#else
+#error ""
+#endif
+
 #else
 #error ""
 #endif
@@ -169,7 +177,11 @@ VK_FUNC(vkCmdEndRenderPass);
 VK_FUNC(vkCmdExecuteCommands);
 
 VK_FUNC(vkCmdPushConstants);
+#if __ANDROID__
 VK_FUNC(vkCreateAndroidSurfaceKHR);
+#elif _WIN32
+VK_FUNC(vkCreateWin32SurfaceKHR);
+#endif
 VK_FUNC(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);
 VK_FUNC(vkGetPhysicalDeviceSurfacePresentModesKHR);
 

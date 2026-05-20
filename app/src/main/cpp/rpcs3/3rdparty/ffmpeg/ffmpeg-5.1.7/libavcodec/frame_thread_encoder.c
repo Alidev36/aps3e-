@@ -18,8 +18,11 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#if _WIN32
+#include "../compat/atomics/win32/stdatomic.h"
+#else
 #include <stdatomic.h>
-
+#endif
 #include "frame_thread_encoder.h"
 
 #include "libavutil/avassert.h"

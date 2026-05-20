@@ -24,7 +24,11 @@
 
 #include "config.h"
 
+#if _WIN32
+#include "../compat/atomics/win32/stdatomic.h"
+#else
 #include <stdatomic.h>
+#endif
 #include <stdint.h>
 
 #include "avcodec.h"

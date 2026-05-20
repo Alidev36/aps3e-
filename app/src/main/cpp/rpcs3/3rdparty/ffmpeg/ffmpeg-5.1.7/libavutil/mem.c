@@ -31,7 +31,11 @@
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
+#if _WIN32
+#include "../compat/atomics/win32/stdatomic.h"
+#else
 #include <stdatomic.h>
+#endif
 #include <string.h>
 #if HAVE_MALLOC_H
 #include <malloc.h>

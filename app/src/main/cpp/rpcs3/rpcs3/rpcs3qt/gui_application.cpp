@@ -790,10 +790,10 @@ void gui_application::InitializeCallbacks()
 		return localized_emu::get_string(id, args);
 	};
 
-	callbacks.get_localized_u32string = [](localized_string_id id, const char* args) -> std::u32string
+	/* callbacks.get_localized_u32string = [](localized_string_id id, const char* args) -> std::u32string
 	{
 		return localized_emu::get_u32string(id, args);
-	};
+	};*/
 
 	callbacks.get_localized_setting = [this](const cfg::_base* node, u32 enum_index) -> std::string
 	{

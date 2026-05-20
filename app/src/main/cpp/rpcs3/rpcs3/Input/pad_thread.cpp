@@ -31,8 +31,9 @@
 #include "Emu/Cell/timers.hpp"
 #include "Utilities/Thread.h"
 #include "util/atomic.hpp"
+#ifdef __ANDROID__
 #include "aps3e_rp3_impl.h"
-
+#endif
 LOG_CHANNEL(sys_log, "SYS");
 
 extern void pad_state_notify_state_change(usz index, u32 state);

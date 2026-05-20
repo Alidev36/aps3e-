@@ -61,6 +61,9 @@
  *               |
  *               V
  */
+#if _WIN32
+#define _USE_MATH_DEFINES 1
+#endif
 
 #include "config_components.h"
 

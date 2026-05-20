@@ -39,6 +39,7 @@ if(WITH_LLVM)
 		# Check on MSVC is needed due to COMPILER_X86, COMPILER_ARM etc. are not set/supported by the MSVC compiler, if used.
 		# Furthermore, the MSVC compiler is not available/supported on Windows AArch64
 		if(WIN32 AND (COMPILER_X86 OR MSVC))
+			set(ITTAPI_GIT_REPOSITORY https://gitee.com/openvinotoolkit-prc/ittapi.git)
 			set(LLVM_USE_INTEL_JITEVENTS ON)
 		endif()
 

@@ -109,9 +109,10 @@ namespace rsx
 		{
 			glyph_load_setup result;
 			result.font_names.push_back(font_name);
-
-			//const std::vector<std::string> font_dirs = Emu.GetCallbacks().get_font_dirs();
-			//result.lookup_font_dirs.insert(result.lookup_font_dirs.end(), font_dirs.begin(), font_dirs.end());
+#ifndef __ANDROID__
+			const std::vector<std::string> font_dirs = Emu.GetCallbacks().get_font_dirs();
+			result.lookup_font_dirs.insert(result.lookup_font_dirs.end(), font_dirs.begin(), font_dirs.end());
+#endif
 			// Search dev_flash for the font too
 			result.lookup_font_dirs.push_back(g_cfg_vfs.get_dev_flash() + "data/font/");
 			result.lookup_font_dirs.push_back(g_cfg_vfs.get_dev_flash() + "data/font/SONY-CC/");

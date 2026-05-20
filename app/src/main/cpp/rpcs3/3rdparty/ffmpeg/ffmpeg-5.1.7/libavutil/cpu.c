@@ -27,7 +27,11 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#if _WIN32
+#include "../compat/atomics/win32/stdatomic.h"
+#else
 #include <stdatomic.h>
+#endif
 
 #include "attributes.h"
 #include "cpu.h"

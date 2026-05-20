@@ -634,7 +634,7 @@ iso_archive::iso_archive(int fd,int dec_key_fd)
 #endif
 	m_dec = std::make_shared<iso_file_decryption>();
 #ifndef __ANDROID__
-	if (!m_dec->init(m_file))
+	if (!m_dec->init(path))
 #else
     if(!m_dec->init(m_file,m_dec_key_file))
 #endif

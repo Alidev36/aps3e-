@@ -32,7 +32,9 @@
  * (for each frame)
  * 5) Remap input frame to output frame using precalculated data
  */
-
+#if _WIN32
+#define _USE_MATH_DEFINES 1
+#endif
 #include <math.h>
 
 #include "libavutil/avassert.h"
