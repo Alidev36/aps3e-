@@ -184,8 +184,8 @@ namespace vk
 
 		~swapchain_WSI() override = default;
 
-		void create(display_handle_t&) override
-		{}
+		void create(display_handle_t&) override;
+		//{}
 
 		void destroy(bool = true) override;
 

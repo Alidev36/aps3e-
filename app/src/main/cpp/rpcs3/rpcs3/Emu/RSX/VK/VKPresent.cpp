@@ -446,6 +446,10 @@ void VKGSRender::flip(const rsx::display_flip_info_t& info)
 
 	if (swapchain_unavailable || should_reinitialize_swapchain)
 	{
+#if __ANDROID__
+        if(!reinitialize_swapchain())
+        return;
+#endif
 		// Reinitializing the swapchain is a failable operation. However, not all failures are fatal (e.g minimized window).
 		// In the worst case, we can have the driver refuse to create the swapchain while we already deleted the previous one.
 		// In such scenarios, we have to retry a few times before giving up as we cannot proceed without a swapchain.
@@ -470,7 +474,7 @@ void VKGSRender::flip(const rsx::display_flip_info_t& info)
 
 	m_profiler.start();
 
-	ensure(m_current_frame, "Invalid swapchain setup. Resizing the game window failed.");
+	//ensure(m_current_frame, "Invalid swapchain setup. Resizing the game window failed.");
 
 	if (m_current_frame == &m_aux_frame_context)
 	{

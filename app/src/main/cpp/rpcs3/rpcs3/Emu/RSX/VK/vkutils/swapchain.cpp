@@ -132,7 +132,20 @@ namespace vk
 			}
 		}
 	}
-
+    void swapchain_WSI::create(display_handle_t& handle) {
+        if(m_vk_swapchain){
+            _vkDestroySwapchainKHR(dev, m_vk_swapchain, nullptr);
+            m_vk_swapchain = VK_NULL_HANDLE;
+        }
+        if(!swapchain_images.empty()){
+            swapchain_images.clear();
+        }
+        WSI_config surface_config
+                {
+                        .supports_automatic_wm_reports = true
+                };
+        m_surface= make_WSI_surface(dev.gpu(),handle, &surface_config);
+    }
 	void swapchain_WSI::destroy(bool)
 	{
 		if (VkDevice pdev = dev)
@@ -201,9 +214,15 @@ namespace vk
 
 		VkSwapchainKHR old_swapchain = m_vk_swapchain;
 		vk::physical_device& gpu = const_cast<vk::physical_device&>(dev.gpu());
-
+#if __ANDROID__
+        constexpr bool should_specify_exclusive_full_screen_mode= false;
+        VkSurfaceCapabilitiesKHR surface_descriptors = {};
+        if(_vkGetPhysicalDeviceSurfaceCapabilitiesKHR(dev.gpu(), m_surface, &surface_descriptors)!= VK_SUCCESS){
+            return false;
+        }
+#else
 		auto [surface_descriptors, should_specify_exclusive_full_screen_mode] = init_surface_capabilities();
-
+#endif
 		if (surface_descriptors.maxImageExtent.width < m_width ||
 			surface_descriptors.maxImageExtent.height < m_height)
 		{
