@@ -176,8 +176,6 @@ extern bool vk_limit_max_vertex_output_components_le_64(){
     return get_physical_device_limits().maxVertexOutputComponents<=64;
 }
 extern bool cfg_vertex_buffer_upload_mode_use_buffer_view(){
-    //FIXME
-    /*
     static const bool r=[]{
         switch(g_cfg.video.vertex_buffer_upload_mode){
             case vertex_buffer_upload_mode::buffer_view:
@@ -188,8 +186,7 @@ extern bool cfg_vertex_buffer_upload_mode_use_buffer_view(){
                 return get_physical_device_limits().maxTexelBufferElements>=64*1024*1024;//>=64M
         }
     }();
-    return r;*/
-    return true;
+    return r;
 }
 
 extern const std::unordered_map<rsx::overlays::language_class,std::string>& cfg_font_files(){

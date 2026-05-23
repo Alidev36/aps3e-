@@ -40,6 +40,12 @@ namespace vk
 			return !!ptr && ptr->resourceId == b.resourceId;
 		}
 
+        bool operator == (const descriptor_slot_t& a, const VkDescriptorSubBufferEx& b)
+		{
+			const auto ptr = std::get_if<VkDescriptorSubBufferEx>(&a);
+			return !!ptr && ptr->resourceId == b.resourceId;
+		}
+
 		bool operator == (const descriptor_slot_t& a, const std::span<const VkDescriptorImageInfoEx>& b)
 		{
 			const auto ptr = std::get_if<descriptor_image_array_t>(&a);
@@ -347,15 +353,11 @@ namespace vk
 
 		void program::bind_uniform(const VkDescriptorSubBufferEx& buffer_upload, u32 set_id, u32 binding_point)
 		{
-            VkDescriptorBufferViewEx sub_ex{};
-            sub_ex.resourceId = buffer_upload.resourceId;
-            //sub_ex.buffer = buffer_upload.data.buffer;
-
-            if (m_sets[set_id].m_descriptor_slots[binding_point] == sub_ex)
+            if (m_sets[set_id].m_descriptor_slots[binding_point] == buffer_upload)
             {
                 return;
             }
-            m_sets[set_id].notify_descriptor_slot_updated(binding_point, sub_ex);
+            m_sets[set_id].notify_descriptor_slot_updated(binding_point, buffer_upload);
 		}
 
 		void program::bind_uniform_array(const std::span<const VkDescriptorImageInfoEx>& image_descriptors, u32 set_id, u32 binding_point)
