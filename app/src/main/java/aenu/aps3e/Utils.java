@@ -166,6 +166,25 @@ public class Utils {
         }
     }
 
+    static int try_open_key_fd(Context ctx, Uri isoUri){
+        int fd = try_open_fd_with_ext(ctx, isoUri, ".dkey");
+        if (fd != -1) return fd;
+        return try_open_fd_with_ext(ctx, isoUri, ".key");
+    }
+
+    private static int try_open_fd_with_ext(Context ctx, Uri isoUri, String ext){
+        try {
+            String docId = DocumentsContract.getDocumentId(isoUri);
+            int dotPos = docId.lastIndexOf('.');
+            if (dotPos <= 0) return -1;
+            String keyDocId = docId.substring(0, dotPos) + ext;
+            Uri keyUri = DocumentsContract.buildDocumentUri(isoUri.getAuthority(), keyDocId);
+            return ctx.getContentResolver().openFileDescriptor(keyUri, "r").detachFd();
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
     static long convert_hex_str_to_long(String hex){
         if(hex.startsWith("0x"))hex=hex.substring(2);
         return Long.parseLong(hex.toUpperCase(),16);

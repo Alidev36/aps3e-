@@ -360,6 +360,8 @@ static void j_setup_game_path(JNIEnv* env,jobject self,jobject path ){
     if(env->IsInstanceOf(path,path_cls=env->FindClass("aenu/emulator/Emulator$Path"))){
         jfieldID f_fd  = env->GetFieldID(path_cls, "fd", "I");
         ae::boot_game_fd=env->GetIntField(path, f_fd);
+        jfieldID f_dec_key_fd  = env->GetFieldID(path_cls, "dec_key_fd", "I");
+        ae::boot_game_dec_key_fd=env->GetIntField(path, f_dec_key_fd);
         if(ae::boot_game_fd!=-1)
             ae::boot_type=ae::BOOT_TYPE_WITH_FD;
         else{

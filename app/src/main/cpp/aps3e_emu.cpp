@@ -15,6 +15,7 @@ namespace ae{
     std::string boot_game_uri;//不使用
     std::string boot_game_path;
     int boot_game_fd;
+    int boot_game_dec_key_fd=-1;
 
     ANativeWindow* window;
     int window_width;
@@ -570,7 +571,7 @@ namespace ae{
 
             aps3e_log.warning("iso_fd: %d",boot_game_fd);
             const game_boot_result error =boot_type==BOOT_TYPE_WITH_PATH? Emu.BootGame(boot_game_path, game_id, true, config_mode, config_path?:"")
-                                                             :Emu.BootISO("",game_id,boot_game_fd,config_mode, config_path?:"");
+                                                             :Emu.BootISO("",game_id,boot_game_fd,boot_game_dec_key_fd,config_mode, config_path?:"");
             LOGW("game_boot_result %d",error);
             return error==game_boot_result::no_errors;
         }//);

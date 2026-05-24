@@ -12,6 +12,7 @@ namespace ae{
 
     extern std::string boot_game_path;
     extern int boot_game_fd;
+    extern int boot_game_dec_key_fd;
     extern std::string boot_game_uri;
 
     extern ANativeWindow* window;

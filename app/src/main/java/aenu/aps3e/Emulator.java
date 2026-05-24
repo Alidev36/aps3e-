@@ -30,6 +30,7 @@ public class Emulator extends aenu.emulator.Emulator
 		String category;
 		String version;
 		boolean decrypt;
+		int dec_key_fd = -1;
 		int resolution=0;
 		int sound_format=0;
 
@@ -582,7 +583,7 @@ public class Emulator extends aenu.emulator.Emulator
 	//public native MetaInfo meta_info_from_iso(String p) throws RuntimeException;
 	
 	public native MetaInfo meta_info_from_dir(String p) throws RuntimeException;
-	public native MetaInfo meta_info_from_iso(int fd,String iso_uri) throws RuntimeException;
+	public native MetaInfo meta_info_from_iso(int fd,int dec_key_fd,String iso_uri) throws RuntimeException;
 	public native boolean install_firmware(int pup_file_fd);
 
 	public boolean install_rap(int pfd,String rap_name){

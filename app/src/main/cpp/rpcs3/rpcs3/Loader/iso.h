@@ -12,7 +12,7 @@ bool is_file_iso(const std::string& path);
 bool is_file_iso(const fs::file& path);
 
 #ifdef __ANDROID__
-void load_iso(int fd);
+void load_iso(int fd, int dec_key_fd);
 #else
 void load_iso(const std::string& path);
 #endif

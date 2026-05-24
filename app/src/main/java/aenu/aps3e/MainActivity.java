@@ -1167,9 +1167,12 @@ public class MainActivity extends AppCompatActivity {
                     ParcelFileDescriptor pfd_=context_.getContentResolver().openFileDescriptor(iso.getUri(),"r");
 					int pfd=pfd_.detachFd();
 					pfd_.close();
-					Emulator.MetaInfo meta=Emulator.get.meta_info_from_iso(pfd,iso.getUri().toString());
-					if(meta!=null)
+					int dec_key_fd = Utils.try_open_key_fd(context_, iso.getUri());
+					Emulator.MetaInfo meta=Emulator.get.meta_info_from_iso(pfd,dec_key_fd,iso.getUri().toString());
+					if(meta!=null) {
+						meta.dec_key_fd = dec_key_fd;
 						metas.add(meta);
+					}
                 } catch (Exception e) {
 
                 }

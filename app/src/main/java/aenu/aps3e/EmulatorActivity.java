@@ -138,15 +138,19 @@ public class EmulatorActivity extends AppCompatActivity {
 			try {
 				if ((meta_info = (Emulator.MetaInfo) getIntent().getSerializableExtra("meta_info")) != null) {
 
-					if (meta_info.eboot_path == null && meta_info.iso_uri != null)
+					if (meta_info.eboot_path == null && meta_info.iso_uri != null){
 						meta_info.iso_fd = Utils.detach_open_uri(this, Uri.parse(meta_info.iso_uri));
+						meta_info.dec_key_fd = Utils.try_open_key_fd(this, Uri.parse(meta_info.iso_uri));
+					}
 
 				} else {
 					String iso_uri = getIntent().getStringExtra(EXTRA_ISO_URI);
 					String game_dir = getIntent().getStringExtra(EXTRA_GAME_DIR);
 					if (iso_uri != null) {
-						meta_info = Emulator.get.meta_info_from_iso(Utils.detach_open_uri(this, Uri.parse(iso_uri)), iso_uri);
+						int dec_key_fd = Utils.try_open_key_fd(this, Uri.parse(iso_uri));
+						meta_info = Emulator.get.meta_info_from_iso(Utils.detach_open_uri(this, Uri.parse(iso_uri)),dec_key_fd, iso_uri);
 						meta_info.iso_fd = Utils.detach_open_uri(this, Uri.parse(iso_uri));
+						meta_info.dec_key_fd = dec_key_fd;
 					}
 					if (game_dir != null) {
 						meta_info = Emulator.get.meta_info_from_dir(game_dir);
@@ -175,7 +179,7 @@ public class EmulatorActivity extends AppCompatActivity {
 			if (meta_info.eboot_path != null)
 				Emulator.get.setup_game_path(meta_info.eboot_path);
 			else if (meta_info.iso_uri != null)
-				Emulator.get.setup_game_path(aenu.emulator.Emulator.Path.from(meta_info.iso_uri, meta_info.iso_fd));
+				Emulator.get.setup_game_path(aenu.emulator.Emulator.Path.from(meta_info.iso_uri, meta_info.iso_fd, meta_info.dec_key_fd));
 			else
 				throw new RuntimeException("Failed to get meta info");
 		}

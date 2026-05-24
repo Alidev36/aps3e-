@@ -133,7 +133,7 @@ static jobject j_meta_info_from_dir(JNIEnv* env,jobject self,jstring jdir_path){
 }
 
 
-static jobject j_meta_info_from_iso(JNIEnv* env,jobject self,jint fd,jstring jiso_uri_path){
+static jobject j_meta_info_from_iso(JNIEnv* env,jobject self,jint fd,jint dec_key_fd,jstring jiso_uri_path){
 
     jclass cls_MetaInfo=env->FindClass("aenu/aps3e/Emulator$MetaInfo");
     jmethodID mid_MetaInfo_ctor=env->GetMethodID(cls_MetaInfo,"<init>","()V");
@@ -147,7 +147,7 @@ static jobject j_meta_info_from_iso(JNIEnv* env,jobject self,jint fd,jstring jis
     jfieldID  fid_MetaInfo_resolution=env->GetFieldID(cls_MetaInfo,"resolution","I");
     jfieldID  fid_MetaInfo_sound_format=env->GetFieldID(cls_MetaInfo,"sound_format","I");
 
-    iso_archive iso(fd,-1);
+    iso_archive iso(fd,dec_key_fd);
 
     if(!iso.exists("PS3_GAME/USRDIR/EBOOT.BIN")) {
         LOGW("EBOOT.BIN not found");
@@ -1039,7 +1039,7 @@ int register_aps3e_Emulator(JNIEnv* env){
             //{ "meta_info_from_iso","(Ljava/lang/String;)Laenu/aps3e/Emulator$MetaInfo;",(void*)MetaInfo_from_iso},
             { "meta_info_from_dir","(Ljava/lang/String;)Laenu/aps3e/Emulator$MetaInfo;",(void*)j_meta_info_from_dir},
 
-            { "meta_info_from_iso","(ILjava/lang/String;)Laenu/aps3e/Emulator$MetaInfo;",(void*)j_meta_info_from_iso},
+            { "meta_info_from_iso","(IILjava/lang/String;)Laenu/aps3e/Emulator$MetaInfo;",(void*)j_meta_info_from_iso},
 
             { "setup_game_id", "(Ljava/lang/String;)V", (void *) j_setup_game_id },
             {"install_edat", "(I)Z", (void *) j_install_edat},

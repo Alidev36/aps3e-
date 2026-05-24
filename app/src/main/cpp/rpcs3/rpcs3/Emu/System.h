@@ -149,6 +149,7 @@ class Emulator final
 	std::string m_config_path;
 	std::string m_path;
     int m_iso_fd=-1;
+    int m_iso_dec_key_fd=-1;
 	std::string m_path_old;
 	std::string m_path_original;
 	std::string m_path_real;
@@ -419,7 +420,7 @@ public:
 	}
 
 	game_boot_result BootGame(const std::string& path, const std::string& title_id = "", bool direct = false, cfg_mode config_mode = cfg_mode::custom, const std::string& config_path = "");
-    game_boot_result BootISO(const std::string& path,const std::string& title_id,int fd,cfg_mode config_mode = cfg_mode::custom, const std::string& config_path = "");
+    game_boot_result BootISO(const std::string& path,const std::string& title_id,int fd,int dec_key_fd,cfg_mode config_mode = cfg_mode::custom, const std::string& config_path = "");
 
     bool BootRsxCapture(const std::string& path);
 

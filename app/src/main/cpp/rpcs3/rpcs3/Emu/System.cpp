@@ -1014,11 +1014,12 @@ game_boot_result Emulator::BootGame(const std::string& path, const std::string& 
 	return restore_on_no_boot(result);
 }
 
-game_boot_result Emulator::BootISO(const std::string& path,const std::string& title_id,int fd,cfg_mode config_mode, const std::string& config_path){
+game_boot_result Emulator::BootISO(const std::string& path,const std::string& title_id,int fd,int dec_key_fd,cfg_mode config_mode, const std::string& config_path){
     m_path = path;
     m_config_mode = config_mode;
     m_config_path = config_path;
     m_iso_fd=fd;
+    m_iso_dec_key_fd=dec_key_fd;
     return Load(title_id);
 }
 
@@ -1346,7 +1347,7 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 				sys_log.notice("Savestate: Loading iso archive");
 #ifdef __ANDROID__
                 sys_log.warning("load_iso %d",__LINE__);
-                load_iso(m_iso_fd);
+                load_iso(m_iso_fd,m_iso_dec_key_fd);
 #else
 				load_iso(disc_info);
 #endif
@@ -1509,7 +1510,7 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 			sys_log.notice("Loading iso archive '%s'", m_path);
 #ifdef __ANDROID__
             sys_log.warning("load_iso %d",__LINE__);
-            load_iso(m_iso_fd);
+            load_iso(m_iso_fd,m_iso_dec_key_fd);
 #else
             load_iso(m_path);
 #endif
@@ -1937,7 +1938,7 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 					sys_log.notice("Loading iso archive for patch ('%s')", game_path);
 #ifdef __ANDROID__
                     sys_log.warning("load_iso %d",__LINE__);
-                    load_iso(m_iso_fd);
+                    load_iso(m_iso_fd,m_iso_dec_key_fd);
 #else
                     load_iso(game_path);
 #endif
@@ -4366,7 +4367,7 @@ game_boot_result Emulator::AddGameToYml(const std::string& path)
 	}
 #else
 	if (m_iso_fd!=-1){
-        archive = std::make_unique<iso_archive>(m_iso_fd,-1);
+        archive = std::make_unique<iso_archive>(m_iso_fd,m_iso_dec_key_fd);
     }
 #endif
 	// Load PARAM.SFO

@@ -86,10 +86,12 @@ public class Emulator {
     public static class Path{
         String uri;
         int fd;
-        public static Path from(String uri,int fd){
+        int dec_key_fd = -1;
+        public static Path from(String uri,int fd, int dec_key_fd){
             Path p=new Path();
             p.uri=uri;
             p.fd=fd;
+            p.dec_key_fd = dec_key_fd;
             return p;
         }
     }

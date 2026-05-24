@@ -1106,11 +1106,11 @@ void iso_dir::rewind()
 	m_pos = 0;
 }
 #ifdef __ANDROID__
-void load_iso(int fd)
+void load_iso(int fd, int dec_key_fd)
 {
     sys_log.notice("Loading ISO fd= '%d'", fd);
 
-    fs::set_virtual_device("iso_overlay_fs_dev", stx::make_shared<iso_device>(fd,-1));
+    fs::set_virtual_device("iso_overlay_fs_dev", stx::make_shared<iso_device>(fd,dec_key_fd));
 
     vfs::mount("/dev_bdvd/"sv, iso_device::virtual_device_name + "/");
 }
