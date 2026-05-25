@@ -32,11 +32,12 @@ elseif (WIN32)
             ${FFMPEG_DIR}/libavdevice/dshow_filter.c
             ${FFMPEG_DIR}/libavdevice/dshow_pin.c
             ${FFMPEG_DIR}/libavdevice/file_open.c
-            ${FFMPEG_DIR}/libavdevice/gdigrab.c
-            ${FFMPEG_DIR}/libavdevice/lavfi.c
             ${FFMPEG_DIR}/libavdevice/utils.c
             ${FFMPEG_DIR}/libavdevice/version.c
-            ${FFMPEG_DIR}/libavdevice/vfwcap.c
+    )
+    # 死代码消除
+    target_compile_options(libavdevice PRIVATE
+            $<$<CONFIG:Debug>:/O2>
     )
 endif ()
 target_include_directories(libavdevice PRIVATE

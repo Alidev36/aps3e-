@@ -59,8 +59,11 @@ namespace vk
 			_vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
 			m_surface = VK_NULL_HANDLE;
 		}
-
+#if __ANDROID__
 		_vkDestroyInstance(m_instance, nullptr);
+#else
+		vkDestroyInstance(m_instance, nullptr);
+#endif
 		m_instance = VK_NULL_HANDLE;
 	}
 
@@ -214,8 +217,11 @@ namespace vk
 #ifdef __APPLE__
 		instance_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 #endif
-
-		if (VkResult result = _vkCreateInstance(&instance_info, nullptr, &m_instance); result != VK_SUCCESS)
+#if __ANDROID__
+        if (VkResult result = _vkCreateInstance(&instance_info, nullptr, &m_instance); result != VK_SUCCESS)
+#else
+        if (VkResult result = vkCreateInstance(&instance_info, nullptr, &m_instance); result != VK_SUCCESS)
+#endif
 		{
 			if (result == VK_ERROR_LAYER_NOT_PRESENT)
 			{
@@ -246,16 +252,22 @@ namespace vk
 	{
 		u32 num_gpus;
 		// This may fail on unsupported drivers, so just assume no devices
+#if __ANDROID__
 		if (_vkEnumeratePhysicalDevices(m_instance, &num_gpus, nullptr) != VK_SUCCESS)
+#else
+		if (vkEnumeratePhysicalDevices(m_instance, &num_gpus, nullptr) != VK_SUCCESS)
+#endif
 			return gpus;
 
 		if (gpus.size() != num_gpus)
 		{
 			std::vector<VkPhysicalDevice> pdevs(num_gpus);
 			gpus.resize(num_gpus);
-
+#if __ANDROID__
 			CHECK_RESULT(_vkEnumeratePhysicalDevices(m_instance, &num_gpus, pdevs.data()));
-
+#else
+			CHECK_RESULT(vkEnumeratePhysicalDevices(m_instance, &num_gpus, pdevs.data()));
+#endif
 			for (u32 i = 0; i < num_gpus; ++i)
 				gpus[i].create(m_instance, pdevs[i], extensions_loaded);
 		}

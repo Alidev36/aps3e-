@@ -44,11 +44,11 @@ elseif (WIN32)
             ${FFMPEG_DIR}/libswscale/utils.c
             ${FFMPEG_DIR}/libswscale/version.c
             ${FFMPEG_DIR}/libswscale/vscale.c
-            ${FFMPEG_DIR}/libswscale/x86/hscale_fast_bilinear_simd.c
-            ${FFMPEG_DIR}/libswscale/x86/rgb2rgb.c
-            ${FFMPEG_DIR}/libswscale/x86/swscale.c
-            ${FFMPEG_DIR}/libswscale/x86/yuv2rgb.c
             ${FFMPEG_DIR}/libswscale/yuv2rgb.c
+    )
+    # 死代码消除
+    target_compile_options(libswscale PRIVATE
+            $<$<CONFIG:Debug>:/O2>
     )
 endif ()
 

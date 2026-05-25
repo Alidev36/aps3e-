@@ -32,9 +32,10 @@ elseif (WIN32)
             ${FFMPEG_DIR}/libswresample/swresample.c
             ${FFMPEG_DIR}/libswresample/swresample_frame.c
             ${FFMPEG_DIR}/libswresample/version.c
-            ${FFMPEG_DIR}/libswresample/x86/audio_convert_init.c
-            ${FFMPEG_DIR}/libswresample/x86/rematrix_init.c
-            ${FFMPEG_DIR}/libswresample/x86/resample_init.c
+    )
+    # 死代码消除
+    target_compile_options(libswresample PRIVATE
+            $<$<CONFIG:Debug>:/O2>
     )
 endif ()
 

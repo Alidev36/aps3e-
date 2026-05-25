@@ -16,7 +16,11 @@ namespace vk
 	{
 		if (!allow_extensions)
 		{
+#if __ANDROID__
 			_vkGetPhysicalDeviceFeatures(dev, &features);
+#else
+			vkGetPhysicalDeviceFeatures(dev, &features);
+#endif
 			return;
 		}
 
@@ -154,9 +158,13 @@ namespace vk
 	void physical_device::get_physical_device_properties_0(bool allow_extensions)
 	{
 		// Core properties only
+#if __ANDROID__
 		_vkGetPhysicalDeviceMemoryProperties(dev, &memory_properties);
 		_vkGetPhysicalDeviceProperties(dev, &props);
-
+#else
+		vkGetPhysicalDeviceMemoryProperties(dev, &memory_properties);
+		vkGetPhysicalDeviceProperties(dev, &props);
+#endif
 		if (!allow_extensions)
 		{
 			return;

@@ -86,11 +86,7 @@ namespace vk
 
     void init_instance_pfn(VkInstance instance){
 #define INSTANCE_VK_FUNCTION
-#if __ANDROID__
 #define VK_FUNC(func) _##func = reinterpret_cast<PFN_##func>(_vkGetInstanceProcAddr(instance, #func))
-#elif _WIN32
-#define VK_FUNC(func) _##func=reinterpret_cast<PFN_##func>(##func)
-#endif
 #include "VKPFNTableEXT.h"
 
 #undef INSTANCE_VK_FUNCTION
@@ -98,11 +94,7 @@ namespace vk
     }
     void init_device_pfn(VkDevice device){
 #define DEVICE_VK_FUNCTION
-#if __ANDROID__
 #define VK_FUNC(func) _##func = reinterpret_cast<PFN_##func>(_vkGetDeviceProcAddr(device, #func))
-#elif _WIN32
-#define VK_FUNC(func) _##func=reinterpret_cast<PFN_##func>(##func)
-#endif
 #include "VKPFNTableEXT.h"
 
 #undef DEVICE_VK_FUNCTION

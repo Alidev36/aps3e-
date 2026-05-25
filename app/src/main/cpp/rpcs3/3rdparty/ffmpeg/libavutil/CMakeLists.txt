@@ -134,59 +134,55 @@ elseif (WIN32)
             ${FFMPEG_DIR}/libavutil/hdr_dynamic_vivid_metadata.c
             ${FFMPEG_DIR}/libavutil/hmac.c
             ${FFMPEG_DIR}/libavutil/hwcontext.c
-            ${FFMPEG_DIR}/libavutil/hwcontext_d3d11va.c
-            ${FFMPEG_DIR}/libavutil/hwcontext_dxva2.c
             ${FFMPEG_DIR}/libavutil/hwcontext_stub.c
-            ${FFMPEG_DIR}/libavutil/lfg.c
-            ${FFMPEG_DIR}/libavutil/lls.c
-            ${FFMPEG_DIR}/libavutil/log.c
-            ${FFMPEG_DIR}/libavutil/md5.c
-            ${FFMPEG_DIR}/libavutil/murmur3.c
-            ${FFMPEG_DIR}/libavutil/opt.c
-            ${FFMPEG_DIR}/libavutil/pixdesc.c
-            ${FFMPEG_DIR}/libavutil/pixelutils.c
-            ${FFMPEG_DIR}/libavutil/rational.c
-            ${FFMPEG_DIR}/libavutil/reverse.c
-            ${FFMPEG_DIR}/libavutil/sha.c
-            ${FFMPEG_DIR}/libavutil/sha512.c
-            ${FFMPEG_DIR}/libavutil/stereo3d.c
-            ${FFMPEG_DIR}/libavutil/tea.c
-            ${FFMPEG_DIR}/libavutil/threadmessage.c
-            ${FFMPEG_DIR}/libavutil/tx.c
-            ${FFMPEG_DIR}/libavutil/tx_float.c
-            ${FFMPEG_DIR}/libavutil/uuid.c
-            ${FFMPEG_DIR}/libavutil/video_enc_params.c
-            ${FFMPEG_DIR}/libavutil/xga_font_data.c
             ${FFMPEG_DIR}/libavutil/imgutils.c
             ${FFMPEG_DIR}/libavutil/integer.c
             ${FFMPEG_DIR}/libavutil/intmath.c
+            ${FFMPEG_DIR}/libavutil/lls.c
             ${FFMPEG_DIR}/libavutil/log2_tab.c
             ${FFMPEG_DIR}/libavutil/lzo.c
-            ${FFMPEG_DIR}/libavutil/mastering_display_metadata.c
             ${FFMPEG_DIR}/libavutil/mathematics.c
+            ${FFMPEG_DIR}/libavutil/md5.c
             ${FFMPEG_DIR}/libavutil/mem.c
             ${FFMPEG_DIR}/libavutil/parseutils.c
-            ${FFMPEG_DIR}/libavutil/random_seed.c
-            ${FFMPEG_DIR}/libavutil/rc4.c
-            ${FFMPEG_DIR}/libavutil/ripemd.c
+            ${FFMPEG_DIR}/libavutil/pixelutils.c
+            ${FFMPEG_DIR}/libavutil/rational.c
+            ${FFMPEG_DIR}/libavutil/reverse.c
             ${FFMPEG_DIR}/libavutil/samplefmt.c
-            ${FFMPEG_DIR}/libavutil/slicethread.c
-            ${FFMPEG_DIR}/libavutil/spherical.c
+            ${FFMPEG_DIR}/libavutil/stereo3d.c
+            ${FFMPEG_DIR}/libavutil/tea.c
             ${FFMPEG_DIR}/libavutil/time.c
             ${FFMPEG_DIR}/libavutil/timecode.c
             ${FFMPEG_DIR}/libavutil/tree.c
             ${FFMPEG_DIR}/libavutil/twofish.c
             ${FFMPEG_DIR}/libavutil/tx_double.c
+            ${FFMPEG_DIR}/libavutil/tx_float.c
             ${FFMPEG_DIR}/libavutil/tx_int32.c
-            ${FFMPEG_DIR}/libavutil/utils.c
+            ${FFMPEG_DIR}/libavutil/uuid.c
             ${FFMPEG_DIR}/libavutil/version.c
-            ${FFMPEG_DIR}/libavutil/x86/cpu.c
-            ${FFMPEG_DIR}/libavutil/x86/fixed_dsp_init.c
-            ${FFMPEG_DIR}/libavutil/x86/float_dsp_init.c
-            ${FFMPEG_DIR}/libavutil/x86/imgutils_init.c
-            ${FFMPEG_DIR}/libavutil/x86/lls_init.c
-            ${FFMPEG_DIR}/libavutil/x86/pixelutils_init.c
             ${FFMPEG_DIR}/libavutil/xtea.c
+            ${FFMPEG_DIR}/libavutil/lfg.c
+            ${FFMPEG_DIR}/libavutil/log.c
+            ${FFMPEG_DIR}/libavutil/mastering_display_metadata.c
+            ${FFMPEG_DIR}/libavutil/murmur3.c
+            ${FFMPEG_DIR}/libavutil/opt.c
+            ${FFMPEG_DIR}/libavutil/pixdesc.c
+            ${FFMPEG_DIR}/libavutil/random_seed.c
+            ${FFMPEG_DIR}/libavutil/rc4.c
+            ${FFMPEG_DIR}/libavutil/ripemd.c
+            ${FFMPEG_DIR}/libavutil/sha.c
+            ${FFMPEG_DIR}/libavutil/sha512.c
+            ${FFMPEG_DIR}/libavutil/slicethread.c
+            ${FFMPEG_DIR}/libavutil/spherical.c
+            ${FFMPEG_DIR}/libavutil/threadmessage.c
+            ${FFMPEG_DIR}/libavutil/tx.c
+            ${FFMPEG_DIR}/libavutil/utils.c
+            ${FFMPEG_DIR}/libavutil/video_enc_params.c
+            ${FFMPEG_DIR}/libavutil/xga_font_data.c
+    )
+    # 死代码消除
+    target_compile_options(libavutil PRIVATE
+            $<$<CONFIG:Debug>:/O2>
     )
 endif()
 

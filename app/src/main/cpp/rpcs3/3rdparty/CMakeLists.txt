@@ -282,6 +282,10 @@ set_property(TARGET ${FAUDIO_TARGET} PROPERTY FOLDER "3rdparty/")
 
 # FFMPEG
 if(ANDROID OR WIN32)
+	if(WIN32)
+		set(SAVE_BUILD_TYPE ${CMAKE_BUILD_TYPE})
+		set(CMAKE_BUILD_TYPE Release)
+	endif ()
 	add_library(3rdparty_ffmpeg INTERFACE)
 	add_subdirectory(ffmpeg EXCLUDE_FROM_ALL)
 
@@ -294,10 +298,20 @@ if(ANDROID OR WIN32)
 			libswscale
 			libavutil
 	)
-	target_include_directories(3rdparty_ffmpeg INTERFACE
-			${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/ffmpeg-5.1.7
-			${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/include/android_aarch64
-	)
+	if(ANDROID)
+		target_include_directories(3rdparty_ffmpeg INTERFACE
+				${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/ffmpeg-5.1.7
+				${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/include/android_aarch64
+		)
+	elseif(WIN32)
+		target_include_directories(3rdparty_ffmpeg INTERFACE
+				${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/ffmpeg-5.1.7
+				${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/include/windows_x64
+		)
+	endif()
+	if(WIN32)
+		set(CMAKE_BUILD_TYPE ${SAVE_BUILD_TYPE})
+	endif ()
 else()
 	add_library(3rdparty_ffmpeg INTERFACE)
 
