@@ -1516,7 +1516,9 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 #endif
 
 			launching_from_disc_archive = true;
-
+#if __ANDROID__
+            m_path_real = m_path;
+#else
 			std::string path = iso_device::virtual_device_name + "/";
 
 			// ISOs that are install discs will error if set to EBOOT.BIN
@@ -1529,6 +1531,7 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 
 			m_path_real = m_path;
 			m_path = std::move(path);
+#endif
 		}
 
 		sys_log.notice("Load: is iso archive = %d (m_path='%s')", launching_from_disc_archive, m_path);

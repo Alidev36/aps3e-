@@ -488,9 +488,17 @@ void lv2_exitspawn(ppu_thread& ppu, std::vector<std::string>& argv, std::vector<
 			}
 
 			Emu.SetForceBoot(true);
-
+#if __ANDROID__
+            game_boot_result res;
+            if(Emu.IsISO()){
+                res = Emu.BootISO(path, "",Emu.GetISOFd(),Emu.GetISODecKeyFd(), cfg_mode::continuous, old_config);
+            }
+            else{
+                res = Emu.BootGame(path, "", true, cfg_mode::continuous, old_config);
+            }
+#else
 			auto res = Emu.BootGame(path, "", true, cfg_mode::continuous, old_config);
-
+#endif
 			if (res != game_boot_result::no_errors)
 			{
 				sys_process.fatal("Failed to boot from exitspawn! (path=\"%s\", error=%s)", path, res);

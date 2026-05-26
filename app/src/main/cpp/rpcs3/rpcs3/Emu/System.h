@@ -496,6 +496,12 @@ public:
 	static bool IsValidSfb(const std::string& path);
 
 	static void SaveSettings(const std::string& settings, const std::string& title_id);
+
+#if __ANDROID__
+    bool IsISO() const { return m_iso_fd!=-1; }
+    int GetISOFd() const { return m_iso_fd; }
+    int GetISODecKeyFd() const { return m_iso_dec_key_fd; }
+#endif
 };
 
 extern Emulator Emu;
