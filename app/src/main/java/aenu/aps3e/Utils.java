@@ -14,6 +14,7 @@ import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.net.Uri;
 import android.provider.DocumentsContract;
+import android.util.Log;
 import android.view.Window;
 import android.view.WindowManager;
 
@@ -178,7 +179,10 @@ public class Utils {
             int dotPos = docId.lastIndexOf('.');
             if (dotPos <= 0) return -1;
             String keyDocId = docId.substring(0, dotPos) + ext;
-            Uri keyUri = DocumentsContract.buildDocumentUri(isoUri.getAuthority(), keyDocId);
+            int slashPos = docId.lastIndexOf('/');
+            String treeId = docId.substring(0, slashPos);
+            Uri treeUri = DocumentsContract.buildTreeDocumentUri(isoUri.getAuthority(), treeId);
+            Uri keyUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, keyDocId);
             return ctx.getContentResolver().openFileDescriptor(keyUri, "r").detachFd();
         } catch (Exception e) {
             return -1;
