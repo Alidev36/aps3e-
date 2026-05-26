@@ -122,7 +122,7 @@ static jobject j_meta_info_from_dir(JNIEnv* env,jobject self,jstring jdir_path){
 
     std::string v;
     env->SetObjectField(meta_info,fid_MetaInfo_eboot_path,env->NewStringUTF((v=fetch_eboot_path(dir_path)).c_str()));
-    env->SetBooleanField(meta_info,fid_MetaInfo_decrypt,ae::allow_eboot_decrypt(fs::file(v)));
+    env->SetBooleanField(meta_info,fid_MetaInfo_decrypt,true);
     env->SetObjectField(meta_info,fid_MetaInfo_name,env->NewStringUTF((v=psf::get_string(psf,"TITLE","")).c_str()));
     env->SetObjectField(meta_info,fid_MetaInfo_serial,env->NewStringUTF((v=psf::get_string(psf,"TITLE_ID","")).c_str()));
     env->SetObjectField(meta_info,fid_MetaInfo_category,env->NewStringUTF((v=psf::get_string(psf,"CATEGORY","??")).c_str()));
