@@ -189,25 +189,25 @@ extern bool cfg_vertex_buffer_upload_mode_use_buffer_view(){
     return r;
 }
 
-extern const std::unordered_map<rsx::overlays::language_class,std::string>& cfg_font_files(){
+extern const std::unordered_map<rsx::overlays::language_class,std::vector<std::string>>& cfg_font_files(){
 
-    static const auto r=[]->std::unordered_map<rsx::overlays::language_class,std::string>{
+    static const auto r=[]->std::unordered_map<rsx::overlays::language_class,std::vector<std::string>>{
         case_lab:
         switch(g_cfg.misc.font_file_selection) {
             case font_file_selection::from_firmware:
                 return {
-                        {rsx::overlays::language_class::default_, "SCE-PS3-VR-R-LATIN.TTF"},
-                        {rsx::overlays::language_class::cjk_base, "SCE-PS3-SR-R-JPN.TTF"},
-                        {rsx::overlays::language_class::hangul,   "SCE-PS3-YG-R-KOR.TTF"}
+                        {rsx::overlays::language_class::default_, {"Arial.ttf","arial.ttf","/system/fonts/Roboto-Regular.ttf","SCE-PS3-VR-R-LATIN.TTF"}},
+                        {rsx::overlays::language_class::cjk_base, {"SCE-PS3-SR-R-JPN.TTF","SCE-PS3-DH-R-CGB.TTF"}},
+                        {rsx::overlays::language_class::hangul,   {"SCE-PS3-YG-R-KOR.TTF"}},
                 };
             case font_file_selection::custom:
                 std::string custom_font_file_path = g_cfg.misc.custom_font_file_path.to_string();
                 if (!custom_font_file_path.empty() &&
                     std::filesystem::exists(custom_font_file_path))
                     return {
-                            {rsx::overlays::language_class::default_, custom_font_file_path},
-                            {rsx::overlays::language_class::cjk_base, custom_font_file_path},
-                            {rsx::overlays::language_class::hangul,   custom_font_file_path}
+                            {rsx::overlays::language_class::default_, {custom_font_file_path}},
+                            {rsx::overlays::language_class::cjk_base, {custom_font_file_path}},
+                            {rsx::overlays::language_class::hangul,   {custom_font_file_path}}
                     };
                 else {
                     g_cfg.misc.font_file_selection.set(font_file_selection::from_firmware);

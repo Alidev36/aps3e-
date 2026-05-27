@@ -13,7 +13,7 @@
 #endif
 #endif
 
-extern const std::unordered_map<rsx::overlays::language_class,std::string>& cfg_font_files();
+extern const std::unordered_map<rsx::overlays::language_class,std::vector<std::string>>& cfg_font_files();
 
 namespace rsx
 {
@@ -119,22 +119,33 @@ namespace rsx
 #ifdef __ANDROID__
             switch (class_) {
                 case language_class::default_: {
-                    result.font_names.emplace_back(cfg_font_files().at(language_class::default_));
+                    {
+                        std::vector<std::string> fonts= cfg_font_files().at(language_class::default_);
+                        for(auto& font : fonts) {
+                            result.font_names.emplace_back(font);
+                        }
+                    }
                     break;
                     case language_class::cjk_base:
                     {
                         // Skip loading font files directly
                         result.font_names.clear();
-                        result.font_names.emplace_back(cfg_font_files().at(language_class::cjk_base));
-                        break;
+                        std::vector<std::string> fonts= cfg_font_files().at(language_class::cjk_base);
+                        for(auto& font : fonts) {
+                            result.font_names.emplace_back(font);
+                        }
                     }
+                    break;
                     case language_class::hangul:
                     {
                         // Skip loading font files directly
                         result.font_names.clear();
-                        result.font_names.emplace_back(cfg_font_files().at(language_class::hangul));
-                        break;
+                        std::vector<std::string> fonts= cfg_font_files().at(language_class::hangul);
+                        for(auto& font : fonts) {
+                            result.font_names.emplace_back(font);
+                        }
                     }
+                    break;
                 }
             }
 #else
