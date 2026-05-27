@@ -1070,4 +1070,24 @@ Translation qwen3
 	<string name="SAVESTATE_FAILED_DUE_TO_SPU">SaveState failed: Failed to lock SPU state, using SPU ASMJIT will fix it.</string>
 	<string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">Preloading cached shaders from disk...</string>
 
+	<string name="RSX_OVERLAYS_SPINNER_NO_TEXT"></string>
+	<string name="CELL_NP_MESSAGE_INVITE_RECEIVED">Received an invite from %0</string>
+	<string name="CELL_NP_MESSAGE_OTHER_RECEIVED">Received a message from %0</string>
+	<string name="RPCN_ERROR_BINDING">RPCN Connection Error: Failed to bind to given binding IP</string>
+	<string name="HOME_MENU_SETTINGS_RESET_BUTTON">To default</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">Resolution Scale</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">Resolution Scale Threshold</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">Stereo Mode</string>
+	<string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">Handle RSX Memory Tiling</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">Show Fatal Error Hints</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">Record With Overlays</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">Play music during boot sequence.</string>
+	<string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">Use Window Space</string>
+	<string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">Mouse Debug Overlay</string>
+	<string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">Reload Second-To-Last Emulation State</string>
+	<string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">Reload Third-To-Last Emulation State</string>
+	<string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">Reload Fourth-To-Last Emulation State</string>
+	<string name="HOME_MENU_TOGGLE_FULLSCREEN">Toggle Fullscreen</string>
+
 </resources>

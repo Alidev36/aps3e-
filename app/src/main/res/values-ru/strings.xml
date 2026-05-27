@@ -1053,4 +1053,22 @@
 	<string name="SAVESTATE_FAILED_DUE_TO_SPU">Сохранение невозможно: не удалось заблокировать SPU, используйте SPU ASMJIT</string>
 	<string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">Предзагрузка шейдеров с диска...</string>
 
+	<string name="CELL_NP_MESSAGE_INVITE_RECEIVED">Получено приглашение от %0</string>
+	<string name="CELL_NP_MESSAGE_OTHER_RECEIVED">Получено сообщение от %0</string>
+	<string name="RPCN_ERROR_BINDING">Ошибка подключения RPCN: Не удалось привязаться к указанному IP-адресу</string>
+	<string name="HOME_MENU_SETTINGS_RESET_BUTTON">По умолчанию</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">Масштаб разрешения</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">Порог масштаба разрешения</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">Стереорежим</string>
+	<string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">Управление тайлингом памяти RSX</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">Показывать подсказки о фатальных ошибках</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">Записывать с наложениями</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">Воспроизводить музыку во время загрузки.</string>
+	<string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">Использовать пространство окна</string>
+	<string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">Отладочное наложение мыши</string>
+	<string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">Загрузить предпоследнее состояние эмуляции</string>
+	<string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">Загрузить третье с конца состояние эмуляции</string>
+	<string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">Загрузить четвёртое с конца состояние эмуляции</string>
+	<string name="HOME_MENU_TOGGLE_FULLSCREEN">Переключить полноэкранный режим</string>
 </resources>

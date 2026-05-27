@@ -1057,4 +1057,22 @@
 	<string name="SAVESTATE_FAILED_DUE_TO_SPU">บันทึกสถานะล้มเหลว: ล็อกสถานะ SPU ล้มเหลว การใช้งาน SPU ASMJIT จะแก้ไขปัญหา</string>
 	<string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">กำลังโหลดชเดอร์แคชจากดิสก์...</string>
 
+	<string name="CELL_NP_MESSAGE_INVITE_RECEIVED">ได้รับคำเชิญจาก %0</string>
+	<string name="CELL_NP_MESSAGE_OTHER_RECEIVED">ได้รับข้อความจาก %0</string>
+	<string name="RPCN_ERROR_BINDING">ข้อผิดพลาดการเชื่อมต่อ RPCN: ไม่สามารถผูกกับ IP ที่ระบุได้</string>
+	<string name="HOME_MENU_SETTINGS_RESET_BUTTON">คืนค่าเริ่มต้น</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">มาตราส่วนความละเอียด</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">ค่าเกณฑ์มาตราส่วนความละเอียด</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">โหมดสเตอริโอ</string>
+	<string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">จัดการ RSX Memory Tiling</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">แสดงคำแนะนำข้อผิดพลาดร้ายแรง</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">บันทึกพร้อมโอเวอร์เลย์</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">เล่นเพลงระหว่างลำดับการบูต</string>
+	<string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">ใช้พื้นที่หน้าต่าง</string>
+	<string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">โอเวอร์เลย์ดีบักเมาส์</string>
+	<string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">โหลดสถานะการจำลองที่สองจากท้ายอีกครั้ง</string>
+	<string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">โหลดสถานะการจำลองที่สามจากท้ายอีกครั้ง</string>
+	<string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">โหลดสถานะการจำลองที่สี่จากท้ายอีกครั้ง</string>
+	<string name="HOME_MENU_TOGGLE_FULLSCREEN">สลับเต็มหน้าจอ</string>
 </resources>

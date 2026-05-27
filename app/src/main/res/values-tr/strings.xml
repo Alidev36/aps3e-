@@ -1061,4 +1061,23 @@
     <string name="SAVESTATE_FAILED_DUE_TO_MISSING_SPU_SETTING">Oyun kaydı başarısız: SPU durumu kilitlenemedi, SPU Uyumlu modunu etkinleştirmek çözebilir.</string>
     <string name="SAVESTATE_FAILED_DUE_TO_SPU">Oyun kaydı başarısız: SPU durumu kilitlenemedi, SPU ASMJIT kullanmak çözebilir.</string>
     <string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">Diskten önbelleğe alınmış shader’lar yükleniyor...</string>
+
+	<string name="CELL_NP_MESSAGE_INVITE_RECEIVED">%0 tarafından bir davet alındı</string>
+	<string name="CELL_NP_MESSAGE_OTHER_RECEIVED">%0 tarafından bir mesaj alındı</string>
+	<string name="RPCN_ERROR_BINDING">RPCN Bağlantı Hatası: Belirtilen bağlama IP adresine bağlanılamadı</string>
+	<string name="HOME_MENU_SETTINGS_RESET_BUTTON">Varsayılana dön</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">Çözünürlük Ölçeği</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">Çözünürlük Ölçeği Eşiği</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">Stereo Modu</string>
+	<string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">RSX Bellek Döşemesini Yönet</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">Ölümcül Hata İpuçlarını Göster</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">Kaplamalarla Kaydet</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">Başlatma sırasında müzik çal.</string>
+	<string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">Pencere Alanını Kullan</string>
+	<string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">Fare Hata Ayıklama Kaplaması</string>
+	<string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">Sondan ikinci öykünme durumunu yeniden yükle</string>
+	<string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">Sondan üçüncü öykünme durumunu yeniden yükle</string>
+	<string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">Sondan dördüncü öykünme durumunu yeniden yükle</string>
+	<string name="HOME_MENU_TOGGLE_FULLSCREEN">Tam Ekranı Aç/Kapat</string>
 </resources>

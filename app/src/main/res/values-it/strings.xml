@@ -1067,4 +1067,23 @@
 	<string name="SAVESTATE_FAILED_DUE_TO_SPU">Salvataggio fallito: Impossibile bloccare lo stato SPU, utilizzare SPU ASMJIT risolverà il problema.</string>
 	<string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">Pre-caricamento shader dalla cache su disco...</string>
 
+	<string name="CELL_NP_MESSAGE_INVITE_RECEIVED">Ricevuto un invito da %0</string>
+	<string name="CELL_NP_MESSAGE_OTHER_RECEIVED">Ricevuto un messaggio da %0</string>
+	<string name="RPCN_ERROR_BINDING">Errore di connessione RPCN: impossibile associare all`IP di binding specificato</string>
+    <string name="HOME_MENU_SETTINGS_RESET_BUTTON">Predefiniti</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">Scala Risoluzione</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">Soglia Scala Risoluzione</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">Modalità Stereo</string>
+    <string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">Gestione Tiling Memoria RSX</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">Mostra Suggerimenti Errori Fatali</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">Registra Con Overlay</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">Riproduci musica durante l`avvio.</string>
+    <string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">Usa Spazio Finestra</string>
+    <string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">Overlay Debug Input Mouse</string>
+    <string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">Ricarica Penultimo Stato Emulazione</string>
+    <string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">Ricarica Terzultimo Stato Emulazione</string>
+    <string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">Ricarica Quartultimo Stato Emulazione</string>
+    <string name="HOME_MENU_TOGGLE_FULLSCREEN">Attiva/Disattiva Schermo Intero</string>
+
 </resources>

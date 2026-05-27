@@ -1059,4 +1059,23 @@ Traducción qwen3
 	<string name="SAVESTATE_FAILED_DUE_TO_SPU">Error de estado guardado: No se pudo bloquear el estado SPU, usar SPU ASMJIT lo solucionará.</string>
 	<string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">Precargando shaders desde disco...</string>
 
+	<string name="CELL_NP_MESSAGE_INVITE_RECEIVED">Invitación recibida de %0</string>
+	<string name="CELL_NP_MESSAGE_OTHER_RECEIVED">Mensaje recibido de %0</string>
+	<string name="RPCN_ERROR_BINDING">Error de conexión RPCN: No se pudo enlazar a la IP de enlace especificada</string>
+	<string name="HOME_MENU_SETTINGS_RESET_BUTTON">A valores predeterminados</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">Escala de Resolución</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">Umbral de Escala de Resolución</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">Modo Estéreo</string>
+	<string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">Manejar Teselado de Memoria RSX</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">Mostrar Consejos de Errores Fatales</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">Grabar con Superposiciones</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">Reproducir música durante el arranque</string>
+	<string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">Usar Espacio de Ventana</string>
+	<string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">Superposición de Depuración del Ratón</string>
+	<string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">Recargar Penúltimo Estado de Emulación</string>
+	<string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">Recargar Antepenúltimo Estado de Emulación</string>
+	<string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">Recargar Cuarto Último Estado de Emulación</string>
+	<string name="HOME_MENU_TOGGLE_FULLSCREEN">Alternar Pantalla Completa</string>
+
 </resources>

@@ -1054,4 +1054,23 @@
 	<string name="SAVESTATE_FAILED_DUE_TO_SPU">Збереження стану не вдалося: Не вдалося заблокувати стан SPU, використання SPU ASMJIT виправить це.</string>
 	<string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">Попереднє завантаження кешованих шейдерів з диска...</string>
 
+	<string name="CELL_NP_MESSAGE_INVITE_RECEIVED">Отримано запрошення від %0</string>
+	<string name="CELL_NP_MESSAGE_OTHER_RECEIVED">Отримано повідомлення від %0</string>
+	<string name="RPCN_ERROR_BINDING">Помилка з`єднання RPCN: Не вдалося прив`язатися до вказаної IP-адреси</string>
+    <string name="HOME_MENU_SETTINGS_RESET_BUTTON">За замовчуванням</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">Масштаб роздільної здатності</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">Поріг масштабу роздільної здатності</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">Стерео режим</string>
+    <string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">Обробка тайлінгу пам`яті RSX</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">Показувати підказки критичних помилок</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">Записувати з накладками</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">Відтворювати музику під час завантаження.</string>
+    <string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">Використовувати простір вікна</string>
+    <string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">Накладка налагодження введення миші</string>
+    <string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">Перезавантажити передостанній стан емуляції</string>
+    <string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">Перезавантажити третій з кінця стан емуляції</string>
+    <string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">Перезавантажити четвертий з кінця стан емуляції</string>
+    <string name="HOME_MENU_TOGGLE_FULLSCREEN">Перемкнути повноекранний режим</string>
+
 </resources>

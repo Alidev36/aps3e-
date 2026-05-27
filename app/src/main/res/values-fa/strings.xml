@@ -1060,4 +1060,23 @@
 	<string name="SAVESTATE_FAILED_DUE_TO_SPU">ذخیره وضعیت ناموفق بود: قفل SPU ناموفق، استفاده از SPU ASMJIT رفعش می‌کند.</string>
 	<string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">در حال پیش‌بارگیری شیدرها از دیسک...</string>
 
+	<string name="CELL_NP_MESSAGE_INVITE_RECEIVED">دعوتنامه دریافت کردید از %0</string>
+	<string name="CELL_NP_MESSAGE_OTHER_RECEIVED">پیامی دریافت کردید از %0</string>
+	<string name="RPCN_ERROR_BINDING">خطای اتصال RPCN: اتصال به IP مشخص شده ناموفق بود</string>
+	<string name="HOME_MENU_SETTINGS_RESET_BUTTON">به پیش‌فرض</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">مقیاس وضوح</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">حد آستانه مقیاس وضوح</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">حالت استریو</string>
+	<string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">مدیریت کاشت حافظه RSX</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">نمایش راهنمایی‌های خطاهای بحرانی</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">ضبط با لایه‌های اضافی</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">پخش موسیقی در حین راه‌اندازی</string>
+	<string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">استفاده از فضای پنجره</string>
+	<string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">لایه اشکال‌زدایی موس</string>
+	<string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">بارگذاری مجدد وضعیت ماقبل آخر</string>
+	<string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">بارگذاری مجدد وضعیت سوم از آخر</string>
+	<string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">بارگذاری مجدد وضعیت چهارم از آخر</string>
+	<string name="HOME_MENU_TOGGLE_FULLSCREEN">تغییر حالت تمام‌صفحه</string>
+
 </resources>

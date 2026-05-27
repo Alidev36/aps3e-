@@ -1062,4 +1062,23 @@ Dịch bởi qwen3
 	<string name="SAVESTATE_FAILED_DUE_TO_SPU">Lưu trạng thái thất bại: Không khóa được trạng thái SPU, dùng SPU ASMJIT sẽ khắc phục</string>
 	<string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">Đang nạp sẵn shader từ đĩa...</string>
 
+	<string name="CELL_NP_MESSAGE_INVITE_RECEIVED">Đã nhận lời mời từ %0</string>
+	<string name="CELL_NP_MESSAGE_OTHER_RECEIVED">Đã nhận tin nhắn từ %0</string>
+	<string name="RPCN_ERROR_BINDING">Lỗi kết nối RPCN: Không thể liên kết với IP ràng buộc đã chỉ định</string>
+    <string name="HOME_MENU_SETTINGS_RESET_BUTTON">Về mặc định</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">Tỷ lệ phân giải</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">Ngưỡng tỷ lệ phân giải</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">Chế độ âm thanh nổi</string>
+    <string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">Xử lý lát bộ nhớ RSX</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">Hiển thị gợi ý lỗi nghiêm trọng</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">Ghi hình với lớp phủ</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">Phát nhạc trong quá trình khởi động.</string>
+    <string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">Sử dụng không gian cửa sổ</string>
+    <string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">Lớp phủ gỡ lỗi đầu vào chuột</string>
+    <string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">Tải lại trạng thái giả lập áp chót</string>
+    <string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">Tải lại trạng thái giả lập thứ ba từ cuối</string>
+    <string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">Tải lại trạng thái giả lập thứ tư từ cuối</string>
+    <string name="HOME_MENU_TOGGLE_FULLSCREEN">Chuyển đổi toàn màn hình</string>
+
 </resources>

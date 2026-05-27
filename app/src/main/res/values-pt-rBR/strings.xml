@@ -1026,4 +1026,22 @@
 	<string name="SAVESTATE_FAILED_DUE_TO_SPU">Estado de salvamento falhou: Não foi possível bloquear o estado SPU, usar SPU ASMJIT pode corrigir.</string>
 	<string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">Pré-carregando shaders do disco...</string>
 
+    <string name="CELL_NP_MESSAGE_INVITE_RECEIVED">Recebeu um convite de %0</string>
+    <string name="CELL_NP_MESSAGE_OTHER_RECEIVED">Recebeu uma mensagem de %0</string>
+    <string name="RPCN_ERROR_BINDING">Erro de conexão RPCN: Falha ao vincular ao IP de ligação fornecido</string>
+    <string name="HOME_MENU_SETTINGS_RESET_BUTTON">Restaurar padrão</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">Escala de resolução</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">Limite da escala de resolução</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">Modo estéreo</string>
+    <string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">Gerenciar Tiling de Memória RSX</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">Mostrar dicas de erros fatais</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">Gravar com sobreposições</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">Reproduzir música durante a sequência de inicialização.</string>
+    <string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">Usar espaço da janela</string>
+    <string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">Sobreposição de depuração do mouse</string>
+    <string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">Recarregar penúltimo estado de emulação</string>
+    <string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">Recarregar antepenúltimo estado de emulação</string>
+    <string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">Recarregar quarto último estado de emulação</string>
+    <string name="HOME_MENU_TOGGLE_FULLSCREEN">Alternar tela cheia</string>
 </resources>

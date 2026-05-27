@@ -1071,4 +1071,23 @@ Traduction qwen3
 	<string name="SAVESTATE_FAILED_DUE_TO_SPU">Sauvegarde échouée : Échec de verrouillage SPU, utiliser SPU ASMJIT résoudra le problème.</string>
 	<string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">Préchargement des shaders depuis le disque...</string>
 
+    <string name="CELL_NP_MESSAGE_INVITE_RECEIVED">Invitation reçue de %0</string>
+    <string name="CELL_NP_MESSAGE_OTHER_RECEIVED">Message reçu de %0</string>
+    <string name="RPCN_ERROR_BINDING">RPCN : Erreur de connexion - Impossible de se lier à l`adresse IP spécifiée</string>
+    <string name="HOME_MENU_SETTINGS_RESET_BUTTON">Par défaut</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">Échelle résolution</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">Seuil échelle résolution</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">Mode stéréo</string>
+    <string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">Gérer tiling mémoire RSX</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">Afficher les astuces d`erreur fatale</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">Enregistrer avec les superpositions</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">Jouer de la musique pendant le démarrage</string>
+    <string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">Utiliser l`espace fenêtre</string>
+    <string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">Superposition débogage souris</string>
+    <string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">Recharger l`avant-dernier état d`émulation</string>
+    <string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">Recharger l`antépénultième état d`émulation</string>
+    <string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">Recharger le quatrième état d`émulation en partant de la fin</string>
+    <string name="HOME_MENU_TOGGLE_FULLSCREEN">Basculer en plein écran</string>
+
 </resources>

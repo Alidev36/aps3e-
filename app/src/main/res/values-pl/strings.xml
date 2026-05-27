@@ -1029,4 +1029,23 @@
 	<string name="SAVESTATE_FAILED_DUE_TO_SPU">Błąd savestate: Nie można zablokować stanu SPU, użycie SPU ASMJIT rozwiąże to</string>
 	<string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">Wstępne ładowanie cache shaderów z dysku...</string>
 
+	<string name="CELL_NP_MESSAGE_INVITE_RECEIVED">Otrzymano zaproszenie od %0</string>
+	<string name="CELL_NP_MESSAGE_OTHER_RECEIVED">Otrzymano wiadomość od %0</string>
+	<string name="RPCN_ERROR_BINDING">Błąd połączenia RPCN: Nie można powiązać z podanym adresem IP</string>
+    <string name="HOME_MENU_SETTINGS_RESET_BUTTON">Do domyślnych</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">Skala rozdzielczości</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">Próg skali rozdzielczości</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">Tryb stereo</string>
+    <string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">Obsługa kafelkowania pamięci RSX</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">Pokaż wskazówki błędów krytycznych</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">Nagrywaj z overlayami</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">Odtwarzaj muzykę podczas uruchamiania.</string>
+    <string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">Użyj przestrzeni okna</string>
+    <string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">Overlay debugowania myszy</string>
+    <string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">Przywróć przedostatni stan emulacji</string>
+    <string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">Przywróć trzeci od końca stan emulacji</string>
+    <string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">Przywróć czwarty od końca stan emulacji</string>
+    <string name="HOME_MENU_TOGGLE_FULLSCREEN">Przełącz pełny ekran</string>
+
 </resources>

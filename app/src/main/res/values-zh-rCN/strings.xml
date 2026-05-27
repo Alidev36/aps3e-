@@ -1067,5 +1067,24 @@
 <string name="SAVESTATE_FAILED_DUE_TO_SPU">保存状态失败：无法锁定SPU状态，使用SPU ASMJIT将解决</string>
 <string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">从磁盘预加载缓存的着色器...</string>
 
+<string name="CELL_NP_MESSAGE_INVITE_RECEIVED">收到来自 %0 的邀请</string>
+<string name="CELL_NP_MESSAGE_OTHER_RECEIVED">收到来自 %0 的消息</string>
+<string name="RPCN_ERROR_BINDING">RPCN连接错误：无法绑定到指定的绑定IP</string>
+<string name="HOME_MENU_SETTINGS_RESET_BUTTON">恢复默认</string>
+<string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">分辨率缩放</string>
+<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">分辨率缩放阈值</string>
+<string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">立体模式</string>
+<string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">处理RSX内存分块</string>
+<string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">显示严重错误提示</string>
+<string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">带叠加层录制</string>
+<string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">在启动过程中播放音乐。</string>
+<string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">使用窗口空间</string>
+<string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">鼠标调试输入叠加层</string>
+<string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">重新加载倒数第二个模拟状态</string>
+<string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">重新加载倒数第三个模拟状态</string>
+<string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">重新加载倒数第四个模拟状态</string>
+<string name="HOME_MENU_TOGGLE_FULLSCREEN">切换全屏</string>
 
 </resources>
+

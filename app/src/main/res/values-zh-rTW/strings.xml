@@ -1062,5 +1062,23 @@ Translation qwen3
 <string name="SAVESTATE_FAILED_DUE_TO_SPU">儲存狀態失敗：無法鎖定 SPU 狀態，使用 SPU ASMJIT 將可修復。</string>
 <string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">從磁碟預先載入著色器快取中...</string>
 
+<string name="CELL_NP_MESSAGE_INVITE_RECEIVED">收到來自 %0 的邀請</string>
+<string name="CELL_NP_MESSAGE_OTHER_RECEIVED">收到來自 %0 的訊息</string>
+<string name="RPCN_ERROR_BINDING">RPCN連線錯誤：無法綁定到指定的綁定IP</string>
+    <string name="HOME_MENU_SETTINGS_RESET_BUTTON">恢復預設</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">解析度縮放</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">解析度縮放臨界值</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">立體模式</string>
+    <string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">處理RSX記憶體分塊</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">顯示致命錯誤提示</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">帶覆蓋層錄製</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">在啟動過程中播放音樂。</string>
+    <string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">使用視窗空間</string>
+    <string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">滑鼠除錯輸入覆蓋層</string>
+    <string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">重新載入倒數第二個模擬狀態</string>
+    <string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">重新載入倒數第三個模擬狀態</string>
+    <string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">重新載入倒數第四個模擬狀態</string>
+    <string name="HOME_MENU_TOGGLE_FULLSCREEN">切換全螢幕</string>
 
 </resources>

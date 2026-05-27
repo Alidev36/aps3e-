@@ -1050,5 +1050,24 @@
 	<string name="SAVESTATE_FAILED_DUE_TO_MISSING_SPU_SETTING">Spielstand fehlgeschlagen: SPU-Zustandssperre fehlgeschlagen, Aktivierung des SPU-Kompatibilitätsmodus könnte helfen.</string>
 	<string name="SAVESTATE_FAILED_DUE_TO_SPU">Spielstand fehlgeschlagen: SPU-Zustandssperre fehlgeschlagen, Nutzung von SPU ASMJIT wird helfen.</string>
 	<string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">Zwischengespeicherte Shaders werden vorgeladen...</string>
-/
+
+	<string name="CELL_NP_MESSAGE_INVITE_RECEIVED">Einladung von %0 erhalten</string>
+	<string name="CELL_NP_MESSAGE_OTHER_RECEIVED">Nachricht von %0 erhalten</string>
+	<string name="RPCN_ERROR_BINDING">RPCN-Verbindungsfehler: Bindung an die angegebene IP fehlgeschlagen</string>
+	<string name="HOME_MENU_SETTINGS_RESET_BUTTON">Auf Standard</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">Auflösungsskalierung</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">Auflösungsskalierungsschwelle</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">Stereomodus</string>
+	<string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">RSX-Speicherkachelung handhaben</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">Fatale Fehlerhinweise anzeigen</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">Mit Overlays aufnehmen</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">Musik während des Bootvorgangs abspielen</string>
+	<string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">Fensterbereich verwenden</string>
+	<string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">Maus-Debug-Overlay</string>
+	<string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">Vorletzten Emulationsspielstand laden</string>
+	<string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">Drittletzten Emulationsspielstand laden</string>
+	<string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">Viertletzten Emulationsspielstand laden</string>
+	<string name="HOME_MENU_TOGGLE_FULLSCREEN">Vollbild umschalten</string>
+
 </resources>

@@ -1062,4 +1062,23 @@ Diterjemahkan oleh qwen3
 	<string name="SAVESTATE_FAILED_DUE_TO_SPU">Gagal menyimpan keadaan: Gagal mengunci keadaan SPU, menggunakan SPU ASMJIT akan memperbaikinya.</string>
 	<string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">Menyediakan semula shader dari cakera...</string>
 
+	<string name="CELL_NP_MESSAGE_INVITE_RECEIVED">Menerima jemputan daripada %0</string>
+	<string name="CELL_NP_MESSAGE_OTHER_RECEIVED">Menerima mesej daripada %0</string>
+	<string name="RPCN_ERROR_BINDING">Ralat Sambungan RPCN: Gagal mengikat ke IP pengikatan yang diberikan</string>
+    <string name="HOME_MENU_SETTINGS_RESET_BUTTON">Kepada asal</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">Skala Resolusi</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">Ambang Skala Resolusi</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">Mod Stereo</string>
+    <string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">Kendalikan Jubin Memori RSX</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">Tunjukkan Petunjuk Ralat Maut</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">Rakam Dengan Selerak</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">Mainkan muzik semasa urutan but.</string>
+    <string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">Guna Ruang Tetingkap</string>
+    <string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">Selerak Input Debug Tetikus</string>
+    <string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">Muat Semula Keadaan Emulasi Kedua Terakhir</string>
+    <string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">Muat Semula Keadaan Emulasi Ketiga Terakhir</string>
+    <string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">Muat Semula Keadaan Emulasi Keempat Terakhir</string>
+    <string name="HOME_MENU_TOGGLE_FULLSCREEN">Togol Skrin Penuh</string>
+
 </resources>

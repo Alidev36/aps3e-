@@ -1055,6 +1055,23 @@
 	<string name="SAVESTATE_FAILED_DUE_TO_SPU">فشل في الحفظ: فشل في قفل حالة SPU، سيحل المشكلة استخدام SPU ASMJIT.</string>
 	<string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">جارٍ تحميل الظلال المُخزنة مسبقًا من القرص...</string>
 
-
+	<string name="CELL_NP_MESSAGE_INVITE_RECEIVED">تم استلام دعوة من %0</string>
+	<string name="CELL_NP_MESSAGE_OTHER_RECEIVED">تم استلام رسالة من %0</string>
+	<string name="RPCN_ERROR_BINDING">خطأ اتصال RPCN: فشل الربط بعنوان IP المحدد</string>
+	<string name="HOME_MENU_SETTINGS_RESET_BUTTON">إلى الافتراضي</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">مقياس الدقة</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">حد مقياس الدقة</string>
+	<string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">وضع ستيريو</string>
+	<string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">معالجة تجانب ذاكرة RSX</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">إظهار تلميحات الأخطاء الفادحة</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">التسجيل مع التراكبات</string>
+	<string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">تشغيل الموسيقى أثناء تسلسل الإقلاع</string>
+	<string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">استخدام مساحة النافذة</string>
+	<string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">تراكب تصحيح أخطاء الماوس</string>
+	<string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">إعادة تحميل حالة المحاكاة قبل الأخيرة</string>
+	<string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">إعادة تحميل حالة المحاكاة الثالثة من الأخيرة</string>
+	<string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">إعادة تحميل حالة المحاكاة الرابعة من الأخيرة</string>
+	<string name="HOME_MENU_TOGGLE_FULLSCREEN">تبديل وضع ملء الشاشة</string>
 
 </resources>

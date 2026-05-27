@@ -1056,4 +1056,23 @@ Qwen3 का अनुवाद
     <string name="SAVESTATE_FAILED_DUE_TO_SPU">सेवस्टेट विफल: एसपीयू स्थिति लॉक करने में विफल, एसपीयू एएसएमजेआईटी का उपयोग करने से समस्या हल हो सकती है</string>
     <string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">डिस्क से कैश किए गए शेडर्स पूर्वलोड कर रहा है...</string>
 
+    <string name="CELL_NP_MESSAGE_INVITE_RECEIVED">%0 से आमंत्रण प्राप्त हुआ</string>
+    <string name="CELL_NP_MESSAGE_OTHER_RECEIVED">%0 से संदेश प्राप्त हुआ</string>
+    <string name="RPCN_ERROR_BINDING">RPCN कनेक्शन त्रुटि: निर्दिष्ट बाइंड IP से जुड़ने में विफल</string>
+    <string name="HOME_MENU_SETTINGS_RESET_BUTTON">डिफ़ॉल्ट पर</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">संकल्प स्केल</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">संकल्प स्केल थ्रेशोल्ड</string>
+    <string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">स्टीरियो मोड</string>
+    <string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">RSX मेमोरी टाइलिंग संभालें</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">गंभीर त्रुटि संकेत दिखाएं</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">ओवरले के साथ रिकॉर्ड करें</string>
+    <string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">बूट के दौरान संगीत चलाएं</string>
+    <string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">विंडो स्पेस का उपयोग करें</string>
+    <string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">माउस डीबग ओवरले</string>
+    <string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">अंतिम से दूसरी एमुलेशन स्थिति पुनः लोड करें</string>
+    <string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">अंतिम से तीसरी एमुलेशन स्थिति पुनः लोड करें</string>
+    <string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">अंतिम से चौथी एमुलेशन स्थिति पुनः लोड करें</string>
+    <string name="HOME_MENU_TOGGLE_FULLSCREEN">पूर्ण स्क्रीन टॉगल करें</string>
+
 </resources>

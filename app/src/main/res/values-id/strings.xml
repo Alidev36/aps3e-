@@ -1062,4 +1062,23 @@ Terjemahan qwen3
 <string name="SAVESTATE_FAILED_DUE_TO_SPU">SimpanStatus gagal: Gagal mengunci status SPU, gunakan SPU ASMJIT untuk memperbaiki.</string>
 <string name="PROGRESS_DIALOG_PRELOADING_SHADER_CACHE">Memuat awal cache shader dari disk...</string>
 
+<string name="CELL_NP_MESSAGE_INVITE_RECEIVED">Menerima undangan dari %0</string>
+<string name="CELL_NP_MESSAGE_OTHER_RECEIVED">Menerima pesan dari %0</string>
+<string name="RPCN_ERROR_BINDING">Kesalahan Koneksi RPCN: Gagal mengikat ke IP binding yang ditentukan</string>
+<string name="HOME_MENU_SETTINGS_RESET_BUTTON">Ke default</string>
+<string name="HOME_MENU_SETTINGS_VIDEO_VSYNC">VSync</string>
+<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_PERCENT">Skala Resolusi</string>
+<string name="HOME_MENU_SETTINGS_VIDEO_RESOLUTION_SCALE_THRESHOLD">Ambang Skala Resolusi</string>
+<string name="HOME_MENU_SETTINGS_VIDEO_STEREO_MODE">Mode Stereo</string>
+<string name="HOME_MENU_SETTINGS_ADVANCED_RSX_MEMORY_TILING">Tangani Tiling Memori RSX</string>
+<string name="HOME_MENU_SETTINGS_OVERLAYS_SHOW_FATAL_ERROR_HINTS">Tampilkan Petunjuk Error Fatal</string>
+<string name="HOME_MENU_SETTINGS_OVERLAYS_RECORD_WITH_OVERLAYS">Rekam Dengan Overlay</string>
+<string name="HOME_MENU_SETTINGS_OVERLAYS_PLAY_MUSIC_DURING_BOOT">Putar musik selama urutan boot.</string>
+<string name="HOME_MENU_SETTINGS_PERFORMANCE_OVERLAY_USE_WINDOW_SPACE">Gunakan Ruang Jendela</string>
+<string name="HOME_MENU_SETTINGS_MOUSE_DEBUG_INPUT_OVERLAY">Overlay Debug Input Mouse</string>
+<string name="HOME_MENU_RELOAD_SECOND_SAVESTATE">Muat Ulang Status Emulasi Kedua Terakhir</string>
+<string name="HOME_MENU_RELOAD_THIRD_SAVESTATE">Muat Ulang Status Emulasi Ketiga Terakhir</string>
+<string name="HOME_MENU_RELOAD_FOURTH_SAVESTATE">Muat Ulang Status Emulasi Keempat Terakhir</string>
+<string name="HOME_MENU_TOGGLE_FULLSCREEN">Alihkan Layar Penuh</string>
+
 </resources>
