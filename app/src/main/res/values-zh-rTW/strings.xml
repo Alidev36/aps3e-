@@ -180,6 +180,62 @@ Translation qwen3
 	<string name="select">選擇</string>
 	<string name="ps">PS</string>
 
+	<string name="emulator_settings_core_spu_reservation_busy_waiting_enabled">SPU  Reservation Busy Waiting Enabled</string>
+	<string name="emulator_settings_core_rsx_fifo_fetch_accuracy">RSX FIFO 擷取精度</string>
+	<string-array name="core_rsx_fifo_fetch_accuracy_entries">
+		<item>快速</item>
+		<item>原子</item>
+		<item>有序和原子</item>
+		<item>PS3</item>
+	</string-array>
+	<string name="emulator_settings_core_ppu_profiler">PPU 分析器</string>
+	<string name="emulator_settings_core_spu_xfloat_accuracy">SPU XFloat 精度</string>
+	<string-array name="core_spu_xfloat_accuracy_entries">
+		<item>精確</item>
+		<item>近似</item>
+		<item>寬鬆</item>
+		<item>不精確</item>
+	</string-array>
+	<string name="emulator_settings_core_ppu_vector_nan_handling">PPU 向量非數值處理</string>
+	<string name="emulator_settings_video_vsync_mode">垂直同步模式</string>
+	<string-array name="video_vsync_mode_entries">
+		<item>停用</item>
+		<item>自我調整</item>
+		<item>完全</item>
+	</string-array>
+	<string name="emulator_settings_video_3d_display_enabled">3D 顯示已啟用</string>
+	<string name="emulator_settings_video_screen_size_in_inches">螢幕尺寸（英寸）</string>
+	<string name="emulator_settings_video_record_with_overlays">錄製包含疊加層</string>
+	<string name="emulator_settings_video_disable_hardware_colorspace_remapping">停用硬體色彩空間重映射</string>
+	<string name="emulator_settings_video_fidelityfx_cas_sharpening_intensity">FidelityFX CAS 銳化強度</string>
+	<string name="emulator_settings_video_vulkan_asynchronous_texture_streaming">非同步紋理流送</string>
+	<string name="emulator_settings_video_vulkan_use_rebar_for_gpu_uploads">使用 Re-BAR 進行 GPU 上傳</string>
+	<string name="emulator_settings_video_performance_overlay_use_window_space">使用視窗空間</string>
+	<string name="emulator_settings_input_output_sdl_camera_id">SDL 攝像頭 ID</string>
+	<string name="emulator_settings_input_output_paint_move_spheres">繪製移動球體</string>
+	<string name="emulator_settings_input_output_allow_move_hue_set_by_game">允許遊戲設定移動色相</string>
+	<string name="emulator_settings_input_output_mouse_debug_overlay">滑鼠調試疊加層</string>
+	<string name="emulator_settings_input_output_fake_move_rotation_cone">虛擬移動旋轉錐</string>
+	<string name="emulator_settings_input_output_fake_move_rotation_cone_v">虛擬移動旋轉錐（垂直）</string>
+	<string name="emulator_settings_system_date_format">日期格式</string>
+	<string-array name="system_date_format_entries">
+		<item>年月日</item>
+		<item>日月年</item>
+		<item>月日年</item>
+	</string-array>
+	<string name="emulator_settings_system_time_format">時間格式</string>
+	<string-array name="system_time_format_entries">
+		<item>12 小時制</item>
+		<item>24 小時制</item>
+	</string-array>
+	<string name="emulator_settings_system_console_psid">主機 PSID</string>
+	<string name="emulator_settings_system_process_argv">處理程序參數</string>
+	<string name="emulator_settings_savestate_maximum_savestate_files">最大儲存狀態檔案數</string>
+	<string name="emulator_settings_savestate_maximum_savestate_files_space">最大儲存狀態檔案空間 (MiB)</string>
+	<string name="emulator_settings_miscellaneous_show_fatal_error_hints">顯示致命錯誤提示</string>
+	<string name="emulator_settings_miscellaneous_show_capture_hints">顯示擷取提示</string>
+	<string name="emulator_settings_miscellaneous_play_music_during_boot_sequence">在啟動過程中播放音樂</string>
+	<string name="emulator_settings_miscellaneous_enable_gamemode">啟用遊戲模式</string>
 
 	<string name="emulator_settings_video_vulkan_custom_driver_library_path_dialog_title">選擇自定義驅動</string>
 	<string name="emulator_settings_video_vulkan_custom_driver_library_path_dialog_add_hint">添加自定義驅動(*.zip, *.so)</string>

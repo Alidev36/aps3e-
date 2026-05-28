@@ -180,6 +180,63 @@ Qwen3 का अनुवाद
 	<string name="select">सिलेक्ट</string>
 	<string name="ps">पीएस</string>
 
+	<string name="emulator_settings_core_spu_reservation_busy_waiting_enabled">SPU आरक्षण बिजी वेटिंग सक्षम</string>
+	<string name="emulator_settings_core_rsx_fifo_fetch_accuracy">RSX FIFO प्राप्ति सटीकता</string>
+	<string-array name="core_rsx_fifo_fetch_accuracy_entries">
+		<item>तेज़</item>
+		<item>परमाणु</item>
+		<item>क्रमबद्ध और परमाणु</item>
+		<item>PS3</item>
+	</string-array>
+	<string name="emulator_settings_core_ppu_profiler">PPU प्रोफाइलर</string>
+	<string name="emulator_settings_core_spu_xfloat_accuracy">SPU XFloat सटीकता</string>
+	<string-array name="core_spu_xfloat_accuracy_entries">
+		<item>सटीक</item>
+		<item>अनुमानित</item>
+		<item>शिथिल</item>
+		<item>गलत</item>
+	</string-array>
+	<string name="emulator_settings_core_ppu_vector_nan_handling">PPU वेक्टर NaN प्रबंधन</string>
+	<string name="emulator_settings_video_vsync_mode">VSync मोड</string>
+	<string-array name="video_vsync_mode_entries">
+		<item>अक्षम</item>
+		<item>अनुकूली</item>
+		<item>पूर्ण</item>
+	</string-array>
+	<string name="emulator_settings_video_3d_display_enabled">3D डिस्प्ले सक्षम</string>
+	<string name="emulator_settings_video_screen_size_in_inches">स्क्रीन का आकार इंच में</string>
+	<string name="emulator_settings_video_record_with_overlays">ओवरले के साथ रिकॉर्ड करें</string>
+	<string name="emulator_settings_video_disable_hardware_colorspace_remapping">हार्डवेयर कलरस्पेस रीमैपिंग अक्षम करें</string>
+	<string name="emulator_settings_video_fidelityfx_cas_sharpening_intensity">FidelityFX CAS शार्पनिंग तीव्रता</string>
+	<string name="emulator_settings_video_vulkan_asynchronous_texture_streaming">असिंक्रोनस टेक्सचर स्ट्रीमिंग</string>
+	<string name="emulator_settings_video_vulkan_use_rebar_for_gpu_uploads">GPU अपलोड के लिए Re-BAR का उपयोग करें</string>
+	<string name="emulator_settings_video_performance_overlay_use_window_space">विंडो स्पेस का उपयोग करें</string>
+	<string name="emulator_settings_input_output_sdl_camera_id">SDL कैमरा ID</string>
+	<string name="emulator_settings_input_output_paint_move_spheres">मूव स्फीयर पेंट करें</string>
+	<string name="emulator_settings_input_output_allow_move_hue_set_by_game">गेम द्वारा सेट मूव ह्यू की अनुमति दें</string>
+	<string name="emulator_settings_input_output_mouse_debug_overlay">माउस डिबग ओवरले</string>
+	<string name="emulator_settings_input_output_fake_move_rotation_cone">नकली मूव रोटेशन कोन</string>
+	<string name="emulator_settings_input_output_fake_move_rotation_cone_v">नकली मूव रोटेशन कोन (वर्टिकल)</string>
+	<string name="emulator_settings_system_date_format">दिनांक प्रारूप</string>
+	<string-array name="system_date_format_entries">
+		<item>yyyymmdd</item>
+		<item>ddmmyyyy</item>
+		<item>mmddyyyy</item>
+	</string-array>
+	<string name="emulator_settings_system_time_format">समय प्रारूप</string>
+	<string-array name="system_time_format_entries">
+		<item>12 घंटे</item>
+		<item>24 घंटे</item>
+	</string-array>
+	<string name="emulator_settings_system_console_psid">कंसोल PSID</string>
+	<string name="emulator_settings_system_process_argv">प्रक्रिया ARGV</string>
+	<string name="emulator_settings_savestate_maximum_savestate_files">अधिकतम सेवस्टेट फ़ाइलें</string>
+	<string name="emulator_settings_savestate_maximum_savestate_files_space">अधिकतम सेवस्टेट फ़ाइल स्थान (MiB)</string>
+	<string name="emulator_settings_miscellaneous_show_fatal_error_hints">घातक त्रुटि संकेत दिखाएं</string>
+	<string name="emulator_settings_miscellaneous_show_capture_hints">कैप्चर संकेत दिखाएं</string>
+	<string name="emulator_settings_miscellaneous_play_music_during_boot_sequence">बूट अनुक्रम के दौरान संगीत चलाएं</string>
+	<string name="emulator_settings_miscellaneous_enable_gamemode">गेममोड सक्षम करें</string>
+
 	<string name="emulator_settings_video_vulkan_custom_driver_library_path_dialog_title">कस्टम ड्राइवर चुनें</string>
 	<string name="emulator_settings_video_vulkan_custom_driver_library_path_dialog_add_hint">कस्टम ड्राइवर जोड़ें (*.zip, *.so)</string>
 

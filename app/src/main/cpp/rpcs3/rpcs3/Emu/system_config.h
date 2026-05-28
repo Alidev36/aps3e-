@@ -20,10 +20,21 @@ struct cfg_root : cfg::node
 		cfg::_bool ppu_call_history{ this, "PPU Calling History" }; // Enable PPU calling history recording
 		cfg::_bool llvm_logs{ this, "Save LLVM logs" };
 		cfg::string llvm_cpu{ this, "Use LLVM CPU" };
+#if __ANDROID__
+        cfg::_int<0, 1024> llvm_threads{ this, "Max LLVM Compile Threads", 4 };
+#else
 		cfg::_int<0, 1024> llvm_threads{ this, "Max LLVM Compile Threads", 0 };
+#endif
 		//cfg::_bool ppu_llvm_greedy_mode{ this, "PPU LLVM Greedy Mode", false, false };
 		cfg::_bool llvm_precompilation{ this, "LLVM Precompilation", true };
 		cfg::_enum<thread_scheduler_mode> thread_scheduler{this, "Thread Scheduler Mode", thread_scheduler_mode::os};
+        struct node_thread_affinity_mask : cfg::node
+        {
+            node_thread_affinity_mask(cfg::node* _this) : cfg::node(_this, "Thread Affinity Mask") {}
+            cfg::uint64 ppu_threads{ this, "PPU Threads", 1 };
+            cfg::uint64 spu_threads{ this, "SPU Threads", 1};
+            cfg::uint64 rsx_threads{ this, "RSX Threads", 1};
+        }thread_affinity_mask{ this };
 		cfg::_bool set_daz_and_ftz{ this, "Set DAZ and FTZ", false };
 		cfg::_enum<spu_decoder_type> spu_decoder{ this, "SPU Decoder", spu_decoder_type::llvm };
 		cfg::uint<0, 100> spu_reservation_busy_waiting_percentage{ this, "SPU Reservation Busy Waiting Percentage 1", 100, true };
@@ -53,7 +64,7 @@ struct cfg_root : cfg::node
 			}
 		};
 
-		fifo_setting rsx_fifo_accuracy{this, "RSX FIFO Fetch Accuracy", rsx_fifo_mode::atomic };
+		fifo_setting rsx_fifo_accuracy{this, "RSX FIFO Fetch Accuracy", rsx_fifo_mode::atomic_ordered };
 		cfg::_bool spu_verification{ this, "SPU Verification", true }; // Should be enabled
 		cfg::_bool spu_cache{ this, "SPU Cache", true };
 		cfg::_bool spu_prof{ this, "SPU Profiler", false };
@@ -141,7 +152,7 @@ struct cfg_root : cfg::node
 		cfg::_bool use_gpu_texture_scaling{ this, "Use GPU texture scaling", false };
 		cfg::_bool stretch_to_display_area{ this, "Stretch To Display Area", false, true };
 		cfg::_bool force_high_precision_z_buffer{ this, "Force High Precision Z buffer" };
-		cfg::_bool strict_rendering_mode{ this, "Strict Rendering Mode" };
+		cfg::_bool strict_rendering_mode{ this, "Strict Rendering Mode", true };
 		cfg::_bool disable_zcull_queries{ this, "Disable ZCull Occlusion Queries", false, true };
 		cfg::_bool disable_video_output{ this, "Disable Video Output", false, true };
 		cfg::_bool disable_vertex_cache{ this, "Disable Vertex Cache", false };
@@ -173,7 +184,9 @@ struct cfg_root : cfg::node
 		cfg::_bool vblank_ntsc{ this, "Vblank NTSC Fixup", false, true };
 		cfg::_bool decr_memory_layout{ this, "DECR memory layout", false}; // Force enable increased allowed main memory range as DECR console
 		cfg::_bool host_label_synchronization{ this, "Allow Host GPU Labels", false };
+#if defined (__APPLE__)
 		cfg::_bool disable_msl_fast_math{ this, "Disable MSL Fast Math", false };
+#endif
 		cfg::_bool disable_async_host_memory_manager{ this, "Disable Asynchronous Memory Manager", false, true };
 		cfg::_enum<output_scaling_mode> output_scaling{ this, "Output Scaling Mode", output_scaling_mode::bilinear, true };
 		cfg::_bool record_with_overlays{ this, "Record With Overlays", true, true };
@@ -254,7 +267,7 @@ struct cfg_root : cfg::node
 		cfg::_enum<audio_channel_layout> channel_layout{ this, "Audio Channel Layout", audio_channel_layout::automatic, false };
 		cfg::string audio_device{ this, "Audio Device", "@@@default@@@", true };
 		cfg::_int<0, 200> volume{ this, "Master Volume", 100, true };
-		cfg::_bool enable_buffering{ this, "Enable Buffering", true, true };
+		cfg::_bool enable_buffering{ this, "Enable Buffering", false, true };
 		cfg::_int <4, 250> desired_buffer_duration{ this, "Desired Audio Buffer Duration", 34, true };
 		cfg::_bool enable_time_stretching{ this, "Enable Time Stretching", false, true };
 		cfg::_bool disable_sampling_skip{ this, "Disable Sampling Skip", false, true };
@@ -353,7 +366,7 @@ struct cfg_root : cfg::node
 		cfg::_bool autostart{ this, "Automatically start games after boot", true, true };
 		cfg::_bool autoexit{ this, "Exit RPCS3 when process finishes", false, true };
 		cfg::_bool autopause{ this, "Pause emulation on RPCS3 focus loss", false, true };
-		cfg::_bool start_fullscreen{ this, "Start games in fullscreen mode", true, true };
+		cfg::_bool start_fullscreen{ this, "Start games in fullscreen mode", false, true };
 		cfg::_bool prevent_display_sleep{ this, "Prevent display sleep while running games", true, true };
 		cfg::_bool show_trophy_popups{ this, "Show trophy popups", true, true };
 		cfg::_bool show_rpcn_popups{ this, "Show RPCN popups", true, true };

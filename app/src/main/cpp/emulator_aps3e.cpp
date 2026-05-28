@@ -613,7 +613,7 @@ static bool gen_is_parent(const std::string& parent_name){
 #define LIST_PREF_TAG "aenu.preference.ListPreference"
 
 static jstring generate_config_xml(JNIEnv* env,jobject self){
-#if 0
+#if 1
     auto gen_one_preference=[&](const std::string parent_name,cfg::_base* node)->std::string{
         std::stringstream out;
 
@@ -625,11 +625,13 @@ static jstring generate_config_xml(JNIEnv* env,jobject self){
         switch (node->get_type()) {
             case cfg::type::_bool:
                 out<<"<" CHECKBOX_PREF_TAG " app:title=\"@string/emulator_settings_"<<parent_name_l<<"_"<<key<<"\" \n";
+                out<<"app:iconSpaceReserved=\"false\" \n";
                 out<<"app:key=\""<<parent_name<<"|"<<name<<"\" />\n";
                 break;
             case cfg::type::_int:
             case cfg::type::uint:
                 out<<"<" SEEKBAR_PREF_TAG " app:title=\"@string/emulator_settings_"<<parent_name_l<<"_"<<key<<"\" \n";
+                out<<"app:iconSpaceReserved=\"false\" \n";
                 out<<"app:min=\""<<node->get_min()<<"\"\n";
                 if(node->get_max()!=-1)
                     out<<"android:max=\""<<node->get_max()<<"\"\n";
@@ -641,6 +643,7 @@ static jstring generate_config_xml(JNIEnv* env,jobject self){
 
             case cfg::type::_enum:
                 out<<"<" LIST_PREF_TAG " app:title=\"@string/emulator_settings_"<<parent_name_l<<"_"<<key<<"\" \n";
+                out<<"app:iconSpaceReserved=\"false\" \n";
                 out<<"app:entries=\""<<"@array/"<<parent_name_l<<"_"<<key<<"_entries\"\n";
                 out<<"app:entryValues=\""<<"@array/"<<parent_name_l<<"_"<<key<<"_values\"\n";
                 out<<"app:key=\""<<parent_name<<"|"<<name<<"\" />\n";
@@ -648,6 +651,7 @@ static jstring generate_config_xml(JNIEnv* env,jobject self){
             default:
 
                 out<<"<PreferenceScreen app:title=\"@string/emulator_settings_"<<parent_name_l<<"_"<<key<<"\"\n";
+                out<<"app:iconSpaceReserved=\"false\" \n";
                 out<<"app:key=\""<<parent_name<<"|"<<name<<"\" />\n";
                 break;
         }
@@ -663,6 +667,7 @@ static jstring generate_config_xml(JNIEnv* env,jobject self){
 
         if(node->get_type()==cfg::type::node){
             out<<"<PreferenceScreen app:title=\"@string/emulator_settings_"<<parent_name_l<<"_"<<key<<"\" \n";
+            out<<"app:iconSpaceReserved=\"false\" \n";
             out<<"app:key=\""<<parent_name<<"|"<<name<<"\" >\n";
             std::string node_key=parent_name+"|"+name;
             for(auto n3:reinterpret_cast<cfg::node*>(node)->get_nodes()) {
@@ -691,6 +696,7 @@ static jstring generate_config_xml(JNIEnv* env,jobject self){
         const std::string& name=n->get_name();
         if(gen_is_parent(name)){
             out<<" <PreferenceScreen app:title=\"@string/emulator_settings_"<<gen_key(name)<<"\" \n";
+            out<<"app:iconSpaceReserved=\"false\" \n";
             out<<"app:key=\""<<name<<"\" >\n";
 
             for(auto n2:reinterpret_cast<cfg::node*>(n)->get_nodes()){
@@ -700,6 +706,7 @@ static jstring generate_config_xml(JNIEnv* env,jobject self){
 
                 if(n2->get_type()==cfg::type::node){
                     out<<"<PreferenceScreen app:title=\"@string/emulator_settings_"<<gen_key(name)<<"_"<<gen_key(n2->get_name())<<"\" \n";
+                    out<<"app:iconSpaceReserved=\"false\" \n";
                     out<<"app:key=\""<<name+"|"+n2->get_name()<<"\" >\n";
                     if((name+"|"+n2->get_name())=="Core|Thread Affinity Mask"){
                         out<<"</PreferenceScreen>\n";

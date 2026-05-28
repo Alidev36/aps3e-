@@ -181,6 +181,62 @@ Diterjemahkan oleh qwen3
 	<string name="select">pilih</string>
 	<string name="ps">PS</string>
 
+	<string name="emulator_settings_core_spu_reservation_busy_waiting_enabled">Penantian Sibuk Tempahan SPU Didayakan</string>
+	<string name="emulator_settings_core_rsx_fifo_fetch_accuracy">Ketepatan Pengambilan RSX FIFO</string>
+	<string-array name="core_rsx_fifo_fetch_accuracy_entries">
+		<item>Pantas</item>
+		<item>Atomik</item>
+		<item>Teratur &amp; Atomik</item>
+		<item>PS3</item>
+	</string-array>
+	<string name="emulator_settings_core_ppu_profiler">Pemprofil PPU</string>
+	<string name="emulator_settings_core_spu_xfloat_accuracy">Ketepatan SPU XFloat</string>
+	<string-array name="core_spu_xfloat_accuracy_entries">
+		<item>Tepat</item>
+		<item>Anggaran</item>
+		<item>Longgar</item>
+		<item>Tidak Tepat</item>
+	</string-array>
+	<string name="emulator_settings_core_ppu_vector_nan_handling">Pengendalian PPU Vector NaN</string>
+	<string name="emulator_settings_video_vsync_mode">Mod VSync</string>
+	<string-array name="video_vsync_mode_entries">
+		<item>Dilumpuhkan</item>
+		<item>Adaptif</item>
+		<item>Penuh</item>
+	</string-array>
+	<string name="emulator_settings_video_3d_display_enabled">Paparan 3D Didayakan</string>
+	<string name="emulator_settings_video_screen_size_in_inches">Saiz skrin dalam inci</string>
+	<string name="emulator_settings_video_record_with_overlays">Rakam Dengan Tindanan</string>
+	<string name="emulator_settings_video_disable_hardware_colorspace_remapping">Lumpuhkan Pemetaan Semula Ruang Warna Perkakasan</string>
+	<string name="emulator_settings_video_fidelityfx_cas_sharpening_intensity">Keamatan Penajaman FidelityFX CAS</string>
+	<string name="emulator_settings_video_vulkan_asynchronous_texture_streaming">Penstriman Tekstur Tak Segerak</string>
+	<string name="emulator_settings_video_vulkan_use_rebar_for_gpu_uploads">Guna Re-BAR untuk muat naik GPU</string>
+	<string name="emulator_settings_video_performance_overlay_use_window_space">Guna Ruang Tetingkap</string>
+	<string name="emulator_settings_input_output_sdl_camera_id">ID Kamera SDL</string>
+	<string name="emulator_settings_input_output_paint_move_spheres">Cat sfera gerak</string>
+	<string name="emulator_settings_input_output_allow_move_hue_set_by_game">Benarkan warna gerak ditetapkan oleh permainan</string>
+	<string name="emulator_settings_input_output_mouse_debug_overlay">Tindanan Nyahpepijat Tetikus</string>
+	<string name="emulator_settings_input_output_fake_move_rotation_cone">Kon Putaran Gerak Palsu</string>
+	<string name="emulator_settings_input_output_fake_move_rotation_cone_v">Kon Putaran Gerak Palsu (Menegak)</string>
+	<string name="emulator_settings_system_date_format">Format Tarikh</string>
+	<string-array name="system_date_format_entries">
+		<item>yyyymmdd</item>
+		<item>ddmmyyyy</item>
+		<item>mmddyyyy</item>
+	</string-array>
+	<string name="emulator_settings_system_time_format">Format Masa</string>
+	<string-array name="system_time_format_entries">
+		<item>jam12</item>
+		<item>jam24</item>
+	</string-array>
+	<string name="emulator_settings_system_console_psid">PSID Konsol</string>
+	<string name="emulator_settings_system_process_argv">ARGV Proses</string>
+	<string name="emulator_settings_savestate_maximum_savestate_files">Fail SaveState Maksimum</string>
+	<string name="emulator_settings_savestate_maximum_savestate_files_space">Ruang Fail SaveState Maksimum (MiB)</string>
+	<string name="emulator_settings_miscellaneous_show_fatal_error_hints">Tunjuk petunjuk ralat maut</string>
+	<string name="emulator_settings_miscellaneous_show_capture_hints">Tunjuk petunjuk tangkapan</string>
+	<string name="emulator_settings_miscellaneous_play_music_during_boot_sequence">Main muzik semasa urutan but</string>
+	<string name="emulator_settings_miscellaneous_enable_gamemode">Dayakan GameMode</string>
 
 	<string name="emulator_settings_video_vulkan_custom_driver_library_path_dialog_title">Pilih Pemandu Tersuai</string>
 	<string name="emulator_settings_video_vulkan_custom_driver_library_path_dialog_add_hint">Tambah Pemandu Tersuai(*.zip, *.so)</string>

@@ -155,6 +155,62 @@
     <string name="start">start</string>
     <string name="select">select</string>
     <string name="ps">PS</string>
+    <string name="emulator_settings_core_spu_reservation_busy_waiting_enabled">Reserva SPU com Espera Ocupada Ativada</string>
+    <string name="emulator_settings_core_rsx_fifo_fetch_accuracy">Precisão de Busca RSX FIFO</string>
+    <string-array name="core_rsx_fifo_fetch_accuracy_entries">
+        <item>Rápido</item>
+        <item>Atômico</item>
+        <item>Ordenado e Atômico</item>
+        <item>PS3</item>
+    </string-array>
+    <string name="emulator_settings_core_ppu_profiler">Perfilador PPU</string>
+    <string name="emulator_settings_core_spu_xfloat_accuracy">Precisão SPU XFloat</string>
+    <string-array name="core_spu_xfloat_accuracy_entries">
+        <item>Preciso</item>
+        <item>Aproximado</item>
+        <item>Relaxado</item>
+        <item>Impreciso</item>
+    </string-array>
+    <string name="emulator_settings_core_ppu_vector_nan_handling">Tratamento PPU Vector NaN</string>
+    <string name="emulator_settings_video_vsync_mode">Modo VSync</string>
+    <string-array name="video_vsync_mode_entries">
+        <item>Desativado</item>
+        <item>Adaptativo</item>
+        <item>Completo</item>
+    </string-array>
+    <string name="emulator_settings_video_3d_display_enabled">Tela 3D Ativada</string>
+    <string name="emulator_settings_video_screen_size_in_inches">Tamanho da tela em polegadas</string>
+    <string name="emulator_settings_video_record_with_overlays">Gravar com Sobreposições</string>
+    <string name="emulator_settings_video_disable_hardware_colorspace_remapping">Desativar Remapeamento de Espaço de Cor por Hardware</string>
+    <string name="emulator_settings_video_fidelityfx_cas_sharpening_intensity">Intensidade de Nitidez FidelityFX CAS</string>
+    <string name="emulator_settings_video_vulkan_asynchronous_texture_streaming">Streaming Assíncrono de Textura</string>
+    <string name="emulator_settings_video_vulkan_use_rebar_for_gpu_uploads">Usar Re-BAR para uploads de GPU</string>
+    <string name="emulator_settings_video_performance_overlay_use_window_space">Usar Espaço da Janela</string>
+    <string name="emulator_settings_input_output_sdl_camera_id">ID da Câmera SDL</string>
+    <string name="emulator_settings_input_output_paint_move_spheres">Pintar esferas de movimento</string>
+    <string name="emulator_settings_input_output_allow_move_hue_set_by_game">Permitir matiz de movimento definido pelo jogo</string>
+    <string name="emulator_settings_input_output_mouse_debug_overlay">Sobreposição de Depuração do Mouse</string>
+    <string name="emulator_settings_input_output_fake_move_rotation_cone">Cone de Rotação de Movimento Falso</string>
+    <string name="emulator_settings_input_output_fake_move_rotation_cone_v">Cone de Rotação de Movimento Falso (Vertical)</string>
+    <string name="emulator_settings_system_date_format">Formato de Data</string>
+    <string-array name="system_date_format_entries">
+        <item>yyyymmdd</item>
+        <item>ddmmyyyy</item>
+        <item>mmddyyyy</item>
+    </string-array>
+    <string name="emulator_settings_system_time_format">Formato de Hora</string>
+    <string-array name="system_time_format_entries">
+        <item>relógio12</item>
+        <item>relógio24</item>
+    </string-array>
+    <string name="emulator_settings_system_console_psid">PSID do Console</string>
+    <string name="emulator_settings_system_process_argv">ARGV do Processo</string>
+    <string name="emulator_settings_savestate_maximum_savestate_files">Máximo de Arquivos de SaveState</string>
+    <string name="emulator_settings_savestate_maximum_savestate_files_space">Espaço Máximo de Arquivos de SaveState (MiB)</string>
+    <string name="emulator_settings_miscellaneous_show_fatal_error_hints">Mostrar dicas de erros fatais</string>
+    <string name="emulator_settings_miscellaneous_show_capture_hints">Mostrar dicas de captura</string>
+    <string name="emulator_settings_miscellaneous_play_music_during_boot_sequence">Tocar música durante a sequência de inicialização</string>
+    <string name="emulator_settings_miscellaneous_enable_gamemode">Ativar GameMode</string>
     <string name="emulator_settings_video_vulkan_custom_driver_library_path_dialog_title">Selecionar Driver Personalizado</string>
     <string name="emulator_settings_video_vulkan_custom_driver_library_path_dialog_add_hint">Adicionar Driver Personalizado(*.zip, *.so)</string>
     <string name="emulator_settings_miscellaneous_custom_font_file_path_dialog_title">Selecionar Fonte Personalizada</string>

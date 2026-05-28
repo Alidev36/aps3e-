@@ -394,5 +394,30 @@
         <item>From Firmware</item>
         <item>Custom</item>
     </string-array>
-
+    <string-array name="core_rsx_fifo_fetch_accuracy_values">
+        <item>Fast</item>
+        <item>Atomic</item>
+        <item>Ordered &amp; Atomic</item>
+        <item>PS3</item>
+    </string-array>
+    <string-array name="core_spu_xfloat_accuracy_values">
+        <item>Accurate</item>
+        <item>Approximate</item>
+        <item>Relaxed</item>
+        <item>Inaccurate</item>
+    </string-array>
+    <string-array name="video_vsync_mode_values">
+        <item>Disabled</item>
+        <item>Adaptive</item>
+        <item>Full</item>
+    </string-array>
+    <string-array name="system_date_format_values">
+        <item>yyyymmdd</item>
+        <item>ddmmyyyy</item>
+        <item>mmddyyyy</item>
+    </string-array>
+    <string-array name="system_time_format_values">
+        <item>clock12</item>
+        <item>clock24</item>
+    </string-array>
 </resources>

@@ -91,6 +91,15 @@ namespace cfg
 		// Get dynamic property for reloading configs during games
 		bool get_is_dynamic() const { return m_dynamic; }
 
+        //
+        virtual int64_t get_min() const
+        {
+            return 0;
+        }
+        virtual int64_t get_max() const
+        {
+            return 0;
+        }
 		// Reset defaults
 		virtual void from_default() = 0;
 
@@ -359,6 +368,14 @@ namespace cfg
 			return m_value;
 		}
 
+        int64_t get_min() const override
+        {
+            return static_cast<int64_t>(min);
+        }
+        int64_t get_max() const override
+        {
+            return static_cast<int64_t>(max);
+        }
 		void from_default() override
 		{
 			m_value = def;
@@ -437,6 +454,15 @@ namespace cfg
 		{
 			return m_value;
 		}
+
+        int64_t get_min() const override
+        {
+            return static_cast<int64_t>(min);
+        }
+        int64_t get_max() const override
+        {
+            return static_cast<int64_t>(max);
+        }
 
 		void from_default() override
 		{
@@ -537,6 +563,15 @@ namespace cfg
 			return m_value;
 		}
 
+        int64_t get_min() const override
+        {
+            return static_cast<int64_t>(min);
+        }
+        int64_t get_max() const override
+        {
+            return static_cast<int64_t>(max);
+        }
+        
 		void from_default() override
 		{
 			m_value = def;

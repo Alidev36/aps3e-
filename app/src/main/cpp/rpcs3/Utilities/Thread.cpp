@@ -1856,7 +1856,7 @@ static LONG exception_handler(PEXCEPTION_POINTERS pExp) noexcept
 			is_exec = true;
 			addr = static_cast<u32>(exec64);
 		}
-		else 
+		else
 		{
 			std::this_thread::sleep_for(1ms);
 			return EXCEPTION_CONTINUE_SEARCH;
@@ -1982,7 +1982,7 @@ static LONG exception_filter(PEXCEPTION_POINTERS pExp) noexcept
 	}
 
 	fmt::append(msg, "RPCS3 image base: %p.\n", GetModuleHandle(NULL));
-	
+
 #if defined(ARCH_X64)
 	fmt::append(msg, "RAX: %016llX	RBX: %016llX\n", pExp->ContextRecord->Rax, pExp->ContextRecord->Rbx);
 	fmt::append(msg, "RCX: %016llX	RDX: %016llX\n", pExp->ContextRecord->Rcx, pExp->ContextRecord->Rdx);
@@ -2014,7 +2014,7 @@ static LONG exception_filter(PEXCEPTION_POINTERS pExp) noexcept
 	{
 		fmt::append(msg, "%s\n", symbol);
 	}
-	
+
 	sys_log.fatal("\n%s", msg);
 	logs::listener::sync_all();
 
@@ -2255,7 +2255,7 @@ void thread_base::start()
     sp.sched_priority=99;
 	pthread_attr_init(&attrs);
 	pthread_attr_setstacksize(&attrs, 0x800000);
-	
+
 	pthread_attr_set_qos_class_np(&attrs, QOS_CLASS_USER_INTERACTIVE, 0);
 	pthread_attr_setschedpolicy(&attrs, SCHED_RR);
 	pthread_attr_setschedparam(&attrs, &sp);
@@ -3042,7 +3042,25 @@ void thread_ctrl::detect_cpu_layout()
 
 u64 thread_ctrl::get_affinity_mask(thread_class group)
 {
-	detect_cpu_layout();
+#ifndef __ANDROID__
+    detect_cpu_layout();
+#endif
+#if 1
+    const u64 all_cores_mask = process_affinity_mask;
+
+    switch (group)
+    {
+        default:
+        case thread_class::general:
+            return all_cores_mask;
+        case thread_class::rsx:
+            return g_cfg.core.thread_affinity_mask.rsx_threads;
+        case thread_class::ppu:
+            return g_cfg.core.thread_affinity_mask.ppu_threads;
+        case thread_class::spu:
+            return g_cfg.core.thread_affinity_mask.spu_threads;
+    }
+#else
 
 	if (const auto thread_count = utils::get_thread_count())
 	{
@@ -3247,6 +3265,7 @@ u64 thread_ctrl::get_affinity_mask(thread_class group)
 	}
 
 	return -1;
+#endif
 }
 
 void thread_ctrl::set_native_priority(int priority)

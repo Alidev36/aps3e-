@@ -73,15 +73,15 @@ public class EmulatorSettings extends AppCompatActivity {
     static final String Miscellaneous$Custom_Font_File_Path="Miscellaneous|Custom Font File Path";
     static final String Video$Vulkan$Use_Custom_Driver="Video|Vulkan|Use Custom Driver";
     static final String Video$Vulkan$Custom_Driver_Library_Path="Video|Vulkan|Custom Driver Library Path";
-    static final String Video$Use_BGRA_Format="Video|Use BGRA Format";
-    static final String Video$Force_Convert_Texture="Video|Force Convert Texture";
-    static final String Video$Texture_Upload_Mode ="Video|Texture Upload Mode";
+    //static final String Video$Use_BGRA_Format="Video|Use BGRA Format";
+    //static final String Video$Force_Convert_Texture="Video|Force Convert Texture";
+    //static final String Video$Texture_Upload_Mode ="Video|Texture Upload Mode";
     static final String Core$Use_LLVM_CPU="Core|Use LLVM CPU";
     static final String Video$Write_Color_Buffers="Video|Write Color Buffers";
     static final String Video$Read_Color_Buffers="Video|Read Color Buffers";
     static final String Video$Strict_Rendering_Mode="Video|Strict Rendering Mode";
     static final String Video$Resolution_Scale="Video|Resolution Scale";
-    static final String Video$Vulkan$Asynchronous_Texture_Streaming_2="Video|Vulkan|Asynchronous Texture Streaming 2";
+    static final String Video$Vulkan$Asynchronous_Texture_Streaming="Video|Vulkan|Asynchronous Texture Streaming";
     static final String Video$Vulkan$Asynchronous_Queue_Scheduler="Video|Vulkan|Asynchronous Queue Scheduler";
     static final String Video$Resolution="Video|Resolution";
     //"Video|Aspect ratio"
@@ -301,32 +301,12 @@ public class EmulatorSettings extends AppCompatActivity {
 
 
             final String[] BOOL_KEYS={
-                    "Miscellaneous|Memory Debug overlay",
-
-                    "Video|Vulkan|Debug|disable_barycentric_coords",
-                    "Video|Vulkan|Debug|disable_conditional_rendering",
-                    "Video|Vulkan|Debug|disable_debug_utils",
-                    "Video|Vulkan|Debug|disable_external_memory_host",
-                    "Video|Vulkan|Debug|disable_framebuffer_loops",
-                    "Video|Vulkan|Debug|disable_sampler_mirror_clamped",
-                    "Video|Vulkan|Debug|disable_shader_stencil_export",
-                    "Video|Vulkan|Debug|disable_surface_capabilities_2",
-                    "Video|Vulkan|Debug|disable_synchronization_2",
-                    "Video|Vulkan|Debug|disable_unrestricted_depth_range",
-                    "Video|Vulkan|Debug|disable_extended_device_fault",
-                    "Video|Vulkan|Debug|disable_texture_compression_bc",
-                    "Video|Vulkan|Debug|disable_depth_clamp",
-                    "Video|Vulkan|Debug|disable_shader_clip_distance",
-                    "Video|Vulkan|Debug|disable_depth_bounds",
-                    "Video|Vulkan|Debug|disable_large_points",
-                    "Video|Vulkan|Debug|disable_wide_lines",
-                    "Video|Vulkan|Debug|disable_logic_op",
-
                     "Core|PPU Debug",
                     "Core|PPU Calling History",
                     "Core|Save LLVM logs",
                     "Core|LLVM Precompilation",
                     "Core|Set DAZ and FTZ",
+                    "Core|SPU Reservation Busy Waiting Enabled",
                     "Core|Disable SPU GETLLAR Spin Optimization",
                     "Core|SPU Debug",
                     "Core|MFC Debug",
@@ -338,13 +318,14 @@ public class EmulatorSettings extends AppCompatActivity {
                     "Core|SPU Verification",
                     "Core|SPU Cache",
                     "Core|SPU Profiler",
+                    "Core|PPU Profiler",
                     "Core|MFC Commands Shuffling In Steps",
                     "Core|Precise SPU Verification",
                     "Core|PPU LLVM Java Mode Handling",
+                    "Core|PPU Vector NaN Handling",
                     "Core|Use Accurate DFMA",
                     "Core|PPU Set Saturation Bit",
                     "Core|PPU Accurate Non-Java Mode",
-                    "Core|PPU Fixup Vector NaN Values",
                     "Core|PPU Accurate Vector NaN Values",
                     "Core|PPU Set FPCC Bits",
                     "Core|Debug Console Mode",
@@ -359,7 +340,6 @@ public class EmulatorSettings extends AppCompatActivity {
                     "Video|Read Depth Buffer",
                     "Video|Handle RSX Memory Tiling",
                     "Video|Log shader programs",
-                    "Video|VSync",
                     "Video|Debug output",
                     "Video|Debug overlay",
                     "Video|Renderdoc Compatibility Mode",
@@ -380,16 +360,20 @@ public class EmulatorSettings extends AppCompatActivity {
                     "Video|Multithreaded RSX",
                     "Video|Relaxed ZCULL Sync",
                     "Video|Force Hardware MSAA Resolve",
+                    "Video|3D Display Enabled",
                     "Video|Debug Program Analyser",
                     "Video|Accurate ZCULL stats",
                     "Video|Vblank NTSC Fixup",
                     "Video|DECR memory layout",
                     "Video|Allow Host GPU Labels",
                     "Video|Disable Asynchronous Memory Manager",
-                    Video$Use_BGRA_Format,
-                    Video$Force_Convert_Texture,
-                    "Video|Vulkan|Force FIFO present mode",
-                    Video$Vulkan$Asynchronous_Texture_Streaming_2,
+                    "Video|Record With Overlays",
+                    "Video|Disable Hardware ColorSpace Remapping",
+                    "Video|Vulkan|Force primitive restart flag",
+                    //"Video|Vulkan|Asynchronous Texture Streaming",
+                    Video$Vulkan$Asynchronous_Texture_Streaming,
+                    "Video|Vulkan|Use Re-BAR for GPU uploads",
+                    //"Video|Vulkan|Use Custom Driver",
                     Video$Vulkan$Use_Custom_Driver,
                     "Video|Vulkan|Custom Driver Force Max Clocks",
                     "Video|Performance Overlay|Enabled",
@@ -397,6 +381,7 @@ public class EmulatorSettings extends AppCompatActivity {
                     "Video|Performance Overlay|Enable Frametime Graph",
                     "Video|Performance Overlay|Center Horizontally",
                     "Video|Performance Overlay|Center Vertically",
+                    "Video|Performance Overlay|Use Window Space",
                     "Video|Shader Loading Dialog|Allow custom background",
                     "Audio|Dump to file",
                     "Audio|Convert to 16 bit",
@@ -406,9 +391,12 @@ public class EmulatorSettings extends AppCompatActivity {
                     "Input/Output|Keep pads connected",
                     "Input/Output|Background input enabled",
                     "Input/Output|Show move cursor",
+                    "Input/Output|Paint move spheres",
+                    "Input/Output|Allow move hue set by game",
                     "Input/Output|Lock overlay input to player one",
                     "Input/Output|Load SDL GameController Mappings",
                     "Input/Output|IO Debug overlay",
+                    "Input/Output|Mouse Debug overlay",
                     "Savestate|Start Paused",
                     "Savestate|Suspend Emulation Savestate Mode",
                     "Savestate|Compatible Savestate Mode",
@@ -418,18 +406,23 @@ public class EmulatorSettings extends AppCompatActivity {
                     "Miscellaneous|Exit RPCS3 when process finishes",
                     "Miscellaneous|Pause emulation on RPCS3 focus loss",
                     "Miscellaneous|Start games in fullscreen mode",
+                    "Miscellaneous|Prevent display sleep while running games",
                     "Miscellaneous|Show trophy popups",
                     "Miscellaneous|Show RPCN popups",
                     "Miscellaneous|Show shader compilation hint",
                     "Miscellaneous|Show PPU compilation hint",
+                    "Miscellaneous|Show autosave/autoload hint",
                     "Miscellaneous|Show pressure intensity toggle hint",
                     "Miscellaneous|Show analog limiter toggle hint",
-                    "Miscellaneous|Show autosave/autoload hint",
+                    "Miscellaneous|Show mouse and keyboard toggle hint",
+                    "Miscellaneous|Show fatal error hints",
+                    "Miscellaneous|Show capture hints",
                     "Miscellaneous|Use native user interface",
                     "Miscellaneous|Silence All Logs",
                     "Miscellaneous|Pause Emulation During Home Menu",
+                    "Miscellaneous|Play music during boot sequence",
+                    "Miscellaneous|Enable GameMode",
             };
-
             final String[] INT_KEYS={
                     "Core|PPU Threads",
                     "Core|Max LLVM Compile Threads",
@@ -441,65 +434,71 @@ public class EmulatorSettings extends AppCompatActivity {
                     "Core|Clocks scale",
                     "Core|Usleep Time Addend",
                     "Video|Second Frame Limit",
+                    "Video|Screen size in inches",
                     "Video|Consecutive Frames To Draw",
                     "Video|Consecutive Frames To Skip",
-                    Video$Resolution_Scale,
                     "Video|Texture LOD Bias Addend",
-                    "Video|Minimum Scalable Dimension",
                     "Video|Shader Compiler Threads",
                     "Video|Driver Recovery Timeout",
                     "Video|Vblank Rate",
+                    "Video|Performance Overlay|Horizontal Margin (%)",
+                    "Video|Performance Overlay|Vertical Margin (%)",
                     "Audio|Master Volume",
                     "Audio|Desired Audio Buffer Duration",
                     "Audio|Time Stretching Threshold",
-                    "Core|SPU Reservation Busy Waiting Percentage",
+                    "System|Console time offset (s)",
+                    "Core|SPU Reservation Busy Waiting Percentage 1",
                     "Core|SPU GETLLAR Busy Waiting Percentage",
                     "Core|MFC Commands Shuffling Limit",
                     "Core|MFC Commands Timeout",
-                    "Core|TSX Transaction First Limit",
-                    "Core|TSX Transaction Second Limit",
                     "Core|SPU Wake-Up Delay",
                     "Core|SPU Wake-Up Delay Thread Mask",
                     "Core|Max CPU Preempt Count",
                     "Core|Performance Report Threshold",
+                    "Video|Resolution Scale",
                     "Video|Anisotropic Filter Override",
+                    "Video|Minimum Scalable Dimension",
                     "Video|Driver Wake-Up Delay",
-                    "Video|Vulkan|FidelityFX CAS Sharpening Intensity",
+                    "Video|FidelityFX CAS Sharpening Intensity",
                     "Video|Vulkan|VRAM allocation limit (MB)",
                     "Video|Performance Overlay|Framerate datapoints",
                     "Video|Performance Overlay|Frametime datapoints",
                     "Video|Performance Overlay|Metrics update interval (ms)",
                     "Video|Performance Overlay|Font size (px)",
-                    "Video|Performance Overlay|Horizontal Margin (px)",
-                    "Video|Performance Overlay|Vertical Margin (px)",
                     "Video|Performance Overlay|Opacity (%)",
                     "Video|Shader Loading Dialog|Darkening effect strength",
                     "Video|Shader Loading Dialog|Blur effect strength",
                     "Audio|Audio Formats",
                     "Input/Output|Pad handler sleep (microseconds)",
-                    "Miscellaneous|Font Size",
+                    "Input/Output|Fake Move Rotation Cone",
+                    "Input/Output|Fake Move Rotation Cone (Vertical)",
+                    "Savestate|Maximum SaveState Files",
+                    "Savestate|Maximum SaveState Files Space (MiB)",
             };
             final String[] STRING_ARR_KEYS={
                     "Core|PPU Decoder",
+                    //"Core|Thread Scheduler Mode",
                     Core$Thread_Scheduler_Mode,
                     "Core|SPU Decoder",
                     "Core|SPU Block Size",
-                    "Core|RSX FIFO Accuracy",
-                    "Core|Enable TSX",
-                    "Core|XFloat Accuracy",
+                    "Core|RSX FIFO Fetch Accuracy",
+                    "Core|SPU XFloat Accuracy",
                     "Core|Sleep Timers Accuracy",
                     "Video|Renderer",
+                    //"Video|Resolution",
                     Video$Resolution,
+                    //"Video|Aspect ratio",
                     Video$Aspect_ratio,
                     "Video|Frame limit",
                     "Video|MSAA",
                     "Video|Shader Mode",
                     "Video|Shader Precision",
+                    "Video|VSync Mode",
                     "Video|3D Display Mode",
                     "Video|Output Scaling Mode",
                     "Video|Vertex Buffer Upload Mode",
-                    Video$Texture_Upload_Mode,
                     "Video|Vulkan|Exclusive Fullscreen Mode",
+                    //"Video|Vulkan|Asynchronous Queue Scheduler",
                     Video$Vulkan$Asynchronous_Queue_Scheduler,
                     "Video|Performance Overlay|Detail level",
                     "Video|Performance Overlay|Framerate graph detail level",
@@ -526,13 +525,15 @@ public class EmulatorSettings extends AppCompatActivity {
                     "System|Language",
                     "System|Keyboard Type",
                     "System|Enter button assignment",
-                    Miscellaneous$Font_File_Selection
+                    "System|Date Format",
+                    "System|Time Format",
+                    //"Miscellaneous|Font File Selection",
+                    Miscellaneous$Font_File_Selection,
             };
             final String[] NODE_KEYS={
                     "Core",
                     "Video",
                     "Video|Vulkan",
-                    "Video|Vulkan|Debug",
                     "Video|Performance Overlay",
                     "Video|Shader Loading Dialog",
                     "Audio",
@@ -955,7 +956,7 @@ public class EmulatorSettings extends AppCompatActivity {
                         ((SeekBarPreference)findPreference(Video$Resolution_Scale)).setEnabled(true);
                     }
                     break;
-                case Video$Use_BGRA_Format:
+                /*case Video$Use_BGRA_Format:
                     if(cur_val.equals("true")){
                         ((CheckBoxPreference)findPreference(Video$Read_Color_Buffers)).setEnabled(true);
                         ((CheckBoxPreference)findPreference(Video$Write_Color_Buffers)).setEnabled(true);
@@ -968,8 +969,8 @@ public class EmulatorSettings extends AppCompatActivity {
                         config.save_config_entry(Video$Read_Color_Buffers,"false");
                         config.save_config_entry(Video$Write_Color_Buffers,"false");
                     }
-                    break;
-                case Video$Vulkan$Asynchronous_Texture_Streaming_2:
+                    break;*/
+                case Video$Vulkan$Asynchronous_Texture_Streaming:
                     if(cur_val.equals("true")){
                         findPreference(Video$Vulkan$Asynchronous_Queue_Scheduler).setEnabled( true);
                     }

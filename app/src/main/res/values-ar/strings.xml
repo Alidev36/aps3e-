@@ -182,7 +182,73 @@
     <string name="select">حدد</string>
     <string name="ps">PS</string>
 
+    <string name="emulator_settings_core_spu_reservation_busy_waiting_enabled">تفعيل انتظار حجز SPU</string>
+    <string name="emulator_settings_core_rsx_fifo_fetch_accuracy">دقة جلب RSX FIFO</string>
+    <string-array name="core_rsx_fifo_fetch_accuracy_entries">
+        <item>سريع</item>
+        <item>ذري</item>
+        <item>مرتب وذري</item>
+        <item>PS3</item>
+    </string-array>
+    <string name="emulator_settings_core_ppu_profiler">محلل PPU</string>
+    <string name="emulator_settings_core_spu_xfloat_accuracy">دقة SPU XFloat</string>
+    <string-array name="core_spu_xfloat_accuracy_entries">
+        <item>دقيق</item>
+        <item>تقريبي</item>
+        <item>مرن</item>
+        <item>غير دقيق</item>
+    </string-array>
+    <string name="emulator_settings_core_ppu_vector_nan_handling">معالجة PPU Vector NaN</string>
+    <string name="emulator_settings_video_vsync_mode">وضع المزامنة العمودية (VSync)</string>
+    <string-array name="video_vsync_mode_entries">
+        <item>معطل</item>
+        <item>متكيف</item>
+        <item>كامل</item>
+    </string-array>
+
+    <string name="emulator_settings_video_3d_display_enabled">تفعيل العرض ثلاثي الأبعاد</string>
+    <string name="emulator_settings_video_screen_size_in_inches">حجم الشاشة بالبوصة</string>
+    <string name="emulator_settings_video_record_with_overlays">التسجيل مع الطبقات</string>
+
+    <string name="emulator_settings_video_disable_hardware_colorspace_remapping">تعطيل إعادة تخطيط الفضاء اللوني للأجهزة</string>
+    <string name="emulator_settings_video_fidelityfx_cas_sharpening_intensity">شدة التوضيح FidelityFX CAS</string>
+    <string name="emulator_settings_video_vulkan_asynchronous_texture_streaming">دفق الملمس غير المتزامن</string>
+    <string name="emulator_settings_video_vulkan_use_rebar_for_gpu_uploads">استخدام Re-BAR لرفع GPU</string>
+
+    <string name="emulator_settings_video_performance_overlay_use_window_space">استخدام مساحة النافذة</string>
+    <string name="emulator_settings_input_output_sdl_camera_id">معرف كاميرا SDL</string>
+    <string name="emulator_settings_input_output_paint_move_spheres">رسم كرات الحركة</string>
+    <string name="emulator_settings_input_output_allow_move_hue_set_by_game">السماح للعبة بتحديد تدرج الحركة</string>
+    <string name="emulator_settings_input_output_mouse_debug_overlay">طبقة تصحيح الفأرة</string>
+    <string name="emulator_settings_input_output_fake_move_rotation_cone">مخروط دوران الحركة الوهمي</string>
+    <string name="emulator_settings_input_output_fake_move_rotation_cone_v">مخروط دوران الحركة الوهمي (عمودي)</string>
+
+    <string name="emulator_settings_system_date_format">تنسيق التاريخ</string>
+    <string-array name="system_date_format_entries">
+        <item>yyyymmdd</item>
+        <item>ddmmyyyy</item>
+        <item>mmddyyyy</item>
+    </string-array>
+    <string name="emulator_settings_system_time_format">تنسيق الوقت</string>
+    <string-array name="system_time_format_entries">
+        <item>12 ساعة</item>
+        <item>24 ساعة</item>
+    </string-array>
+
+    <string name="emulator_settings_system_console_psid">PSID الكونسول</string>
+    <string name="emulator_settings_system_process_argv">وسائط العملية ARGV</string>
+
+    <string name="emulator_settings_savestate_maximum_savestate_files">الحد الأقصى لملفات حفظ الحالة</string>
+    <string name="emulator_settings_savestate_maximum_savestate_files_space">المساحة القصوى لملفات حفظ الحالة (ميغابايت)</string>
+
+    <string name="emulator_settings_miscellaneous_show_fatal_error_hints">إظهار تلميحات الأخطاء المميتة</string>
+    <string name="emulator_settings_miscellaneous_show_capture_hints">إظهار تلميحات الالتقاط</string>
+
+    <string name="emulator_settings_miscellaneous_play_music_during_boot_sequence">تشغيل الموسيقى أثناء تسلسل الإقلاع</string>
+    <string name="emulator_settings_miscellaneous_enable_gamemode">تفعيل وضع الألعاب GameMode</string>
+
     <string name="emulator_settings_video_vulkan_custom_driver_library_path_dialog_title">حدد برنامج تشغيل مخصص</string>
+
     <string name="emulator_settings_video_vulkan_custom_driver_library_path_dialog_add_hint">إضافة برنامج تشغيل مخصص (*.zip, *.so)</string>
 
     <string name="emulator_settings_miscellaneous_custom_font_file_path_dialog_title">حدد خط مخصص</string>
