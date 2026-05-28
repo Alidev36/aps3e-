@@ -479,14 +479,14 @@ public class QuickStartActivity extends AppCompatActivity {
             if(!Boolean.valueOf(config.load_config_entry(EmulatorSettings.Video$Vulkan$Use_Custom_Driver))){
 
                 String gpu_driver_name=Emulator.get.get_vulkan_physical_dev_list()[0];
-                if(gpu_driver_name.contains("Adreno (TM) 7")||gpu_driver_name.contains("Adreno (TM) 8")){
+                /*if(gpu_driver_name.contains("Adreno (TM) 7")||gpu_driver_name.contains("Adreno (TM) 8")){
                     config.save_config_entry(EmulatorSettings.Video$Use_BGRA_Format,"false");
                     config.save_config_entry(EmulatorSettings.Video$Force_Convert_Texture,"true");
                 }
 
                 if(gpu_driver_name.contains("Adreno (TM) 7")){
                     config.save_config_entry(EmulatorSettings.Video$Texture_Upload_Mode,"CPU");
-                }
+                }*/
             }
 
             boolean fix_llvm_cpu_cfg=false;
