@@ -212,6 +212,9 @@ public class AboutActivity extends AppCompatActivity {
                 + " *优化了内存搜索\n"
                 + "1.38(2026-04-13)\n"
                 + " *部分修正与完善\n"
+                + "2.39(2026-05-29)\n"
+                + " *更新RPCS3版本\n"
+                + " *加密版ISO支持（需要对应的.dkey或.key文件）\n"
                 + " \n";
 
         return log;
