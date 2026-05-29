@@ -183,7 +183,8 @@
     <string name="select">选择</string>
     <string name="ps">PS</string>
 
-    <string name="emulator_settings_core_spu_reservation_busy_waiting_enabled">SPU  Reservation Busy Waiting Enabled</string>
+    <string name="emulator_settings_core_spu_reservation_busy_waiting_enabled">启用 SPU 保留区繁忙等待</string>
+
     <string name="emulator_settings_core_rsx_fifo_fetch_accuracy">RSX FIFO 获取精度</string>
     <string-array name="core_rsx_fifo_fetch_accuracy_entries">
         <item>快速</item>

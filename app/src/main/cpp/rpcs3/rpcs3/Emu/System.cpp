@@ -1621,6 +1621,7 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 			else if (m_config_mode == cfg_mode::custom)
 			{
 				// Load custom configs
+#ifndef __ANDROID__
 				for (std::string config_path :
 				{
 					m_path + ".yml",
@@ -1646,6 +1647,21 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 						sys_log.fatal("Failed to apply custom config: %s", config_path);
 					}
 				}
+#else
+                if (fs::file cfg_file{m_config_path})
+                {
+                    sys_log.notice("Applying custom config: %s", m_config_path);
+
+                    if (g_cfg.from_string(cfg_file.to_string()))
+                    {
+                        g_cfg.name = m_config_path;
+                    }
+                    else
+                    {
+                        sys_log.fatal("Failed to apply custom config: %s", m_config_path);
+                    }
+                }
+#endif
 			}
 
 			// Disable incompatible settings
