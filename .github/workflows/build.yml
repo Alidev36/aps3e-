@@ -93,8 +93,6 @@ jobs:
         org.gradle.configureondemand=true
         org.gradle.daemon=true
         android.enableJetifier=false
-        android.enableBuildCache=true
-        android.enableDexingArtifactTransform=true
         android.useAndroidX=true
         android.native.buildOutput=verbose
         EOF
