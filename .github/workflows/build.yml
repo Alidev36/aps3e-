@@ -26,6 +26,14 @@ jobs:
         sudo apt-get install -y --no-install-recommends ccache
         echo "/usr/lib/ccache" >> $GITHUB_PATH
 
+    - name: Cache NDK and CMake
+      uses: actions/cache@v4
+      with:
+        path: /usr/local/lib/android/sdk/ndk
+        key: ${{ runner.os }}-ndk-${{ hashFiles('**/build.gradle*', '**/CMakeLists.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-ndk-
+
     - name: Cache ccache
       uses: actions/cache@v4
       with:
@@ -48,7 +56,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: app/.cxx
-        key: ${{ runner.os }}-cxx-${{ hashFiles('**/CMakeLists.txt') }}
+        key: ${{ runner.os }}-cxx-${{ hashFiles('**/CMakeLists.txt', '**/*.cpp', '**/*.c', '**/*.h', '**/*.hpp') }}
         restore-keys: |
           ${{ runner.os }}-cxx-
 
@@ -79,12 +87,14 @@ jobs:
       run: |
         mkdir -p ~/.gradle
         cat >> ~/.gradle/gradle.properties << 'EOF'
-        org.gradle.jvmargs=-Xmx6g -XX:+UseG1GC -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8
+        org.gradle.jvmargs=-Xmx6g -XX:+UseG1GC -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8
         org.gradle.parallel=true
         org.gradle.caching=true
+        org.gradle.configureondemand=true
         org.gradle.daemon=true
         android.enableJetifier=false
         android.useAndroidX=true
+        android.native.buildOutput=verbose
         EOF
 
     - name: Build APK with ccache
@@ -97,7 +107,8 @@ jobs:
         ./gradlew assembleRelease \
           --parallel \
           --build-cache \
-          --no-daemon \
+          --daemon \
+          --configuration-cache \
           -Dkotlin.incremental=true \
           -Dkotlin.daemon.jvm.options="-Xmx2g"
         ccache -s
