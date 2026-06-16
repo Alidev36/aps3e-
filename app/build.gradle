@@ -1,0 +1,110 @@
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+}
+
+android {
+    namespace 'aenu.aps3e'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "aenu.aps3e"
+        //applicationId "aenu.aps3e.premium"
+
+        minSdk 28
+        targetSdk 35
+        versionCode 19
+        versionName "1.19"
+
+        buildConfigField "String", "TGDB_API_KEY", "\"5246dd1c14c2fce7a1c85ad77d3aa348ca350fe62337abddf7f2c6f758004626\""
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        externalNativeBuild {
+            cmake {
+                abiFilters 'arm64-v8a'
+                cppFlags ''
+            }
+        }
+
+        sourceSets{
+            main {
+                //jniLibs.srcDirs = ['src/main/lib']
+            }
+        }
+    }
+
+    signingConfigs {
+        release {
+            storeFile file('aps3e.keystore')
+            storePassword 'android'
+            keyAlias 'aps3e'
+            keyPassword 'android'
+        }
+        debug {
+            storeFile file('aps3e.keystore')
+            storePassword 'android'
+            keyAlias 'aps3e'
+            keyPassword 'android'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+        debug {
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+    kotlinOptions {
+        jvmTarget = "11"
+    }
+    buildFeatures {
+        compose true
+        buildConfig true
+    }
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
+        }
+    }
+
+    packaging{
+        jniLibs.useLegacyPackaging = true
+    }
+}
+
+dependencies {
+    implementation libs.appcompat
+    implementation libs.material
+    implementation libs.activity
+    implementation libs.constraintlayout
+    implementation libs.preference
+    implementation platform(libs.compose.bom)
+    implementation libs.compose.ui
+    implementation libs.compose.ui.graphics
+    implementation libs.compose.ui.tooling.preview
+    implementation libs.compose.foundation
+    implementation libs.compose.material3
+    implementation libs.activity.compose
+    implementation libs.lifecycle.runtime.compose
+    implementation libs.coil.compose
+    implementation libs.coroutines.android
+    implementation libs.coroutines.core
+    implementation libs.okhttp
+    debugImplementation libs.compose.ui.tooling
+    debugImplementation libs.compose.ui.test.manifest
+    testImplementation libs.junit
+    androidTestImplementation libs.ext.junit
+    androidTestImplementation libs.espresso.core
+}
